@@ -5,7 +5,7 @@ import requests
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
 from .forms import UserForm
-
+import bcrypt
 
 def homepage(request):
     service = os.environ.get('K_SERVICE', 'Unknown service')
@@ -37,9 +37,14 @@ def adduser(request):
         form = UserForm(request.POST)
         if form.is_valid():
             username = form.cleaned_data['username']
-            # Insert the user into the database
+            password = form.cleaned_data['password'] 
+
+            # Hash the password
+            hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+
+            # Insert the user with the hashed password into the database
             try:
-                user_collection.insert_one({"username": username})
+                user_collection.insert_one({"username": username, "password": hashed_password})
                 message = f"User '{username}' added successfully."
             except pymongo.errors.OperationFailure as e:
                 message = f"An error occurred: {e}"

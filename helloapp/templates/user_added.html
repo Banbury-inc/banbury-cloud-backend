@@ -1,13 +1,11 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Add User</title>
+    <meta charset="UTF-8">
+    <title>User Added</title>
 </head>
 <body>
-    <form method="post">
-        {% csrf_token %}
-        {{ form.as_p }}
-        <button type="submit">Add User</button>
-    </form>
+    <h2>User Added Successfully</h2>
+    <p>{{ message }}</p>
 </body>
 </html>
