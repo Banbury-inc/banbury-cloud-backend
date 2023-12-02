@@ -6,6 +6,8 @@ from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
 from .forms import UserForm
 import bcrypt
+from django.views.decorators.csrf import csrf_protect
+
 
 def homepage(request):
     service = os.environ.get('K_SERVICE', 'Unknown service')
@@ -20,7 +22,7 @@ def homepage(request):
 def aboutpage(request):
     return render(request, 'aboutpage.html', context={})
 
-
+@csrf_protect
 def adduser(request):
 
     # MongoDB connection string
@@ -53,3 +55,9 @@ def adduser(request):
         form = UserForm()
 
     return render(request, 'add_user.html', {'form': form})
+
+
+
+
+
+
