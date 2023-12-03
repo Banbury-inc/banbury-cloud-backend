@@ -5,8 +5,6 @@ import requests
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
 from .forms import UserForm
-import bcrypt
-from django.views.decorators.csrf import csrf_protect
 
 
 def homepage(request):
@@ -22,9 +20,7 @@ def homepage(request):
 def aboutpage(request):
     return render(request, 'aboutpage.html', context={})
 
-@csrf_protect
 def adduser(request):
-
     # MongoDB connection string
 
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
@@ -39,14 +35,9 @@ def adduser(request):
         form = UserForm(request.POST)
         if form.is_valid():
             username = form.cleaned_data['username']
-            password = form.cleaned_data['password'] 
-
-            # Hash the password
-            hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
-
-            # Insert the user with the hashed password into the database
+            # Insert the user into the database
             try:
-                user_collection.insert_one({"username": username, "password": hashed_password})
+                user_collection.insert_one({"username": username})
                 message = f"User '{username}' added successfully."
             except pymongo.errors.OperationFailure as e:
                 message = f"An error occurred: {e}"
@@ -55,6 +46,7 @@ def adduser(request):
         form = UserForm()
 
     return render(request, 'add_user.html', {'form': form})
+
 
 
 
