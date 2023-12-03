@@ -1,12 +1,13 @@
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 import os
 import pymongo
 import requests
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
 from .forms import UserForm
-
-
+import bcrypt
+from .forms import LoginForm
+from .forms import UserProfileForm
 def homepage(request):
     service = os.environ.get('K_SERVICE', 'Unknown service')
     revision = os.environ.get('K_REVISION', 'Unknown revision')
@@ -20,7 +21,7 @@ def homepage(request):
 def aboutpage(request):
     return render(request, 'aboutpage.html', context={})
 
-def adduser(request):
+def addusernopassword(request):
     # MongoDB connection string
 
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
@@ -46,10 +47,139 @@ def adduser(request):
         form = UserForm()
 
     return render(request, 'add_user.html', {'form': form})
+def adduser1(request):
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = pymongo.MongoClient(uri, server_api=ServerApi('1'))
+    db = client['myDatabase']
+    user_collection = db['users']
+
+    if request.method == 'POST':
+        form = UserForm(request.POST)
+        if form.is_valid():
+            username = form.cleaned_data['first_name']
+            username = form.cleaned_data['last_name']
+            username = form.cleaned_data['username']
+            password = form.cleaned_data['password']  # Get the password from the form
+
+            # Hash the password
+            hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+
+            try:
+                # Insert the user with the hashed password into the database
+                user_collection.insert_one({"username": username, "password": hashed_password})
+                message = f"User '{username}' added successfully."
+            except pymongo.errors.OperationFailure as e:
+                message = f"An error occurred: {e}"
+            return render(request, 'user_added.html', {'message': message})
+    else:
+        form = UserForm()
+
+    return render(request, 'add_user.html', {'form': form})
+
+def adduser(request):
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = pymongo.MongoClient(uri, server_api=ServerApi('1'))
+    db = client['myDatabase']
+    user_collection = db['users']
+
+
+    if request.method == 'POST':
+        form = UserForm(request.POST)
+        if form.is_valid():
+            firstName = form.cleaned_data['first_name']
+            lastName = form.cleaned_data['last_name']
+            username = form.cleaned_data['username']
+            password = form.cleaned_data['password'].encode('utf-8')
+
+            hashed_password = bcrypt.hashpw(password, bcrypt.gensalt())
+
+            # Create a new user document with additional fields set to null
+            new_user = {
+                "username": username,
+                "password": hashed_password,
+                "first_name": firstName,
+                "last_name": lastName,
+                "phone_number": None,
+                "email": None,
+                "devices": [],
+                "files": []
+            }
+
+            try:
+                user_collection.insert_one(new_user)
+                message = f"User '{username}' added successfully."
+            except pymongo.errors.OperationFailure as e:
+                message = f"An error occurred: {e}"
+
+            return render(request, 'user_added.html', {'message': message})
+
+    else:
+        form = UserForm()
+
+    return render(request, 'add_user.html', {'form': form})
+
+
+def login(request):
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = pymongo.MongoClient(uri, server_api=ServerApi('1'))
+    db = client['myDatabase']
+    user_collection = db['users']
+
+    if request.method == 'POST':
+        form = LoginForm(request.POST)
+        if form.is_valid():
+            username = form.cleaned_data['username']
+            password = form.cleaned_data['password'].encode('utf-8')
+
+            user = user_collection.find_one({'username': username})
+
+            if user and bcrypt.checkpw(password, user['password']):
+                return redirect('dashboard', username=username)  # Redirect to a home page or dashboard
+            else:
+                return render(request, 'login.html', {'form': form, 'error': 'Invalid username or password'})
+    else:
+        form = LoginForm()
+
+    return render(request, 'login.html', {'form': form})
+def dashboard(request, username):
+    # Render the dashboard template with the username
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = pymongo.MongoClient(uri, server_api=ServerApi('1'))
+    db = client['myDatabase']
+    user_collection = db['users']
+
+    user = user_collection.find_one({'username': username})
+    first_name = user.get('first_name', 'User')  # Default to 'User' if first name is not set
+    return render(request, 'dashboard.html', {'username': username, 'first_name': first_name})
+
+def update_user_profile(request, username):
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = pymongo.MongoClient(uri, server_api=ServerApi('1'))
+    db = client['myDatabase']
+    user_collection = db['users']
 
 
 
 
+    user = user_collection.find_one({'username': username})
+
+    if request.method == 'POST':
+        form = UserProfileForm(request.POST)
+        if form.is_valid():
+            user_collection.update_one(
+                {'username': username},
+                {'$set': {
+                    'first_name': form.cleaned_data['first_name'] or user['first_name'],
+                    'last_name': form.cleaned_data['last_name'] or user['last_name'],
+                    'phone_number': form.cleaned_data['phone_number'] or user['phone_number'],
+                    'email': form.cleaned_data['email'] or user['email']
+                }}
+            )
+            return redirect('dashboard', username=username)
+    else:
+        form = UserProfileForm(initial=user)
+
+    return render(request, 'update_profile.html', {'form': form, 'username': username})
 
 
 
