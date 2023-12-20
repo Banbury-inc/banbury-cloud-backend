@@ -1,4 +1,5 @@
 from django.shortcuts import render, redirect
+from django.views import generic
 import os
 import pymongo
 import requests
@@ -8,6 +9,10 @@ from .forms import UserForm
 import bcrypt
 from .forms import LoginForm
 from .forms import UserProfileForm
+
+
+
+
 def homepage(request):
     service = os.environ.get('K_SERVICE', 'Unknown service')
     revision = os.environ.get('K_REVISION', 'Unknown revision')
