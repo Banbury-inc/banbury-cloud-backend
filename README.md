@@ -7,6 +7,8 @@ gcloud auth configure-docker
 
 deploy to cloud run
 
+do i need to update dockerfile before I do a git commit?
+
 select cloud build option instead of local
 
 
