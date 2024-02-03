@@ -9,5 +9,5 @@ urlpatterns = [
     path('login/', views.login, name='login'),
     path('dashboard/<str:username>/', views.dashboard, name='dashboard'),
     path('update_profile/<str:username>/', views.update_user_profile, name='update_profile'),
-
+    path('download-deb/', views.download_debian_package, name='download-deb'),
 ]

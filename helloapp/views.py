@@ -1,4 +1,6 @@
 from django.shortcuts import render, redirect
+from django.http import HttpResponse
+from django.conf import settings
 import os
 import pymongo
 import requests
@@ -20,6 +22,19 @@ def homepage(request):
 
 def aboutpage(request):
     return render(request, 'aboutpage.html', context={})
+
+
+def download_debian_package(request):
+    file_path = os.path.join(settings.BASE_DIR, 'helloapp/templates/bcloud_1.0.0_all.deb')
+    if os.path.exists(file_path):
+        with open(file_path, 'rb') as fh:
+            response = HttpResponse(fh.read(), content_type="application/vnd.debian.binary-package")
+            response['Content-Disposition'] = 'attachment; filename="bcloud_1.0.0.0_all.deb"'
+            return response
+    else:
+        response = HttpResponse("File not found.", status=404)
+    return response
+
 
 def addusernopassword(request):
     # MongoDB connection string
