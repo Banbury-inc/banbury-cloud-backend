@@ -2,14 +2,18 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Dashboard</title>
+    <title>Banbury Cloud</title>
 </head>
 <body>
     <h1>Dashboard</h1>
-    <p>Hello, {{ first_name }}!</p>
+    <p>Welcome, {{ first_name }}.</p>
+    <a href="{% url 'home' %}">Home Page</a>
     <a href="{% url 'update_profile' username %}">Update Profile</a>
     <!-- Files Table -->
+    <p>Thank you for using Banbury Cloud. At this point in time, uploading and downloading files will only be able to be
+    done on the desktop app.</p>
 
+ 
     <h3>Files</h3>
     <table border="1">
         <thead>
