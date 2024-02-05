@@ -165,7 +165,9 @@ def dashboard(request, username):
 
     user = user_collection.find_one({'username': username})
     first_name = user.get('first_name', 'User')  # Default to 'User' if first name is not set
-    return render(request, 'dashboard.html', {'username': username, 'first_name': first_name})
+    files = user.get('files', 'files')  # Default to 'User' if first name is not set
+    devices = user.get('devices', 'devices')  # Default to 'User' if first name is not set
+    return render(request, 'dashboard.html', {'username': username, 'first_name': first_name, 'files': files, 'devices': devices})
 
 def update_user_profile(request, username):
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
