@@ -28,7 +28,7 @@ DEBUG = True
 # Change this to your production URL for deployment
 ALLOWED_HOSTS = ['*']
 
-CSRF_TRUSTED_ORIGINS = ['https://website2-v3xlkt54dq-uc.a.run.app/']
+CSRF_TRUSTED_ORIGINS = ['https://website2-v3xlkt54dq-uc.a.run.app']
 
 
 # Application definition
@@ -39,9 +39,9 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
-    'django.middleware.common.CommonMiddleware',
+#    'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+#    'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
 ROOT_URLCONF = 'helloproject.urls'
