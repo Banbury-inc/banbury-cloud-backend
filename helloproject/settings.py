@@ -28,7 +28,7 @@ DEBUG = True
 # Change this to your production URL for deployment
 ALLOWED_HOSTS = ['*']
 
-CSRF_TRUSTED_ORIGINS = ['https://website-v3xlkt54dq-uc.a.run.app']
+CSRF_TRUSTED_ORIGINS = ['https://website2-v3xlkt54dq-uc.a.run.app/']
 
 
 # Application definition
