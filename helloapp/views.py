@@ -1,5 +1,5 @@
 from django.shortcuts import render, redirect
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.conf import settings
 import os
 import pymongo
@@ -10,6 +10,28 @@ from .forms import UserForm
 import bcrypt
 from .forms import LoginForm
 from .forms import UserProfileForm
+
+
+def getuserinfo(request):
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    username = "mmills6060" 
+    db = client['myDatabase']
+    user_collection = db['users']
+    user = user_collection.find_one({'username': username})
+    if not user:
+        print("Please login first.")
+    else:
+        if user['username'] == username:
+                devices = user.get('devices', [])
+                first_name = user.get('first_name')
+                user_data = {"first_name": first_name}
+                return JsonResponse(user_data)
+
+
+
+
+
 def homepage(request):
     service = os.environ.get('K_SERVICE', 'Unknown service')
     revision = os.environ.get('K_REVISION', 'Unknown revision')
