@@ -27,8 +27,11 @@ def getuserinfo(request):
                 last_name = user.get('last_name')
                 phone_number = user.get('phone_number')
                 email = user.get('email')
+
                 devices = user.get('devices', [])
                 files = user.get('devices', [])
+                total_files = len(user.get('files', []))
+                total_devices = "1"
                 user_data = {
                         "first_name": first_name,
                         "last_name": last_name,
@@ -36,6 +39,8 @@ def getuserinfo(request):
                         "email": email,
                         "devices": devices,
                         "files": files,
+                        "total_files": total_files,
+                        "total_devices": total_devices,
                         }
                 return JsonResponse(user_data)
 
