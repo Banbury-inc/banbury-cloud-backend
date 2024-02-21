@@ -43,7 +43,11 @@ CSRF_TRUSTED_ORIGINS = ['https://website2-v3xlkt54dq-uc.a.run.app']
 # Application definition
 
 INSTALLED_APPS = [
+    'django.contrib.admin',
+    'django.contrib.auth',
     'django.contrib.contenttypes',  # Make sure this line is present
+    'django.contrib.sessions',
+    'django.contrib.messages',
     'django.contrib.staticfiles',
     'helloapp',
     'rest_framework',
