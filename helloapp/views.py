@@ -23,9 +23,20 @@ def getuserinfo(request):
         print("Please login first.")
     else:
         if user['username'] == username:
-                devices = user.get('devices', [])
                 first_name = user.get('first_name')
-                user_data = {"first_name": first_name}
+                last_name = user.get('last_name')
+                phone_number = user.get('phone_number')
+                email = user.get('email')
+                devices = user.get('devices', [])
+                files = user.get('devices', [])
+                user_data = {
+                        "first_name": first_name,
+                        "last_name": last_name,
+                        "phone_number": phone_number,
+                        "email": email,
+                        "devices": devices,
+                        "files": files,
+                        }
                 return JsonResponse(user_data)
 
 
