@@ -32,6 +32,9 @@ def getuserinfo(request):
                 number_of_files = user.get('number_of_files', [])
                 number_of_devices = user.get('number_of_devices', [])
                 overall_date_added = user.get('overall_date_added', [])
+                total_average_upload_speed = user.get('total_average_upload_speed', [])
+                total_average_download_speed = user.get('total_average_download_speed', [])
+                total_device_storage = user.get('total_device_storage', [])
  
                 user_data = {
                         "first_name": first_name,
@@ -42,6 +45,9 @@ def getuserinfo(request):
                         "number_of_devices": number_of_devices,
                         "number_of_files": number_of_files,
                         "overall_date_added": overall_date_added,
+                        "total_average_upload_speed": total_average_upload_speed,
+                        "total_average_download_speed": total_average_download_speed,
+                        "total_device_storage": total_device_storage,
                         }
                 return JsonResponse(user_data)
 
