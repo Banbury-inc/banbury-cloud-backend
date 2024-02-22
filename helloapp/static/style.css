@@ -2,6 +2,7 @@ body {
 	font-family: 'Roboto', sans-serif;
 	font-display: fallback;
 	background-size: cover;
+
 	background-position: center;
 	line-height: 1.6;
  }
