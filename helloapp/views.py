@@ -1,6 +1,8 @@
 from django.shortcuts import render, redirect
 from django.http import HttpResponse, JsonResponse
 from django.conf import settings
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
 import os
 import pymongo
 import requests
@@ -202,34 +204,37 @@ def login(request):
 
     return render(request, 'login.html', {'form': form})
 
+
+@csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
+@require_http_methods(["POST"])  # Limit this view to only handle POST requests
 def login_api(request):
+
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = pymongo.MongoClient(uri, server_api=ServerApi('1'))
     db = client['myDatabase']
     user_collection = db['users']
 
-    if request.method == 'POST':
-        form = LoginForm(request.POST)
-        if form.is_valid():
-            username = form.cleaned_data['username']
-            password = form.cleaned_data['password'].encode('utf-8')
+    # Process the form
+    form = LoginForm(request.POST or None)
+    if form.is_valid():
+        username = form.cleaned_data['username']
+        password = form.cleaned_data['password'].encode('utf-8')
 
-            user = user_collection.find_one({'username': username})
+        user = user_collection.find_one({'username': username})
 
-            if user and bcrypt.checkpw(password, user['password']):
-                response = {
-                        "response": "success",
-                       }
-
-            else:
-                response = {
-                        "response": "fail",
-                       }
- 
-            return JsonResponse(response)
-
-
-
+        # It's important to encode the stored password as bytes before comparing
+        if user and bcrypt.checkpw(password, user['password'].encode('utf-8')):
+            response = {
+                "response": "success",
+            }
+        else:
+            response = {
+                "response": "fail",
+            }
+        return JsonResponse(response)
+    else:
+        # Form is not valid, return an error response
+        return JsonResponse({"response": "fail", "reason": "Invalid form data"}, status=400)
 
 
 
