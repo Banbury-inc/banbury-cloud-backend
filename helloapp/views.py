@@ -201,6 +201,38 @@ def login(request):
         form = LoginForm()
 
     return render(request, 'login.html', {'form': form})
+
+def login_api(request):
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = pymongo.MongoClient(uri, server_api=ServerApi('1'))
+    db = client['myDatabase']
+    user_collection = db['users']
+
+    if request.method == 'POST':
+        form = LoginForm(request.POST)
+        if form.is_valid():
+            username = form.cleaned_data['username']
+            password = form.cleaned_data['password'].encode('utf-8')
+
+            user = user_collection.find_one({'username': username})
+
+            if user and bcrypt.checkpw(password, user['password']):
+                response = {
+                        "response": "success",
+                       }
+
+            else:
+                response = {
+                        "response": "fail",
+                       }
+ 
+            return JsonResponse(response)
+
+
+
+
+
+
 def dashboard(request, username):
     # Render the dashboard template with the username
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
