@@ -276,7 +276,7 @@ def login_api(request):
 
 
 
-# @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
+@csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
 def registration_api(request):
 
