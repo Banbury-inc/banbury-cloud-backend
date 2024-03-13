@@ -105,43 +105,41 @@ def registration_api(request, firstName, lastName, username, password):
     user_collection = db['users']
 
     # Ensure the request body is JSON
+
+    hashed_password = bcrypt.hashpw(password, bcrypt.gensalt())
+
+    # Create a new user document with additional fields set to null
+    new_user = {
+        "username": username,
+        "password": hashed_password,
+        "first_name": firstName,
+        "last_name": lastName,
+        "phone_number": None,
+        "email": None,
+        "devices": [],
+        "number_of_devices": [],
+        "number_of_files": [],
+        "overall_date_added": [],
+        "total_average_download_speed": [],
+        "total_average_upload_speed": [],
+        "total_device_storage": [],
+        "total_average_cpu_usage": [],
+        "total_average_gpu_usage": [],
+        "total_average_ram_usage": [],
+    }
+
+
     try:
-
-        hashed_password = bcrypt.hashpw(password, bcrypt.gensalt())
-
-        # Create a new user document with additional fields set to null
-        new_user = {
-            "username": username,
-            "password": hashed_password,
-            "first_name": firstName,
-            "last_name": lastName,
-            "phone_number": None,
-            "email": None,
-            "devices": [],
-            "number_of_devices": [],
-            "number_of_files": [],
-            "overall_date_added": [],
-            "total_average_download_speed": [],
-            "total_average_upload_speed": [],
-            "total_device_storage": [],
-            "total_average_cpu_usage": [],
-            "total_average_gpu_usage": [],
-            "total_average_ram_usage": [],
+        user_collection.insert_one(new_user)
+        message = {
+            "response": "success",
+                } 
+        return JsonResponse(message)
+    except Exception as e:
+        message = {
+            "response": "fail",
         }
-
-        try:
-            user_collection.insert_one(new_user)
-            message = f"User '{username}' added successfully."
-            return JsonResponse({'response': 'success'})
-
-        except pymongo.errors.OperationFailure as e:
-            message = f"An error occurred: {e}"
-            return JsonResponse({'response': 'fail'})
-    except ValueError:
-        return JsonResponse({'error': 'Invalid JSON'}, status=400)
-
-
-
+        return JsonResponse(message)
 
 
 def homepage(request):
