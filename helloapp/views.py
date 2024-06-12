@@ -93,6 +93,34 @@ def getuserinfo2(request, username):
                         "total_device_storage": total_device_storage,
                         }
                 return JsonResponse(user_data)
+def getuserinfo3(request, username):
+
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    username = username 
+    db = client['myDatabase']
+    user_collection = db['users']
+    user = user_collection.find_one({'username': username})
+    if not user:
+        print("Please login first.")
+    else:
+        if user['username'] == username:
+                username = user.get('username')
+                password = user.get('password')
+                first_name = user.get('first_name')
+                last_name = user.get('last_name')
+                email = user.get('email')
+
+ 
+                user_data = {
+                        "username": username,
+                        "password": password,
+                        "first_name": first_name,
+                        "last_name": last_name,
+                        "email": email,
+                        }
+                return JsonResponse(user_data)
+
 
 
 def registration_api(request, firstName, lastName, username, password):
