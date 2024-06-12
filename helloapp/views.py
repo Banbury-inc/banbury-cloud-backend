@@ -93,28 +93,34 @@ def getuserinfo2(request, username):
                         "total_device_storage": total_device_storage,
                         }
                 return JsonResponse(user_data)
-def getuserinfo3(request, username, password):
 
+
+def getuserinfo3(request, username, password):
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
-    username = username 
     db = client['myDatabase']
     user_collection = db['users']
     user = user_collection.find_one({'username': username})
+
     if not user:
-        print("Please login first.")
+        return JsonResponse({"result": "fail", "message": "User not found. Please login first."})
+
+    # Assuming password stored in the database is hashed and saved as bytes.
+    # Also assuming 'password' parameter from the function call is the plaintext password to verify.
+    stored_hashed_password = user['password']
+    password_bytes = password.encode('utf-8')  # Encode the plaintext password to bytes
+
+    if bcrypt.checkpw(password_bytes, stored_hashed_password):
+        result = "success"
+        username = user.get('username')
     else:
-        if user['username'] == username:
-                username = user.get('username')
-                password = user.get('password')
-                password_bytes = password.encode('utf-8')  # Encode the string to bytes
-                if user and bcrypt.checkpw(password_bytes, user['password']):
-                    result = "success"
-        else:
-            result = "fail"
+        result = "fail"
+        username = None
+
     user_data = {
-            "result": username,
-            }
+        "result": result,
+        "username": username  # Return username if success, None if fail
+    }
     return JsonResponse(user_data)
  
 
