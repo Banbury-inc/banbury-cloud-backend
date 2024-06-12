@@ -93,7 +93,7 @@ def getuserinfo2(request, username):
                         "total_device_storage": total_device_storage,
                         }
                 return JsonResponse(user_data)
-def getuserinfo3(request, username):
+def getuserinfo3(request, username, password):
 
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
@@ -107,20 +107,16 @@ def getuserinfo3(request, username):
         if user['username'] == username:
                 username = user.get('username')
                 password = user.get('password')
-                first_name = user.get('first_name')
-                last_name = user.get('last_name')
-                email = user.get('email')
-
+                password_bytes = password.encode('utf-8')  # Encode the string to bytes
+                if user and bcrypt.checkpw(password_bytes, user['password']):
+                    result = "success"
+        else:
+            result = "fail"
+    user_data = {
+            "result": username,
+            }
+    return JsonResponse(user_data)
  
-                user_data = {
-                        "username": username,
-                        "password": password,
-                        "first_name": first_name,
-                        "last_name": last_name,
-                        "email": email,
-                        }
-                return JsonResponse(user_data)
-
 
 
 def registration_api(request, firstName, lastName, username, password):
