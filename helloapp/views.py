@@ -53,6 +53,32 @@ def getuserinfo(request):
                         }
                 return JsonResponse(user_data)
 
+def get_small_user_info(request, username):
+
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    username = username 
+    db = client['myDatabase']
+    user_collection = db['users']
+    user = user_collection.find_one({'username': username})
+    if not user:
+        print("Please login first.")
+    else:
+        if user['username'] == username:
+                first_name = user.get('first_name')
+                last_name = user.get('last_name')
+                phone_number = user.get('phone_number')
+                email = user.get('email')
+ 
+                user_data = {
+                        "first_name": first_name,
+                        "last_name": last_name,
+                        "phone_number": phone_number,
+                        "email": email,
+                        }
+                return JsonResponse(user_data)
+
+
 
 def getuserinfo2(request, username):
 
