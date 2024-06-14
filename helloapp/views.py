@@ -171,51 +171,51 @@ def register(request, username, password, firstName, lastName):
  
 
 
-def registration_api(request, firstName, lastName, username, password):
+# def registration_api(request, firstName, lastName, username, password):
 
- 
-    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+#  
+#     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
 
-    client = pymongo.MongoClient(uri, server_api=ServerApi('1'))
-    db = client['myDatabase']
-    user_collection = db['users']
+#     client = pymongo.MongoClient(uri, server_api=ServerApi('1'))
+#     db = client['myDatabase']
+#     user_collection = db['users']
 
-    # Ensure the request body is JSON
+#     # Ensure the request body is JSON
 
-    hashed_password = bcrypt.hashpw(password, bcrypt.gensalt())
+#     hashed_password = bcrypt.hashpw(password, bcrypt.gensalt())
 
-    # Create a new user document with additional fields set to null
-    new_user = {
-        "username": username,
-        "password": hashed_password,
-        "first_name": firstName,
-        "last_name": lastName,
-        "phone_number": None,
-        "email": None,
-        "devices": [],
-        "number_of_devices": [],
-        "number_of_files": [],
-        "overall_date_added": [],
-        "total_average_download_speed": [],
-        "total_average_upload_speed": [],
-        "total_device_storage": [],
-        "total_average_cpu_usage": [],
-        "total_average_gpu_usage": [],
-        "total_average_ram_usage": [],
-    }
+#     # Create a new user document with additional fields set to null
+#     new_user = {
+#         "username": username,
+#         "password": hashed_password,
+#         "first_name": firstName,
+#         "last_name": lastName,
+#         "phone_number": None,
+#         "email": None,
+#         "devices": [],
+#         "number_of_devices": [],
+#         "number_of_files": [],
+#         "overall_date_added": [],
+#         "total_average_download_speed": [],
+#         "total_average_upload_speed": [],
+#         "total_device_storage": [],
+#         "total_average_cpu_usage": [],
+#         "total_average_gpu_usage": [],
+#         "total_average_ram_usage": [],
+#     }
 
 
-    try:
-        user_collection.insert_one(new_user)
-        message = {
-            "response": "success",
-                } 
-        return JsonResponse(message)
-    except Exception as e:
-        message = {
-            "response": "fail",
-        }
-        return JsonResponse(message)
+#     try:
+#         user_collection.insert_one(new_user)
+#         message = {
+#             "response": "success",
+#                 } 
+#         return JsonResponse(message)
+#     except Exception as e:
+#         message = {
+#             "response": "fail",
+#         }
+#         return JsonResponse(message)
 
 
 def homepage(request):
