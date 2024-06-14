@@ -15,5 +15,6 @@ urlpatterns = [
     path('getuserinfo/', views.getuserinfo, name='login'),
     path('getuserinfo2/<str:username>/', views.getuserinfo2, name='login'),
     path('getuserinfo3/<str:username>/<str:password>/', views.getuserinfo3, name='login'),
+    path('register/<str:username>/<str:password>/<str:firstName>/<str:lastName>/', views.register, name='login'),
 
 ]

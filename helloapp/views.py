@@ -122,6 +122,52 @@ def getuserinfo3(request, username, password):
         "username": username  # Return username if success, None if fail
     }
     return JsonResponse(user_data)
+def register(request, username, password, firstName, lastName):
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client['myDatabase']
+    user_collection = db['users']
+    user = user_collection.find_one({'username': username})
+
+    password_bytes = password.encode('utf-8')  # Encode the string to bytes
+    hashed_password = bcrypt.hashpw(password_bytes, bcrypt.gensalt())
+    if user:
+        user_data = {
+            "result": "user_already_exists",
+            "username": username
+        }
+        return JsonResponse(user_data)
+
+    new_user = {
+        "username": username,
+        "password": hashed_password,
+        "first_name": firstName,
+        "last_name": lastName,
+        "phone_number": None,
+        "email": None,
+        "devices": [],
+        "number_of_devices": [],
+        "number_of_files": [],
+        "overall_date_added": [],
+        "total_average_download_speed": [],
+        "total_average_upload_speed": [],
+        "total_device_storage": [],
+        "total_average_cpu_usage": [],
+        "total_average_gpu_usage": [],
+        "total_average_ram_usage": [],
+    }
+
+    try:
+        user_collection.insert_one(new_user)
+    except Exception as e:
+        print(f"Error sending to device: {e}")
+    result = "success"
+
+    user_data = {
+        "result": result,
+        "username": username  # Return username if success, None if fail
+    }
+    return JsonResponse(user_data)
  
 
 
