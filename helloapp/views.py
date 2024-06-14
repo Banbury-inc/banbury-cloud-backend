@@ -122,6 +122,45 @@ def getuserinfo3(request, username, password):
         "username": username  # Return username if success, None if fail
     }
     return JsonResponse(user_data)
+def change_profile(request, username, password, first_name, last_name, email):
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client['myDatabase']
+    user_collection = db['users']
+    user = user_collection.find_one({'username': username})
+
+    if not user:
+        return JsonResponse({"result": "fail", "message": "User not found. Please login first."})
+
+    if password == "undefined":
+
+       user_collection.update_one({'_id': user['_id']}, {'$set': {
+            'first_name': first_name,
+            'last_name': last_name,
+            'username': username,
+            'email': email,
+            }})
+    else:
+        password_bytes = password.encode('utf-8')  # Encode the string to bytes
+        hashed_password = bcrypt.hashpw(password_bytes, bcrypt.gensalt())
+ 
+        user_collection.update_one({'_id': user['_id']}, {'$set': {
+            'first_name': first_name,
+            'last_name': last_name,
+            'username': username,
+            'email': email,
+            'password': hashed_password,
+            }})
+ 
+    result = "success"
+
+    user_data = {
+        "result": result,
+        "username": username  # Return username if success, None if fail
+    }
+    return JsonResponse(user_data)
+
+
 def register(request, username, password, firstName, lastName):
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
