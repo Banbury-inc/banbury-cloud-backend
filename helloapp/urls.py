@@ -16,7 +16,7 @@ urlpatterns = [
     path('getuserinfo2/<str:username>/', views.getuserinfo2, name='login'),
     path('get_small_user_info/<str:username>/', views.get_small_user_info, name='login'),
     path('getuserinfo3/<str:username>/<str:password>/', views.getuserinfo3, name='login'),
-    path('update_devices/<str:username>', views.update_devices, name='login'),
+    path('update_devices/<str:username>/', views.update_devices, name='login'),
     path('register/<str:username>/<str:password>/<str:firstName>/<str:lastName>/', views.register, name='login'),
     path('change_profile/<str:username>/<str:password>/<str:first_name>/<str:last_name>/<str:email>/', views.change_profile, name='login'),
 
