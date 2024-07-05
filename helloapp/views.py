@@ -148,6 +148,27 @@ def getuserinfo3(request, username, password):
         "username": username  # Return username if success, None if fail
     }
     return JsonResponse(user_data)
+
+def update_devices(request, username):
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            devices = data.get('devices', [])
+            uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+            client = MongoClient(uri)
+            db = client['myDatabase']
+            user_collection = db['users']
+            user = user_collection.find_one({'username': username})
+            user_collection.update_one({'_id': user['_id']}, {'$set': {'devices': devices}})
+       
+            return JsonResponse({'response': 'success'})
+        except ValueError:
+            return JsonResponse({'error': 'Invalid JSON'}, status=400)
+    else:
+        return JsonResponse({'error': 'Invalid method'}, status=400)
+
+
+
 def change_profile(request, username, password, first_name, last_name, email):
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
