@@ -148,7 +148,7 @@ def getuserinfo3(request, username, password):
         "username": username  # Return username if success, None if fail
     }
     return JsonResponse(user_data)
-
+@csrf_exempt
 def update_devices(request, username):
     if request.method == 'POST':
         try:
