@@ -148,25 +148,49 @@ def getuserinfo3(request, username, password):
         "username": username  # Return username if success, None if fail
     }
     return JsonResponse(user_data)
+
+
+
 @csrf_exempt
 def update_devices(request, username):
     if request.method == 'POST':
         try:
+            # Load JSON data from the request body
             data = json.loads(request.body)
-            devices = data.get('devices', [])
+            new_files = data.get('files', [])
+            device_name = data.get('device_name')
+
+            # Connection URI to MongoDB
             uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
             client = MongoClient(uri)
             db = client['myDatabase']
             user_collection = db['users']
+
+            # Find the user by username
             user = user_collection.find_one({'username': username})
-            user_collection.update_one({'_id': user['_id']}, {'$set': {'devices': devices}})
-            return JsonResponse({'response': 'success'})
-        except ValueError:
+
+            # Update the files array for the specific device
+            result = user_collection.update_one(
+                {'_id': user['_id'], 'devices.device_name': device_name},
+                {'$set': {'devices.$.files': new_files}}
+            )
+
+            # Check if the update was successful
+            if result.modified_count > 0:
+                return JsonResponse({'response': 'success'})
+            else:
+                return JsonResponse({'error': 'Device not found or no update needed'}, status=404)
+
+        except json.JSONDecodeError:
             return JsonResponse({'error': 'Invalid JSON'}, status=400)
-    if request.method == 'GET':
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=500)
+
+    elif request.method == 'GET':
         return JsonResponse({'response': 'success'})
+
     else:
-        return JsonResponse({'error': 'Invalid method'}, status=400)
+        return JsonResponse({'error': 'Invalid method'}, status=405)
 
 
 
