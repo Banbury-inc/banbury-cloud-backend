@@ -163,6 +163,8 @@ def update_devices(request, username):
             return JsonResponse({'response': 'success'})
         except ValueError:
             return JsonResponse({'error': 'Invalid JSON'}, status=400)
+    if request.method == 'GET':
+        return JsonResponse({'response': 'success'})
     else:
         return JsonResponse({'error': 'Invalid method'}, status=400)
 
