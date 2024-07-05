@@ -160,7 +160,6 @@ def update_devices(request, username):
             user_collection = db['users']
             user = user_collection.find_one({'username': username})
             user_collection.update_one({'_id': user['_id']}, {'$set': {'devices': devices}})
-       
             return JsonResponse({'response': 'success'})
         except ValueError:
             return JsonResponse({'error': 'Invalid JSON'}, status=400)
