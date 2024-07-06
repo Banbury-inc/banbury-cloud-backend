@@ -179,7 +179,8 @@ def update_devices(request, username):
             if result.modified_count > 0:
                 return JsonResponse({'response': 'success'})
             else:
-                return JsonResponse({'error': 'Device not found or no update needed'}, status=404)
+                # return JsonResponse({'error': 'Device not found or no update needed'}, status=404)
+                return JsonResponse({'response': 'no change needed'})
 
         except json.JSONDecodeError:
             return JsonResponse({'error': 'Invalid JSON'}, status=400)
