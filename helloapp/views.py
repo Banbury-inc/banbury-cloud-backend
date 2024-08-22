@@ -155,14 +155,20 @@ def get_neuranet_info(request):
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
     db = client['myDatabase']
-    server_data = db['server']
-    total_data_processed = server_data.find_one({'total_data_processed': 1})
-    total_number_of_requests = server_data.find_one({'total_number_of_requests': 1})
+    server_data_collection = db['server']
+
+    # Find the document
+    server_data = server_data_collection.find_one({})
+
+    # Extract the specific fields
+    total_data_processed = server_data.get('total_data_processed', None)
+    total_number_of_requests = server_data.get('total_number_of_requests', None)
 
     collected_server_data = {
         "total_data_processed": total_data_processed,
-        "total_number_of_requests": total_number_of_requests  # Return username if success, None if fail
+        "total_number_of_requests": total_number_of_requests
     }
+
     return JsonResponse(collected_server_data)
 
 
