@@ -151,6 +151,23 @@ def getuserinfo3(request, username, password):
 
 
 
+def get_neuranet_info(request):
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client['myDatabase']
+    server_data = db['server']
+    total_data_processed = server_data['total_data_processed']
+    total_number_of_requests = server_data['total_number_of_requests']
+
+    collected_server_data = {
+        "total_data_processed": total_data_processed,
+        "total_number_of_requests": total_number_of_requests  # Return username if success, None if fail
+    }
+    return JsonResponse(collected_server_data)
+
+
+
+
 @csrf_exempt
 def update_devices(request, username):
     if request.method == 'POST':
