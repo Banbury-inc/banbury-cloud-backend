@@ -156,8 +156,8 @@ def get_neuranet_info(request):
     client = MongoClient(uri)
     db = client['myDatabase']
     server_data = db['server']
-    total_data_processed = server_data['total_data_processed']
-    total_number_of_requests = server_data['total_number_of_requests']
+    total_data_processed = server_data.find_one({'total_data_processed': 1})
+    total_number_of_requests = server_data.find_one({'total_number_of_requests': 1})
 
     collected_server_data = {
         "total_data_processed": total_data_processed,
