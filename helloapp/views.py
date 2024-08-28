@@ -342,14 +342,11 @@ def new_register(request, username, password, firstName, lastName):
     }
     return JsonResponse(user_data)
  
-def add_device(request, username, password, device_name):
+def add_device(request, username, device_name):
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
     db = client['NeuraNet']
     user_collection = db['devices']
-
-    password_bytes = password.encode('utf-8')  # Encode the string to bytes
-    hashed_password = bcrypt.hashpw(password_bytes, bcrypt.gensalt())
 
     new_device = {
             "device_name": device_name,
