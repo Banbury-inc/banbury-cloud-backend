@@ -19,6 +19,7 @@ urlpatterns = [
     path('getuserinfo3/<str:username>/<str:password>/', views.getuserinfo3, name='login'),
     path('update_devices/<str:username>/', views.update_devices, name='login'),
     path('register/<str:username>/<str:password>/<str:firstName>/<str:lastName>/', views.register, name='login'),
+    path('new_register/<str:username>/<str:password>/<str:firstName>/<str:lastName>/', views.new_register, name='login'),
     path('change_profile/<str:username>/<str:password>/<str:first_name>/<str:last_name>/<str:email>/', views.change_profile, name='login'),
 
 ]

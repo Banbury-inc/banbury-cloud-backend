@@ -304,7 +304,44 @@ def register(request, username, password, firstName, lastName):
     }
     return JsonResponse(user_data)
  
+def new_register(request, username, password, firstName, lastName):
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client['NeuraNet']
+    user_collection = db['users']
+    user = user_collection.find_one({'username': username})
 
+    password_bytes = password.encode('utf-8')  # Encode the string to bytes
+    hashed_password = bcrypt.hashpw(password_bytes, bcrypt.gensalt())
+    if user:
+        user_data = {
+            "result": "user_already_exists",
+            "username": username
+        }
+        return JsonResponse(user_data)
+
+    new_user = {
+        "username": username,
+        "password": hashed_password,
+        "first_name": firstName,
+        "last_name": lastName,
+        "phone_number": None,
+        "email": None,
+        "devices": [],
+    }
+
+    try:
+        user_collection.insert_one(new_user)
+    except Exception as e:
+        print(f"Error sending to device: {e}")
+    result = "success"
+
+    user_data = {
+        "result": result,
+        "username": username  # Return username if success, None if fail
+    }
+    return JsonResponse(user_data)
+ 
 
 # def registration_api(request, firstName, lastName, username, password):
 
