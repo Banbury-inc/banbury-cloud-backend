@@ -342,6 +342,43 @@ def new_register(request, username, password, firstName, lastName):
     }
     return JsonResponse(user_data)
  
+def add_device(request, username, password, device_name):
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client['NeuraNet']
+    user_collection = db['devices']
+
+    password_bytes = password.encode('utf-8')  # Encode the string to bytes
+    hashed_password = bcrypt.hashpw(password_bytes, bcrypt.gensalt())
+
+    new_device = {
+            "device_name": device_name,
+            "device_type": "",
+            "storage_capacity_gb": "",
+            "date_added": [],
+            "upload_network_speed": [],
+            "download_network_speed": [],
+            "gpu_usage": [],
+            "cpu_usage": [],
+            "ram_usage": [],
+            "ram_total": [],
+            "ram_free": [],
+            "sync_status": True,
+            "online": True
+    }
+
+    try:
+        user_collection.insert_one(new_device)
+    except Exception as e:
+        print(f"Error sending to device: {e}")
+    result = "success"
+
+    user_data = {
+        "result": result,
+        "username": username  # Return username if success, None if fail
+    }
+    return JsonResponse(user_data)
+ 
 
 # def registration_api(request, firstName, lastName, username, password):
 
