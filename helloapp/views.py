@@ -347,9 +347,20 @@ def add_device(request, username, device_name):
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
     db = client['NeuraNet']
-    user_collection = db['devices']
+    device_collection = db['devices']
+    user_collection = db['users']
+
+    # Find the user_id based on username
+    user = user_collection.find_one({"username": username})
+    if not user:
+        return JsonResponse({"result": "error", "message": "Device not found."})
+
+    user_id = user['_id']  # Get the ObjectId for the device
+
+
 
     new_device = {
+            "user_id": user_id,
             "device_name": device_name,
             "device_type": "",
             "storage_capacity_gb": "",
@@ -366,7 +377,7 @@ def add_device(request, username, device_name):
     }
 
     try:
-        user_collection.insert_one(new_device)
+        device_collection.insert_one(new_device)
     except Exception as e:
         print(f"Error sending to device: {e}")
     result = "success"
