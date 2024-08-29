@@ -548,10 +548,10 @@ def add_file(request, username):
         data = json.loads(request.body)
         
         # Extract specific data from the JSON (for example: device_id and date_added)
-        device_name = data.get('device_name')
         file_type = data.get('file_type')
         file_name = data.get('file_name')
         file_path = data.get('file_path')
+        device_name = data.get('device_name')
 
 
         uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
@@ -572,6 +572,7 @@ def add_file(request, username):
                 "file_type": file_type,
                 "file_name": file_name,
                 "file_path": file_path,
+                "device_name": device_name,
        }
 
         try:
