@@ -98,14 +98,12 @@ def getuserinfo(request, username):
                 last_name = user.get('last_name')
                 phone_number = user.get('phone_number')
                 email = user.get('email')
-                devices = user.get('devices', [])
  
                 user_data = {
                         "first_name": first_name,
                         "last_name": last_name,
                         "phone_number": phone_number,
                         "email": email,
-                        "devices": devices,
                         }
                 return JsonResponse(user_data)
 def getdeviceinfo(request, username):
