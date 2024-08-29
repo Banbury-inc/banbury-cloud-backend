@@ -17,6 +17,7 @@ urlpatterns = [
     path('getuserinfo2/<str:username>/', views.getuserinfo2, name='login'),
     path('get_small_user_info/<str:username>/', views.get_small_user_info, name='login'),
     path('getuserinfo3/<str:username>/<str:password>/', views.getuserinfo3, name='login'),
+    path('getuserinfo4/<str:username>/<str:password>/', views.getuserinfo3, name='login'),
     path('update_devices/<str:username>/', views.update_devices, name='login'),
     path('add_device/<str:username>/<str:device_name>/', views.add_device, name='login'),
     path('add_file/<str:username>/', views.add_file, name='login'),
