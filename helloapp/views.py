@@ -350,6 +350,7 @@ def new_register(request, username, password, firstName, lastName):
 
     password_bytes = password.encode('utf-8')  # Encode the string to bytes
     hashed_password = bcrypt.hashpw(password_bytes, bcrypt.gensalt())
+
     if user:
         user_data = {
             "result": "user_already_exists",
@@ -440,22 +441,22 @@ def add_device(request, username, device_name):
             {"$push": {"devices": device_id}}
         )
 
-        # # Append all usage data and other arrays in the device document
-        # device_collection.update_one(
-        #     {"_id": device_id},
-        #     {
-        #         "$push": {
-        #             "gpu_usage": gpu_usage,
-        #             "cpu_usage": cpu_usage,
-        #             "ram_usage": ram_usage,
-        #             "ram_total": ram_total,
-        #             "ram_free": ram_free,
-        #             "download_network_speed": download_network_speed,
-        #             "upload_network_speed": upload_network_speed,
-        #             "date_added": date_added
-        #         }
-        #     }
-        # )
+        # Append all usage data and other arrays in the device document
+        device_collection.update_one(
+            {"_id": device_id},
+            {
+                "$push": {
+                    "gpu_usage": gpu_usage,
+                    "cpu_usage": cpu_usage,
+                    "ram_usage": ram_usage,
+                    "ram_total": ram_total,
+                    "ram_free": ram_free,
+                    "download_network_speed": download_network_speed,
+                    "upload_network_speed": upload_network_speed,
+                    "date_added": date_added
+                }
+            }
+        )
 
     except Exception as e:
         print(f"Error sending to device: {e}")
