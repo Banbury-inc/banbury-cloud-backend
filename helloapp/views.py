@@ -386,7 +386,7 @@ def add_file(request, username):
         data = json.loads(request.body)
         
         # Extract specific data from the JSON (for example: device_id and date_added)
-        device_id = data.get('device_id')
+        device_name = data.get('device_name')
         file_type = data.get('file_type')
         file_name = data.get('file_name')
         file_path = data.get('file_path')
@@ -395,17 +395,25 @@ def add_file(request, username):
         uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
         client = MongoClient(uri)
         db = client['NeuraNet']
-        user_collection = db['files']
+        file_collection = db['files']
+        device_collection = db['devices']
+
+        # Find the device_id based on device_name
+        device = device_collection.find_one({"device_name": device_name})
+        if not device:
+            return JsonResponse({"result": "error", "message": "Device not found."})
+
+        device_id = device['_id']  # Get the ObjectId for the device
 
         new_file = {
-                "device_id": ObjectId(device_id),
+                "device_id": device_id,
                 "file_type": file_type,
                 "file_name": file_name,
                 "file_path": file_path,
        }
 
         try:
-            user_collection.insert_one(new_file)
+            file_collection.insert_one(new_file)
         except Exception as e:
             print(f"Error sending to device: {e}")
         result = "success"
