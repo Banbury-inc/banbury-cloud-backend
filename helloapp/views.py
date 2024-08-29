@@ -377,7 +377,15 @@ def add_device(request, username, device_name):
     }
 
     try:
-        device_collection.insert_one(new_device)
+        # Insert the new device and get the inserted_id
+        result = device_collection.insert_one(new_device)
+        device_id = result.inserted_id
+
+        # Update the user collection to add the device_id to the user's list of devices
+        user_collection.update_one(
+            {"_id": user_id},
+            {"$push": {"devices": device_id}}
+        )
     except Exception as e:
         print(f"Error sending to device: {e}")
     result = "success"
