@@ -544,14 +544,23 @@ def add_device(request, username, device_name):
 @require_http_methods(["POST"])
 def add_file(request, username):
 
-        # Parse the JSON body
-        data = json.loads(request.body)
-        
-        # Extract specific data from the JSON (for example: device_id and date_added)
-        file_type = data.get('file_type')
-        file_name = data.get('file_name')
-        file_path = data.get('file_path')
-        device_name = data.get('device_name')
+        try:
+            # Parse the JSON body
+            data = json.loads(request.body)
+            
+            # Extract specific data from the JSON (for example: device_id and date_added)
+            file_type = data.get('file_type')
+            file_name = data.get('file_name')
+            file_path = data.get('file_path')
+            date_uploaded = data.get('date_uploaded')
+            date_modified = data.get('date_modified')
+            file_size = data.get('file_size')
+            file_priority = data.get('file_priority')
+            file_parent = data.get('file_parent')
+            original_device = data.get('original_device')
+            kind = data.get('kind')
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Invalid JSON'}, status=400)
 
 
         uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
@@ -561,18 +570,27 @@ def add_file(request, username):
         device_collection = db['devices']
 
         # Find the device_id based on device_name
-        device = device_collection.find_one({"device_name": device_name})
+        device = device_collection.find_one({"device_name": original_device})
         if not device:
-            return JsonResponse({"result": "error", "message": "Device not found."})
+            return JsonResponse({"result": "device_not_found", "message": "Device not found."})
 
-        device_id = device['_id']  # Get the ObjectId for the device
+        try:
+            device_id = device['_id']  # Get the ObjectId for the device
+        except:
+            return JsonResponse({"result": "object_id_not_found", "message": "Device id not found."})
 
         new_file = {
                 "device_id": device_id,
                 "file_type": file_type,
                 "file_name": file_name,
                 "file_path": file_path,
-                "device_name": device_name,
+                "date_uploaded": date_uploaded,
+                "date_modified": date_modified,
+                "file_size": file_size,
+                "file_priority": file_priority,
+                "file_parent": file_parent,
+                "original_device": original_device,
+                "kind": kind
        }
 
         try:
