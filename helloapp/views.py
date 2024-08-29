@@ -150,6 +150,35 @@ def getuserinfo3(request, username, password):
     }
     return JsonResponse(user_data)
 
+def getuserinfo4(request, username, password):
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client['NeuraNet']
+    user_collection = db['users']
+    user = user_collection.find_one({'username': username})
+
+    if not user:
+        return JsonResponse({"result": "fail", "message": "User not found. Please login first."})
+
+    # Assuming password stored in the database is hashed and saved as bytes.
+    # Also assuming 'password' parameter from the function call is the plaintext password to verify.
+    stored_hashed_password = user['password']
+    password_bytes = password.encode('utf-8')  # Encode the plaintext password to bytes
+
+    if bcrypt.checkpw(password_bytes, stored_hashed_password):
+        result = "success"
+        username = user.get('username')
+    else:
+        result = "fail"
+        username = None
+
+    user_data = {
+        "result": result,
+        "username": username  # Return username if success, None if fail
+    }
+    return JsonResponse(user_data)
+
+
 
 
 def get_neuranet_info(request):
