@@ -346,19 +346,21 @@ def new_register(request, username, password, firstName, lastName):
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
 def add_device(request, username, device_name):
-
-    data = json.loads(request.body)
-    device_name = data.get('device_name')
-    device_type = data.get('device_type')
-    storage_capacity_gb = data.get('storage_capacity_gb')
-    date_added = data.get('date_added')
-    upload_network_speed = data.get('upload_network_speed')
-    download_network_speed = data.get('download_network_speed')
-    gpu_usage = data.get('gpu_usage')
-    cpu_usage = data.get('cpu_usage')
-    ram_usage = data.get('ram_usage')
-    ram_total = data.get('ram_total')
-    ram_free = data.get('ram_free')
+    try:
+        data = json.loads(request.body)
+        device_name = data.get('device_name')
+        device_type = data.get('device_type')
+        storage_capacity_gb = data.get('storage_capacity_gb')
+        date_added = data.get('date_added')
+        upload_network_speed = data.get('upload_network_speed')
+        download_network_speed = data.get('download_network_speed')
+        gpu_usage = data.get('gpu_usage')
+        cpu_usage = data.get('cpu_usage')
+        ram_usage = data.get('ram_usage')
+        ram_total = data.get('ram_total')
+        ram_free = data.get('ram_free')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
 
 
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
