@@ -377,6 +377,45 @@ def add_device(request, username, device_name):
     return JsonResponse(user_data)
  
 
+
+@csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
+@require_http_methods(["POST"])
+def add_file(request, username):
+        # Parse the JSON body
+        data = json.loads(request.body)
+        
+        # Extract specific data from the JSON (for example: device_id and date_added)
+
+        file_type = data.get('file_type')
+        file_name = data.get('file_name')
+        file_path = data.get('file_path')
+
+
+        uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+        client = MongoClient(uri)
+        db = client['NeuraNet']
+        user_collection = db['files']
+
+        new_file = {
+                "file_type": file_type,
+                "file_name": file_name,
+                "file_path": file_path,
+       }
+
+        try:
+            user_collection.insert_one(new_file)
+        except Exception as e:
+            print(f"Error sending to device: {e}")
+        result = "success"
+
+        user_data = {
+            "result": result,
+            "username": username  # Return username if success, None if fail
+        }
+        return JsonResponse(user_data)
+
+
+    
 # def registration_api(request, firstName, lastName, username, password):
 
 #  
