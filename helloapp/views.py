@@ -2,6 +2,7 @@ from django.shortcuts import render, redirect
 from django.http import HttpResponse, JsonResponse
 from django.conf import settings
 import os
+from bson import ObjectId
 import pymongo
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
@@ -385,7 +386,7 @@ def add_file(request, username):
         data = json.loads(request.body)
         
         # Extract specific data from the JSON (for example: device_id and date_added)
-
+        device_id = data.get('device_id')
         file_type = data.get('file_type')
         file_name = data.get('file_name')
         file_path = data.get('file_path')
@@ -397,6 +398,7 @@ def add_file(request, username):
         user_collection = db['files']
 
         new_file = {
+                "device_id": ObjectId(device_id),
                 "file_type": file_type,
                 "file_name": file_name,
                 "file_path": file_path,
