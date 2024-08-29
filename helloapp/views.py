@@ -15,45 +15,6 @@ from .forms import LoginForm
 from .forms import UserProfileForm
 import json
 
-def getuserinfo(request):
-    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
-    client = MongoClient(uri)
-    username = "mmills6060" 
-    db = client['myDatabase']
-    user_collection = db['users']
-    user = user_collection.find_one({'username': username})
-    if not user:
-        print("Please login first.")
-    else:
-        if user['username'] == username:
-                first_name = user.get('first_name')
-                last_name = user.get('last_name')
-                phone_number = user.get('phone_number')
-                email = user.get('email')
-
-                devices = user.get('devices', [])
-                number_of_files = user.get('number_of_files', [])
-                number_of_devices = user.get('number_of_devices', [])
-                overall_date_added = user.get('overall_date_added', [])
-                total_average_upload_speed = user.get('total_average_upload_speed', [])
-                total_average_download_speed = user.get('total_average_download_speed', [])
-                total_device_storage = user.get('total_device_storage', [])
- 
-                user_data = {
-                        "first_name": first_name,
-                        "last_name": last_name,
-                        "phone_number": phone_number,
-                        "email": email,
-                        "devices": devices,
-                        "number_of_devices": number_of_devices,
-                        "number_of_files": number_of_files,
-                        "overall_date_added": overall_date_added,
-                        "total_average_upload_speed": total_average_upload_speed,
-                        "total_average_download_speed": total_average_download_speed,
-                        "total_device_storage": total_device_storage,
-                        }
-                return JsonResponse(user_data)
-
 def get_small_user_info(request, username):
 
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
@@ -121,7 +82,117 @@ def getuserinfo2(request, username):
                         }
                 return JsonResponse(user_data)
 
+def getuserinfo(request, username):
 
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    username = username 
+    db = client['NeuraNet']
+    user_collection = db['users']
+    user = user_collection.find_one({'username': username})
+    if not user:
+        print("Please login first.")
+    else:
+        if user['username'] == username:
+                first_name = user.get('first_name')
+                last_name = user.get('last_name')
+                phone_number = user.get('phone_number')
+                email = user.get('email')
+                devices = user.get('devices', [])
+ 
+                user_data = {
+                        "first_name": first_name,
+                        "last_name": last_name,
+                        "phone_number": phone_number,
+                        "email": email,
+                        "devices": devices,
+                        }
+                return JsonResponse(user_data)
+def getdeviceinfo(request, username):
+
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client['NeuraNet']
+    user_collection = db['users']
+    device_collection = db['devices']
+
+    # Find the user by username
+    user = user_collection.find_one({'username': username})
+    
+    if not user:
+        return JsonResponse({"error": "Please login first."}, status=401)
+
+    # Find all devices belonging to the user
+    devices = list(device_collection.find({'user_id': user['_id']}))
+
+    # Prepare devices data for response
+    device_data = []
+    for device in devices:
+        device_data.append({
+            "device_name": device.get('device_name'),
+            "device_type": device.get('device_type'),
+            "storage_capacity_gb": device.get('storage_capacity_gb'),
+            "date_added": device.get('date_added'),
+            "upload_network_speed": device.get('upload_network_speed'),
+            "download_network_speed": device.get('download_network_speed'),
+            "gpu_usage": device.get('gpu_usage'),
+            "cpu_usage": device.get('cpu_usage'),
+            "ram_usage": device.get('ram_usage'),
+            "ram_total": device.get('ram_total'),
+            "ram_free": device.get('ram_free'),
+            "sync_status": device.get('sync_status'),
+            "online": device.get('online'),
+        })
+
+    device_data = {
+        "devices": device_data,
+    }
+    
+    return JsonResponse(device_data)
+
+def getfileinfo(request, username):
+
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client['NeuraNet']
+    user_collection = db['users']
+    device_collection = db['devices']
+    file_collection = db['files']
+
+    # Find the user by username
+    user = user_collection.find_one({'username': username})
+    
+    if not user:
+        return JsonResponse({"error": "Please login first."}, status=401)
+
+    # Find all devices belonging to the user
+    devices = list(device_collection.find({'user_id': user['_id']}))
+
+    # Prepare file data for response
+    all_files_data = []
+    for device in devices:
+        # Find all files for the current device
+        files = list(file_collection.find({'device_id': device['_id']}))
+        
+        # Process each file and append to the list
+        for file in files:
+            all_files_data.append({
+                "file_name": file.get('file_name'),
+                "file_size": file.get('file_size'),
+                "file_type": file.get('file_type'),
+                "file_path": file.get('file_path'),
+                "date_uploaded": file.get('date_uploaded'),
+                "date_modified": file.get('date_modified'),
+                "date_accessed": file.get('date_accessed'),
+                "kind": file.get('kind'),
+                "device_name": device.get('device_name'),  # Include device name for context
+            })
+
+    files_data = {
+        "files": all_files_data,
+    }
+    
+    return JsonResponse(files_data)
 def getuserinfo3(request, username, password):
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
