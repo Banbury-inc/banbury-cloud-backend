@@ -347,7 +347,6 @@ def new_register(request, username, password, firstName, lastName):
 @require_http_methods(["POST"])
 def add_device(request, username, device_name):
 
-
     data = json.loads(request.body)
     device_name = data.get('device_name')
     device_type = data.get('device_type')
@@ -362,8 +361,6 @@ def add_device(request, username, device_name):
     ram_free = data.get('ram_free')
 
 
-
-
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
     db = client['NeuraNet']
@@ -376,8 +373,6 @@ def add_device(request, username, device_name):
         return JsonResponse({"result": "error", "message": "Device not found."})
 
     user_id = user['_id']  # Get the ObjectId for the device
-
-
 
     new_device = {
             "user_id": user_id,
@@ -407,24 +402,26 @@ def add_device(request, username, device_name):
             {"$push": {"devices": device_id}}
         )
 
-        # Append all usage data and other arrays in the device document
-        device_collection.update_one(
-            {"_id": device_id},
-            {
-                "$push": {
-                    "gpu_usage": gpu_usage,
-                    "cpu_usage": cpu_usage,
-                    "ram_usage": ram_usage,
-                    "ram_total": ram_total,
-                    "ram_free": ram_free,
-                    "download_network_speed": download_network_speed,
-                    "upload_network_speed": upload_network_speed,
-                    "date_added": date_added
-                }
-            }
-        )
+        # # Append all usage data and other arrays in the device document
+        # device_collection.update_one(
+        #     {"_id": device_id},
+        #     {
+        #         "$push": {
+        #             "gpu_usage": gpu_usage,
+        #             "cpu_usage": cpu_usage,
+        #             "ram_usage": ram_usage,
+        #             "ram_total": ram_total,
+        #             "ram_free": ram_free,
+        #             "download_network_speed": download_network_speed,
+        #             "upload_network_speed": upload_network_speed,
+        #             "date_added": date_added
+        #         }
+        #     }
+        # )
+
     except Exception as e:
         print(f"Error sending to device: {e}")
+
     result = "success"
 
     user_data = {
@@ -437,7 +434,6 @@ def add_device(request, username, device_name):
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
-
 def add_file(request, username):
 
         # Parse the JSON body
