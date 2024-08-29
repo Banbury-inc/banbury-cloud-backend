@@ -162,8 +162,15 @@ def getuserinfo4(request, username, password):
 
     # Assuming password stored in the database is hashed and saved as bytes.
     # Also assuming 'password' parameter from the function call is the plaintext password to verify.
-    stored_hashed_password = user['password']
-    password_bytes = password.encode('utf-8')  # Encode the plaintext password to bytes
+    try:
+        stored_hashed_password = user['password']
+    except:
+        return JsonResponse({"result": "fail", "message": "Can't find user password"})
+
+    try:
+        password_bytes = password.encode('utf-8')  # Encode the plaintext password to bytes
+    except:
+        return JsonResponse({"result": "fail", "message": "Can't find user password"})
 
     if bcrypt.checkpw(password_bytes, stored_hashed_password):
         result = "success"
