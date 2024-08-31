@@ -712,20 +712,32 @@ def get_tasks_by_username_and_device(request, username):
         uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
         client = MongoClient(uri)
         db = client['NeuraNet']
-        session_collection = db['sessions']
+        try:
+            session_collection = db['sessions']
+        except:
+            return JsonResponse({"error": "Can't find session collection"})
 
         # Query for sessions with the given username and task_device
-        sessions = session_collection.find({"username": username, "task_device": task_device})
+        try:
+            sessions = session_collection.find({"username": username, "task_device": task_device})
+        except:
+            return JsonResponse({"error": "Can't find session collection"})
 
-        # Convert the cursor to a list of dictionaries
-        session_list = list(sessions)
+        try:
+            # Convert the cursor to a list of dictionaries
+            session_list = list(sessions)
+        except:
+            return JsonResponse({"error": "Can't convert cursor to list"})
 
         if not session_list:
             return JsonResponse({"result": "no_tasks_found", "message": "No tasks found for the given username and device."}, status=404)
 
-        # Convert ObjectId to string and prepare JSON response
-        for session in session_list:
-            session['_id'] = str(session['_id'])
+        try:
+            # Convert ObjectId to string and prepare JSON response
+            for session in session_list:
+                session['_id'] = str(session['_id'])
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=500)
 
         return JsonResponse({"result": "success", "tasks": session_list}, status=200)
     
