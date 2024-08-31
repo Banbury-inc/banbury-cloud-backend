@@ -607,6 +607,70 @@ def add_file(request, username):
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
+def add_files(request, username):
+    try:
+        # Parse the JSON body
+        data = json.loads(request.body)
+        
+        # Extract specific data from the JSON
+        files = data.get('files')
+        device_name = data.get('device_name')
+        
+        if not files or not device_name:
+            return JsonResponse({'error': 'Missing files or device_name'}, status=400)
+
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    # Connect to MongoDB
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client['NeuraNet']
+    file_collection = db['files']
+    device_collection = db['devices']
+
+    # Find the device_id based on device_name
+    device = device_collection.find_one({"device_name": device_name})
+    if not device:
+        return JsonResponse({"result": "device_not_found", "message": "Device not found."})
+
+    try:
+        device_id = device['_id']  # Get the ObjectId for the device
+    except KeyError:
+        return JsonResponse({"result": "object_id_not_found", "message": "Device id not found."})
+
+    # Prepare the list of new files to insert
+    new_files = []
+    for file_data in files:
+        new_file = {
+            "device_id": device_id,
+            "file_type": file_data.get('file_type'),
+            "file_name": file_data.get('file_name'),
+            "file_path": file_data.get('file_path'),
+            "date_uploaded": file_data.get('date_uploaded'),
+            "date_modified": file_data.get('date_modified'),
+            "file_size": file_data.get('file_size'),
+            "file_priority": file_data.get('file_priority'),
+            "file_parent": file_data.get('file_parent'),
+            "original_device": file_data.get('original_device'),
+            "kind": file_data.get('kind')
+        }
+        new_files.append(new_file)
+
+    # Insert all new files in one go
+    try:
+        file_collection.insert_many(new_files)
+    except Exception as e:
+        print(f"Error inserting files: {e}")
+        return JsonResponse({"result": "failure", "message": f"Error inserting files: {str(e)}"}, status=500)
+
+    return JsonResponse({"result": "success", "message": f"{len(new_files)} files added successfully."})
+
+
+
+
+@csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
+@require_http_methods(["POST"])
 def add_task(request, username):
 
         try:
