@@ -729,8 +729,13 @@ def get_session(request, username):
         if not session_list:
             return JsonResponse({"result": "no_tasks_found", "message": "No tasks found for the given username and device."}, status=404)
 
+            # Use json.dumps to serialize the data, ensuring all elements are JSON-compatible
+        response_data = {
+            "result": "success",
+            "sessions": session_list
+        }
+        return JsonResponse(json.loads(json.dumps(response_data)), status=200)
 
-        return JsonResponse({"result": "hello world", "tasks": "hello_world"}, status=200)
     
 
 # def registration_api(request, firstName, lastName, username, password):
