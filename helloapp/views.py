@@ -605,8 +605,94 @@ def add_file(request, username):
         }
         return JsonResponse(user_data)
 
+@csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
+@require_http_methods(["POST"])
+def add_task(request, username):
 
-    
+        try:
+            # Parse the JSON body
+            data = json.loads(request.body)
+            # Extract specific data from the JSON (for example: device_id and date_added)
+            task_name = data.get('task_name')
+            task_device = data.get('task_device')
+            task_status = data.get('task_status')
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+
+        uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+        client = MongoClient(uri)
+        db = client['NeuraNet']
+        session_collection = db['sessions']
+        device_collection = db['devices']
+
+        # Find the device_id based on device_name
+        device = device_collection.find_one({"device_name": task_device})
+        if not device:
+            return JsonResponse({"result": "device_not_found", "message": "Device not found."})
+
+        try:
+            device_id = device['_id']  # Get the ObjectId for the device
+        except:
+            return JsonResponse({"result": "object_id_not_found", "message": "Device id not found."})
+
+        new_task = {
+                "device_id": device_id,
+                "task_name": task_name,
+                "task_device": task_device,
+                "task_status": task_status,
+       }
+
+        try:
+            session_collection.insert_one(new_task)
+        except Exception as e:
+            print(f"Error sending to device: {e}")
+        result = "success"
+
+        user_data = {
+            "result": result,
+            "username": username  # Return username if success, None if fail
+        }
+        return JsonResponse(user_data)
+
+@csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
+@require_http_methods(["POST"])
+def update_task(request, username):
+    try:
+        # Parse the JSON body
+        data = json.loads(request.body)
+        task_name = data.get('task_name')
+        task_device = data.get('task_device')  # You may also want to use the device name for better specificity
+        task_status = data.get('task_status')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    if not task_name or not task_status:
+        return JsonResponse({'error': 'Missing task_name or task_status'}, status=400)
+
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client['NeuraNet']
+    session_collection = db['sessions']
+
+    # Use both task_name and task_device to find the specific task
+    query = {"task_name": task_name}
+    if task_device:
+        query["task_device"] = task_device
+
+    # Update the task with the new status
+    update_result = session_collection.update_one(
+        query,
+        {"$set": {"task_status": task_status}}
+    )
+
+    if update_result.matched_count == 0:
+        return JsonResponse({"result": "task_not_found", "message": "Task not found."})
+
+    return JsonResponse({"result": "success", "message": "Task status updated successfully."})    
+
+
+
 # def registration_api(request, firstName, lastName, username, password):
 
 #  
