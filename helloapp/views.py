@@ -719,11 +719,12 @@ def get_session(request, username):
         except:
             return JsonResponse({"error": "Can't find session collection"})
 
-        try:
-            # Convert the cursor to a list of dictionaries
-            session_list = list(sessions)
-        except:
-            return JsonResponse({"error": "Can't convert cursor to list"})
+        # Convert the cursor to a list of dictionaries and serialize ObjectId to string
+        session_list = []
+        for session in sessions:
+            session['_id'] = str(session['_id'])  # Convert ObjectId to string
+            session_list.append(session)
+
 
         if not session_list:
             return JsonResponse({"result": "no_tasks_found", "message": "No tasks found for the given username and device."}, status=404)
