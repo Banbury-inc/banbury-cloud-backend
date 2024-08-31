@@ -694,7 +694,7 @@ def update_task(request, username):
 
 @csrf_exempt
 @require_http_methods(["POST"])
-def get_tasks_by_username_and_device(request, username):
+def get_session(request, username):
     try:
         # Parse the JSON body
         data = json.loads(request.body)
