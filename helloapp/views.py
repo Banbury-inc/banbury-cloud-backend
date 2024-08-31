@@ -723,6 +723,7 @@ def get_session(request, username):
         session_list = []
         for session in sessions:
             session['_id'] = str(session['_id'])  # Convert ObjectId to string
+            session['device_id'] = str(session['device_id'])  # Convert device_id ObjectId to string
             session_list.append(session)
 
 
@@ -734,7 +735,11 @@ def get_session(request, username):
             "result": "success",
             "sessions": session_list
         }
-        return JsonResponse(json.loads(json.dumps(response_data)), status=200)
+
+
+        json_response = json.dumps(response_data, indent=4)
+
+        return JsonResponse(json_response)
 
     
 
