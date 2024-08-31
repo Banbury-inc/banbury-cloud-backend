@@ -662,14 +662,13 @@ def update_task(request, username):
     try:
         # Parse the JSON body
         data = json.loads(request.body)
+
         task_name = data.get('task_name')
         task_device = data.get('task_device')  # You may also want to use the device name for better specificity
         task_status = data.get('task_status')
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid JSON'}, status=400)
 
-    if not task_name or not task_status:
-        return JsonResponse({'error': 'Missing task_name or task_status'}, status=400)
 
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
