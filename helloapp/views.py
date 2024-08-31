@@ -713,11 +713,7 @@ def get_session(request, username):
         except:
             return JsonResponse({"error": "Can't find session collection"})
 
-        # Query for sessions with the given username and task_device
-        try:
-            sessions = session_collection.find({"username": username, "task_device": task_device})
-        except:
-            return JsonResponse({"error": "Can't find session collection"})
+        sessions = session_collection.find({"username": username, "task_device": task_device})
 
         # Convert the cursor to a list of dictionaries and serialize ObjectId to string
         session_list = []
@@ -726,20 +722,13 @@ def get_session(request, username):
             session['device_id'] = str(session['device_id'])  # Convert device_id ObjectId to string
             session_list.append(session)
 
-
-        if not session_list:
-            return JsonResponse({"result": "no_tasks_found", "message": "No tasks found for the given username and device."}, status=404)
-
             # Use json.dumps to serialize the data, ensuring all elements are JSON-compatible
         response_data = {
             "result": "success",
             "sessions": session_list
         }
 
-
-        json_response = json.dumps(response_data, indent=4)
-
-        return JsonResponse(json_response)
+        return JsonResponse(response_data, status=200)
 
     
 
