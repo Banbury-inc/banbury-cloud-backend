@@ -715,17 +715,21 @@ def get_session(request, username):
 
         sessions = session_collection.find({"username": username, "task_device": task_device})
 
-        # Convert the cursor to a list of dictionaries and serialize ObjectId to string
-        session_list = []
-        for session in sessions:
-            session['_id'] = str(session['_id'])  # Convert ObjectId to string
-            session['device_id'] = str(session['device_id'])  # Convert device_id ObjectId to string
-            session_list.append(session)
 
-            # Use json.dumps to serialize the data, ensuring all elements are JSON-compatible
+        all_sessions_data = []
+        # Convert the cursor to a list of dictionaries and serialize ObjectId to string
+        for session in sessions:
+            all_sessions_data.append({
+                "task_name": session["task_name"],
+                "task_device": session["task_device"],
+                "task_status": session["task_status"],
+                })
+
+
+
         response_data = {
             "result": "success",
-            "sessions": session_list
+            "sessions": all_sessions_data
         }
 
         return JsonResponse(response_data, status=200)

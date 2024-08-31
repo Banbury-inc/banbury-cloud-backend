@@ -1,5 +1,7 @@
 import json
 from pymongo.mongo_client import MongoClient
+import json
+
 
 def get_session(username):
         # Parse the JSON body
@@ -13,18 +15,21 @@ def get_session(username):
         # Query for sessions with the given username and task_device
         sessions = session_collection.find({"username": username, "task_device": task_device})
 
+        all_sessions_data = []
         # Convert the cursor to a list of dictionaries and serialize ObjectId to string
-        session_list = []
         for session in sessions:
-            session['_id'] = str(session['_id'])  # Convert _id ObjectId to string
-            session['device_id'] = str(session['device_id'])  # Convert device_id ObjectId to string
-            session_list.append(session)
+            all_sessions_data.append({
+                "task_name": session["task_name"],
+                "task_device": session["task_device"],
+                "task_status": session["task_status"],
+                })
+
 
 
             # Use json.dumps to serialize the data, ensuring all elements are JSON-compatible
         response_data = {
             "result": "success",
-            "sessions": session_list
+            "sessions": all_sessions_data
         }
         return response_data
 
@@ -34,8 +39,6 @@ def main():
     response_data = get_session(username)
     print(response_data)
 
-    json_response = json.dumps(response_data, indent=3)
-    print(json_response)
 
 if __name__ == '__main__':
     main()
