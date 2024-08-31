@@ -698,40 +698,18 @@ def get_session(request, username):
     try:
         # Parse the JSON body
         data = json.loads(request.body)
-
-        task_device = data.get('task_device')
         
-        if not task_device:
-            return JsonResponse({"result": "no_device_provided", "message": "No device provided."}, status=400)
-        if not username:
-            return JsonResponse({"result": "no_username_provided", "message": "No username provided."}, status=400)
     except json.JSONDecodeError as e:
         print(f"JSON decode error: {e}")
         return JsonResponse({'error': 'Invalid JSON'}, status=400)
 
-    try:
-        uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
-        client = MongoClient(uri)
-        db = client['NeuraNet']
-        session_collection = db['sessions']
-        device_collection = db['devices']
-
-        # Find the device_id based on device_name
-        device = device_collection.find_one({"device_name": task_device})
-        if not device:
-            return JsonResponse({"result": "device_not_found", "message": "Device not found."})
-
-        try:
-            device_id = device['_id']  # Get the ObjectId for the device
-        except:
-            return JsonResponse({"result": "object_id_not_found", "message": "Device id not found."})
-
-
-        return JsonResponse({"result": "success", "sessions": device_id}, status=200)
+    user_data = {
+            "result": "success",
+            "username": username  # Return username if success, None if fail
+        }
+ 
+    return JsonResponse(user_data)
     
-    except Exception as e:
-        print(f"Server error: {e}")
-        return JsonResponse({"error": "Internal server error"}, status=500)
 
 
 # def registration_api(request, firstName, lastName, username, password):
