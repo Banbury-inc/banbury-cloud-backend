@@ -710,21 +710,11 @@ def get_session(request, username):
     device_collection = db['devices']
     session_collection = db['sessions']
 
-    # Find the device_id based on device_name
-    device = device_collection.find_one({"device_name": data.get('task_device')})
-    if not device:
-        return JsonResponse({"result": "device_not_found", "message": "Device not found."})
-
-    try:
-        device_id = device['_id']  # Get the ObjectId for the device
-    except:
-        return JsonResponse({"result": "object_id_not_found", "message": "Device id not found."})
-
 
     user_data = {
             "result": "success",
             "username": username,  # Return username if success, None if fail
-            "device_id": device_id
+            "device_id": session_collection
         }
  
     return JsonResponse(user_data)
