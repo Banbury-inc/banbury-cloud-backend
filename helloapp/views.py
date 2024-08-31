@@ -732,14 +732,8 @@ def get_session(request, username):
         if not session_list:
             return JsonResponse({"result": "no_tasks_found", "message": "No tasks found for the given username and device."}, status=404)
 
-        try:
-            # Convert ObjectId to string and prepare JSON response
-            for session in session_list:
-                session['_id'] = str(session['_id'])
-        except Exception as e:
-            return JsonResponse({"error": str(e)}, status=500)
 
-        return JsonResponse({"result": "success", "tasks": session_list}, status=200)
+        return JsonResponse({"result": "success", "tasks": "hello_world"}, status=200)
     
     except Exception as e:
         return JsonResponse({"error": "Internal server error", "details": str(e)}, status=500)
