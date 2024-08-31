@@ -714,23 +714,23 @@ def get_session(request, username):
         client = MongoClient(uri)
         db = client['NeuraNet']
         session_collection = db['sessions']
+        device_collection = db['devices']
 
-        # Query for sessions with the given username and task_device
-        print(f"Querying for username: {username} and task_device: {task_device}")
-        sessions = session_collection.find({"username": username, "task_device": task_device})
+        # Find the device_id based on device_name
+        device = device_collection.find_one({"device_name": task_device})
+        if not device:
+            return JsonResponse({"result": "device_not_found", "message": "Device not found."})
 
-        # Convert the cursor to a list of dictionaries
-        session_list = list(sessions)
-        print(f"Session list: {session_list}")
+        try:
+            device_id = device['_id']  # Get the ObjectId for the device
+        except:
+            return JsonResponse({"result": "object_id_not_found", "message": "Device id not found."})
 
-        if not session_list:
-            return JsonResponse({"result": "no_sessions_found", "message": "No sessions found for the given username and task device."}, status=404)
+        # Find all sessions for the specific device
+        sessions = list(session_collection.find({'device_id': device_id, 'username': username}))
 
-        # Convert ObjectId to string and prepare JSON response
-        for session in session_list:
-            session['_id'] = str(session['_id'])
 
-        return JsonResponse({"result": "success", "sessions": session_list}, status=200)
+        return JsonResponse({"result": "success", "sessions": sessions}, status=200)
     
     except Exception as e:
         print(f"Server error: {e}")
