@@ -694,32 +694,43 @@ def update_task(request, username):
 
 @csrf_exempt
 @require_http_methods(["POST"])
-def get_session(request, username):
+def get_tasks_by_username_and_device(request, username):
     try:
         # Parse the JSON body
         data = json.loads(request.body)
+        task_device = data.get('task_device')
+        
+        if not task_device:
+            return JsonResponse({"result": "no_device_provided", "message": "No device provided."}, status=400)
+        if not username:
+            return JsonResponse({"result": "no_username_provided", "message": "No username provided."}, status=400)
         
     except json.JSONDecodeError as e:
-        print(f"JSON decode error: {e}")
         return JsonResponse({'error': 'Invalid JSON'}, status=400)
 
+    try:
+        uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+        client = MongoClient(uri)
+        db = client['NeuraNet']
+        session_collection = db['sessions']
 
-    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
-    client = MongoClient(uri)
-    db = client['NeuraNet']
-    device_collection = db['devices']
-    session_collection = db['sessions']
+        # Query for sessions with the given username and task_device
+        sessions = session_collection.find({"username": username, "task_device": task_device})
 
+        # Convert the cursor to a list of dictionaries
+        session_list = list(sessions)
 
-    user_data = {
-            "result": "success",
-            "username": username,  # Return username if success, None if fail
-            "device_id": session_collection
-        }
- 
-    return JsonResponse(user_data)
+        if not session_list:
+            return JsonResponse({"result": "no_tasks_found", "message": "No tasks found for the given username and device."}, status=404)
+
+        # Convert ObjectId to string and prepare JSON response
+        for session in session_list:
+            session['_id'] = str(session['_id'])
+
+        return JsonResponse({"result": "success", "tasks": session_list}, status=200)
     
-
+    except Exception as e:
+        return JsonResponse({"error": "Internal server error", "details": str(e)}, status=500)
 
 # def registration_api(request, firstName, lastName, username, password):
 
