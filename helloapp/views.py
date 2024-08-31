@@ -730,7 +730,7 @@ def get_session(request, username):
             return JsonResponse({"result": "no_tasks_found", "message": "No tasks found for the given username and device."}, status=404)
 
 
-        return JsonResponse({"result": session_list, "tasks": "hello_world"}, status=200)
+        return JsonResponse({"result": "hello world", "tasks": "hello_world"}, status=200)
     
 
 # def registration_api(request, firstName, lastName, username, password):
