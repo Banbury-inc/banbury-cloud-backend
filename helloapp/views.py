@@ -698,13 +698,13 @@ def get_session(request, username):
     try:
         # Parse the JSON body
         data = json.loads(request.body)
+
         task_device = data.get('task_device')
         
         if not task_device:
             return JsonResponse({"result": "no_device_provided", "message": "No device provided."}, status=400)
         if not username:
             return JsonResponse({"result": "no_username_provided", "message": "No username provided."}, status=400)
-        
     except json.JSONDecodeError as e:
         print(f"JSON decode error: {e}")
         return JsonResponse({'error': 'Invalid JSON'}, status=400)
@@ -726,11 +726,8 @@ def get_session(request, username):
         except:
             return JsonResponse({"result": "object_id_not_found", "message": "Device id not found."})
 
-        # Find all sessions for the specific device
-        sessions = list(session_collection.find({'device_id': device_id, 'username': username}))
 
-
-        return JsonResponse({"result": "success", "sessions": sessions}, status=200)
+        return JsonResponse({"result": "success", "sessions": device_id}, status=200)
     
     except Exception as e:
         print(f"Server error: {e}")
