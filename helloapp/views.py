@@ -698,10 +698,15 @@ def get_session(request, username):
     try:
         # Parse the JSON body
         data = json.loads(request.body)
-        task_device = data.get('task_device')  # You may also want to use the device name for better specificity
+        task_device = data.get('task_device')
+        
+        if not task_device:
+            return JsonResponse({"result": "no_device_provided", "message": "No device provided."}, status=400)
+        if not username:
+            return JsonResponse({"result": "no_username_provided", "message": "No username provided."}, status=400)
+        
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid JSON'}, status=400)
-
 
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
@@ -715,14 +720,13 @@ def get_session(request, username):
     session_list = list(sessions)
 
     if not session_list:
-        return JsonResponse({"result": "no_sessions_found", "message": "No sessions found for the given username and task device."})
+        return JsonResponse({"result": "no_sessions_found", "message": "No sessions found for the given username and task device."}, status=404)
 
     # Convert ObjectId to string and prepare JSON response
     for session in session_list:
         session['_id'] = str(session['_id'])
 
-
-    return JsonResponse(session_list)    
+    return JsonResponse({"result": "success", "sessions": session_list}, status=200)
 
 
 
