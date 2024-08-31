@@ -691,6 +691,39 @@ def update_task(request, username):
 
     return JsonResponse({"result": "success", "message": "Task status updated successfully."})    
 
+@csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
+@require_http_methods(["POST"])
+def get_session(request, username):
+    try:
+        # Parse the JSON body
+        data = json.loads(request.body)
+        task_device = data.get('task_device')  # You may also want to use the device name for better specificity
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client['NeuraNet']
+    session_collection = db['sessions']
+
+    # Query for sessions with the given username and task_device
+    sessions = session_collection.find({"username": username, "task_device": task_device})
+
+    # Convert the cursor to a list of dictionaries
+    session_list = list(sessions)
+
+    if not session_list:
+        return JsonResponse({"result": "no_sessions_found", "message": "No sessions found for the given username and task device."})
+
+    # Convert ObjectId to string and prepare JSON response
+    for session in session_list:
+        session['_id'] = str(session['_id'])
+
+
+    return JsonResponse(session_list)    
+
+
 
 
 # def registration_api(request, firstName, lastName, username, password):

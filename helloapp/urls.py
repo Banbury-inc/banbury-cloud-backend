@@ -25,6 +25,7 @@ urlpatterns = [
     path('add_file/<str:username>/', views.add_file, name='login'),
     path('add_task/<str:username>/', views.add_task, name='login'),
     path('update_task/<str:username>/', views.update_task, name='login'),
+    path('get_session/<str:username>/', views.get_session, name='login'),
     path('register/<str:username>/<str:password>/<str:e>/<str:lastName>/', views.register, name='login'),
     path('new_register/<str:username>/<str:password>/<str:firstName>/<str:lastName>/', views.new_register, name='login'),
     path('change_profile/<str:username>/<str:password>/<str:first_name>/<str:last_name>/<str:email>/', views.change_profile, name='login'),
