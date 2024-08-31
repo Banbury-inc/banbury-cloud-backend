@@ -638,6 +638,7 @@ def add_task(request, username):
 
         new_task = {
                 "device_id": device_id,
+                "username": username,
                 "task_name": task_name,
                 "task_device": task_device,
                 "task_status": task_status,
