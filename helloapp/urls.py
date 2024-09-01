@@ -16,6 +16,7 @@ urlpatterns = [
     path('getuserinfo/<str:username>/', views.getuserinfo, name='login'),
     path('getdeviceinfo/<str:username>/', views.getdeviceinfo, name='login'),
     path('getfileinfo/<str:username>/', views.getfileinfo, name='login'),
+    path('getpartialfileinfo/<str:username>/', views.get_partial_file_info, name='login'),
     path('getuserinfo2/<str:username>/', views.getuserinfo2, name='login'),
     path('get_small_user_info/<str:username>/', views.get_small_user_info, name='login'),
     path('getuserinfo3/<str:username>/<str:password>/', views.getuserinfo3, name='login'),
