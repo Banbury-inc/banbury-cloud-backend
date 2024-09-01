@@ -224,10 +224,13 @@ def get_partial_file_info(request, username):
     all_files_data = []
     for device in devices:
         # Construct the regular expression for matching file paths based on the max_depth
-        depth_pattern = f'([^/]+/)' * (max_depth - 1) + '[^/]+/?$'
-        regex_pattern = f'^{re.escape(folder_path)}{depth_pattern}'
+        # Count the number of slashes in the folder path
+        base_depth = folder_path.rstrip('/').count('/')
+        # Create a regex pattern that matches up to `max_depth` levels below the folder_path
+        depth_pattern = f'(?:/[^/]+){{0,{max_depth}}}'
+        regex_pattern = f'^{re.escape(folder_path)}{depth_pattern}/?$'
 
-        # Build the query with an optional file type filter
+        # Build the query
         query = {
             'device_id': device['_id'],
             'file_path': {'$regex': regex_pattern}
@@ -255,6 +258,8 @@ def get_partial_file_info(request, username):
     }
 
     return JsonResponse(files_data)
+
+
 
 def getuserinfo3(request, username, password):
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
