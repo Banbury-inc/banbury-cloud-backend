@@ -200,9 +200,9 @@ def get_partial_file_info(request, username):
     try:
         data = json.loads(request.body)
         folder_path = data.get('folder_path')
+        max_depth = data.get('max_depth', 4)  # Default to 4 levels deep if not specified
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid JSON'}, status=400)
- 
 
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
@@ -215,7 +215,7 @@ def get_partial_file_info(request, username):
     user = user_collection.find_one({'username': username})
     
     if not user:
-        return "User not found."
+        return JsonResponse({"error": "User not found."}, status=404)
 
     # Find all devices belonging to the user
     devices = list(device_collection.find({'user_id': user['_id']}))
@@ -223,20 +223,19 @@ def get_partial_file_info(request, username):
     # Prepare file data for response
     all_files_data = []
     for device in devices:
-        # Regular expression to match files within two levels of the folder_path
-        regex_pattern = f'^{re.escape(folder_path)}[^/]+(/[^/]+)?/?$'
+        # Construct the regular expression for matching file paths based on the max_depth
+        depth_pattern = f'([^/]+/)' * (max_depth - 1) + '[^/]+/?$'
+        regex_pattern = f'^{re.escape(folder_path)}{depth_pattern}'
 
-        # Regular expression to match files within four levels of the folder_path
-        # regex_pattern = f'^{re.escape(folder_path)}([^/]+/){0,3}[^/]+/?$'
-
-        
-        # regex_pattern = f'^{re.escape(folder_path)}([^/]+/){0,2}[^/]+/?$'
-        # Find all files for the current device within the specified folder and up to two levels deep
-        files = list(file_collection.find({
+        # Build the query with an optional file type filter
+        query = {
             'device_id': device['_id'],
             'file_path': {'$regex': regex_pattern}
-        }))
-        
+        }
+
+        # Find all files for the current device within the specified folder and depth
+        files = list(file_collection.find(query))
+
         # Process each file and append to the list
         for file in files:
             all_files_data.append({
@@ -254,10 +253,8 @@ def get_partial_file_info(request, username):
     files_data = {
         "files": all_files_data,
     }
-    
+
     return JsonResponse(files_data)
-
-
 
 def getuserinfo3(request, username, password):
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
