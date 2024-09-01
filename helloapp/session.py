@@ -3,7 +3,7 @@ import re
 
 def getfileinfo(username):
     # Set the folder path you want to search within
-    folder_path = "/home/mmills/"
+    folder_path = "/home/mmills/BCloud/"
 
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
