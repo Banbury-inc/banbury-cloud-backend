@@ -226,7 +226,8 @@ def get_partial_file_info(request, username):
         # Regular expression to match files within two levels of the folder_path
         # regex_pattern = f'^{re.escape(folder_path)}[^/]+(/[^/]+)?/?$'
         # Regular expression to match files within four levels of the folder_path
-        regex_pattern = f'^{re.escape(folder_path)}([^/]+/){0,3}[^/]+/?$'
+        # regex_pattern = f'^{re.escape(folder_path)}([^/]+/){0,3}[^/]+/?$'
+        regex_pattern = f'^{re.escape(folder_path)}([^/]+/){0,2}[^/]+/?$'
         # Find all files for the current device within the specified folder and up to two levels deep
         files = list(file_collection.find({
             'device_id': device['_id'],
