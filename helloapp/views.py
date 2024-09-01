@@ -251,7 +251,7 @@ def get_partial_file_info(request, username):
         "files": all_files_data,
     }
     
-    return files_data
+    return JsonResponse(files_data)
 
 
 
