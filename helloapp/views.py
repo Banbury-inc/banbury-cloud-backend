@@ -670,6 +670,44 @@ def add_file(request, username):
         }
         return JsonResponse(user_data)
 
+
+@csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
+@require_http_methods(["POST"])
+def add_site_visitor_info(request):
+
+        try:
+            # Parse the JSON body
+            data = json.loads(request.body)
+            
+            # Extract specific data from the JSON (for example: device_id and date_added)
+            ip_address = data.get('ip_address')
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+
+        uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+        client = MongoClient(uri)
+        db = client['NeuraNet']
+        site_collection = db['site']
+
+        new_visitor = {
+                "ip_address": ip_address
+       }
+
+        try:
+            site_collection.insert_one(new_visitor)
+        except Exception as e:
+            print(f"Error sending to device: {e}")
+        result = "success"
+
+        user_data = {
+            "result": result,
+            "username": username  # Return username if success, None if fail
+        }
+        return JsonResponse(user_data)
+
+
+
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
 def add_files(request, username):

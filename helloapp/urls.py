@@ -8,6 +8,7 @@ urlpatterns = [
     # path('register/', views.adduser, name='register'),
     path('login/', views.login, name='login'),
     path('get_neuranet_info/', views.get_neuranet_info, name='login'),
+    path('add_site_visitor_info/', views.add_site_visitor_info, name='login'),
     path('login_api/', views.login_api, name='login_api'),
     # path('register/<str:firstName>/<str:lastName>/<str:username>/<str:password>/', views.registration_api, name='registration_api'),
     path('dashboard/<str:username>/', views.dashboard, name='dashboard'),
