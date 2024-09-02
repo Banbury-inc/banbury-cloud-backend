@@ -674,37 +674,55 @@ def add_file(request, username):
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
 def add_site_visitor_info(request):
+    try:
+        # Parse the JSON body
+        data = json.loads(request.body)
+        # Extract specific data from the JSON (for example: device_id and date_added)
+        ip_address = data.get('ip_address')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
 
-        try:
-            # Parse the JSON body
-            data = json.loads(request.body)
-            
-            # Extract specific data from the JSON (for example: device_id and date_added)
-            ip_address = data.get('ip_address')
-        except json.JSONDecodeError:
-            return JsonResponse({'error': 'Invalid JSON'}, status=400)
+    # Fetch location data based on the IP address
+    try:
+        geo_response = requests.get(f"https://ipapi.co/{ip_address}/json/")
+        if geo_response.status_code == 200:
+            geo_data = geo_response.json()
+            city = geo_data.get('city', 'Unknown')
+            region = geo_data.get('region', 'Unknown')
+            country = geo_data.get('country_name', 'Unknown')
+        else:
+            city = 'Unknown'
+            region = 'Unknown'
+            country = 'Unknown'
+    except requests.RequestException:
+        city = 'Unknown'
+        region = 'Unknown'
+        country = 'Unknown'
 
+    # MongoDB connection
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client['NeuraNet']
+    site_collection = db['site']
 
-        uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
-        client = MongoClient(uri)
-        db = client['NeuraNet']
-        site_collection = db['site']
+    # Prepare the document to insert
+    new_visitor = {
+        "ip_address": ip_address,
+        "city": city,
+        "region": region,
+        "country": country
+    }
 
-        new_visitor = {
-                "ip_address": ip_address
-       }
-
-        try:
-            site_collection.insert_one(new_visitor)
-        except Exception as e:
-            print(f"Error sending to device: {e}")
+    try:
+        site_collection.insert_one(new_visitor)
         result = "success"
+    except Exception as e:
+        print(f"Error inserting to MongoDB: {e}")
+        result = "failed"
 
-        user_data = {
-            "result": result,
-            "username": username  # Return username if success, None if fail
-        }
-        return JsonResponse(user_data)
+    # Return the result
+    return JsonResponse({"result": result})
+
 
 
 
