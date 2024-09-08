@@ -6,6 +6,7 @@ from bson import ObjectId
 import pymongo
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
+from datetime import datetime
 import requests
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
@@ -699,6 +700,8 @@ def add_site_visitor_info(request):
         region = 'Unknown'
         country = 'Unknown'
 
+    time = datetime.now()
+
     # MongoDB connection
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
@@ -708,6 +711,7 @@ def add_site_visitor_info(request):
     # Prepare the document to insert
     new_visitor = {
         "ip_address": ip_address,
+        "time": time,
         "city": city,
         "region": region,
         "country": country
