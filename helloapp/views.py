@@ -242,7 +242,7 @@ def update_settings(request, username):
     except Exception as e:
         print(f"Error sending to device: {e}")
 
-    return JsonResponse({'response': 'success'})
+    return JsonResponse({'result': 'success'})
 
 
 
