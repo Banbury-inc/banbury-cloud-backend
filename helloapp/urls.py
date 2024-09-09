@@ -23,6 +23,7 @@ urlpatterns = [
     path('getuserinfo3/<str:username>/<str:password>/', views.getuserinfo3, name='login'),
     path('getuserinfo4/<str:username>/<str:password>/', views.getuserinfo4, name='login'),
     path('update_devices/<str:username>/', views.update_devices, name='login'),
+    path('update_settings/<str:username>/', views.update_settings, name='login'),
     path('add_device/<str:username>/<str:device_name>/', views.add_device, name='login'),
     path('add_file/<str:username>/', views.add_file, name='login'),
     path('add_files/<str:username>/', views.add_files, name='login'),
