@@ -242,7 +242,9 @@ def update_settings(request, username):
     except Exception as e:
         print(f"Error sending to device: {e}")
 
-    return JsonResponse(settings_data)
+    return JsonResponse({'response': 'success'})
+
+
 
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
