@@ -197,6 +197,56 @@ def getfileinfo(request, username):
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
+def update_settings(request, username):
+    try:
+        data = json.loads(request.body)
+        sync_entire_device_checked = data.get('sync_entire_device_checked')
+        device_name = data.get('device_name')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client['NeuraNet']
+    user_collection = db['users']
+    device_collection = db['devices']
+    settings_collection = db['settings']
+
+    # Find the user by username
+    user = user_collection.find_one({'username': username})
+    
+    if not user:
+        return JsonResponse({"error": "User not found."}, status=404)
+
+    # match the username to the user id
+    user_id = user['_id']
+
+    # Find all devices belonging to the user
+    devices = list(device_collection.find({'user_id': user['_id']}))
+
+    device_id = None
+    # match the device name to the device id
+    for device in devices:
+        if device.get('device_name') == device_name:
+            device_id = device.get('_id')
+
+
+    settings_data = {
+        "user_id": user_id,
+        "device_id": device_id,
+        "sync_entire_device_checked": sync_entire_device_checked,
+    }
+
+    try:
+        settings_collection.insert_one(settings_data)
+    except Exception as e:
+        print(f"Error sending to device: {e}")
+
+    return JsonResponse(settings_data)
+
+
+@csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
+@require_http_methods(["POST"])
 def get_partial_file_info(request, username):
     try:
         data = json.loads(request.body)
