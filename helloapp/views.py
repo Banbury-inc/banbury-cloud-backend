@@ -893,6 +893,8 @@ def add_task(request, username):
                 "task_name": task_name,
                 "task_device": task_device,
                 "task_status": task_status,
+                "task_date_added": datetime.now(),
+                "task_date_modified": datetime.now()
        }
 
         try:
@@ -931,10 +933,15 @@ def update_task(request, username):
     if task_device:
         query["task_device"] = task_device
 
-    # Update the task with the new status
+    # Update the task with the new status and update the task_date_modified field
     update_result = session_collection.update_one(
         query,
-        {"$set": {"task_status": task_status}}
+        {
+            "$set": {
+                "task_status": task_status,
+                "task_date_modified": datetime.now()  # Update the modification date
+            }
+        }
     )
 
     if update_result.matched_count == 0:
@@ -973,6 +980,8 @@ def get_session(request, username):
                 "task_name": session["task_name"],
                 "task_device": session["task_device"],
                 "task_status": session["task_status"],
+                "task_date_added": session["task_date_added"],
+                "task_date_modified": session["task_date_modified"],
                 })
 
 
@@ -984,7 +993,51 @@ def get_session(request, username):
 
         return JsonResponse(response_data, status=200)
 
-    
+@csrf_exempt
+@require_http_methods(["POST"])
+def get_recent_session(request, username):
+        # Parse the JSON body
+        data = json.loads(request.body)
+        task_device = data.get('task_device')
+        
+        if not task_device:
+            return JsonResponse({"result": "no_device_provided", "message": "No device provided."}, status=400)
+        if not username:
+            return JsonResponse({"result": "no_username_provided", "message": "No username provided."}, status=400)
+        
+
+        uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+        client = MongoClient(uri)
+        db = client['NeuraNet']
+        try:
+            session_collection = db['sessions']
+        except:
+            return JsonResponse({"error": "Can't find session collection"})
+
+        sessions = session_collection.find({"username": username, "task_device": task_device})
+
+
+        all_sessions_data = []
+        # Convert the cursor to a list of dictionaries and serialize ObjectId to string
+        for session in sessions:
+            # If datetime modified is within the last 5 minutes
+            if (datetime.now() - session["task_date_modified"]).total_seconds() < 300:
+                all_sessions_data.append({
+                    "task_name": session["task_name"],
+                    "task_device": session["task_device"],
+                    "task_status": session["task_status"],
+                    "task_date_added": session["task_date_added"],
+                    "task_date_modified": session["task_date_modified"],
+                    })
+
+        response_data = {
+            "result": "success",
+            "sessions": all_sessions_data
+        }
+
+        return JsonResponse(response_data, status=200)
+
+   
 
 # def registration_api(request, firstName, lastName, username, password):
 

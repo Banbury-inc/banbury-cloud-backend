@@ -19,6 +19,7 @@ urlpatterns = [
     # Dashboard and Session Management
     path('dashboard/<str:username>/', views.dashboard, name='dashboard'),
     path('get_session/<str:username>/', views.get_session, name='get_session'),
+    path('get_recent_session/<str:username>/', views.get_recent_session, name='get_session'),
 
     # User Information
     path('getuserinfo/<str:username>/', views.getuserinfo, name='getuserinfo'),
