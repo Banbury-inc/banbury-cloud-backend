@@ -17,6 +17,19 @@ from .forms import UserProfileForm
 import json
 import re
 
+
+def ping(request):
+
+    result = "pong"
+
+    response = {
+            "result": result,
+            }
+
+    return JsonResponse(response)
+
+
+
 def get_small_user_info(request, username):
 
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"

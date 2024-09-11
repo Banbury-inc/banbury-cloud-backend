@@ -14,4 +14,11 @@ select cloud build option instead of local
 test
 
 # Run server in dev environemnt
- python3  manage.py runserver 0.0.0.0:8080 --noreload
+'''
+python3  manage.py runserver 0.0.0.0:8080 --noreload
+'''
+
+# Run Websocket server
+'''
+daphne -p 8080 helloproject.asgi:application
+'''

@@ -2,6 +2,11 @@ django==4.2.7
 requests==2.31.0
 bcrypt==3.2.0
 pymongo==4.6.1
+channels==4.0.0
+channels-redis==4.0.0
 djangorestframework==3.14.0
 django-cors-headers==4.3.1
+daphne==4.0.0
+redis==4.0.0
+
 debugpy # Required for debugging.

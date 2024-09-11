@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'channels',
     'helloapp',
     'rest_framework',
     'corsheaders',
@@ -102,6 +103,18 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'helloproject.wsgi.application'
+ASGI_APPLICATION = 'helloproject.asgi.application'
+
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        # 'BACKEND': 'channels_redis.core.InMemoryChannelLayer',
+        'CONFIG': {
+            # "hosts": [('0.0.0.0', 8080)],
+            "hosts": [('127.0.0.1', 6379)],
+        },
+    },
+}
 
 
 # Internationalization
