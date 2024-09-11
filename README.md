@@ -22,3 +22,9 @@ python3  manage.py runserver 0.0.0.0:8080 --noreload
 '''
 daphne -p 8080 helloproject.asgi:application
 '''
+
+# Websocket endpoints
+
+request file
+
+

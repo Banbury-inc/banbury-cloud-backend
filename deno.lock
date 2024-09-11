@@ -2,7 +2,11 @@
   "version": "3",
   "packages": {
     "specifiers": {
-      "npm:axios@^1.7.7": "npm:axios@1.7.7"
+      "npm:axios@^1.7.7": "npm:axios@1.7.7",
+      "npm:fs@^0.0.1-security": "npm:fs@0.0.1-security",
+      "npm:os@^0.1.2": "npm:os@0.1.2",
+      "npm:path@^0.12.7": "npm:path@0.12.7",
+      "npm:ws@^8.18.0": "npm:ws@8.18.0"
     },
     "npm": {
       "asynckit@0.4.0": {
@@ -39,6 +43,14 @@
           "mime-types": "mime-types@2.1.35"
         }
       },
+      "fs@0.0.1-security": {
+        "integrity": "sha512-3XY9e1pP0CVEUCdj5BmfIZxRBTSDycnbqhIOGec9QYtmVH2fbLpj86CFWkrNOkt/Fvty4KZG5lTglL9j/gJ87w==",
+        "dependencies": {}
+      },
+      "inherits@2.0.3": {
+        "integrity": "sha512-x00IRNXNy63jwGkJmzPigoySHbaqpNuzKbBOmzK+g2OdZpQ9w+sxCN+VSB3ja7IAge2OP2qpfxTjeNcyjmW1uw==",
+        "dependencies": {}
+      },
       "mime-db@1.52.0": {
         "integrity": "sha512-sPU4uV7dYlvtWJxwwxHD0PuihVNiE7TyAbQ5SWxDCB9mUYvOgroQOwYQQOKPJ8CIbE+1ETVlOoK1UC2nU3gYvg==",
         "dependencies": {}
@@ -49,8 +61,33 @@
           "mime-db": "mime-db@1.52.0"
         }
       },
+      "os@0.1.2": {
+        "integrity": "sha512-ZoXJkvAnljwvc56MbvhtKVWmSkzV712k42Is2mA0+0KTSRakq5XXuXpjZjgAt9ctzl51ojhQWakQQpmOvXWfjQ==",
+        "dependencies": {}
+      },
+      "path@0.12.7": {
+        "integrity": "sha512-aXXC6s+1w7otVF9UletFkFcDsJeO7lSZBPUQhtb5O0xJe8LtYhj/GxldoL09bBj9+ZmE2hNoHqQSFMN5fikh4Q==",
+        "dependencies": {
+          "process": "process@0.11.10",
+          "util": "util@0.10.4"
+        }
+      },
+      "process@0.11.10": {
+        "integrity": "sha512-cdGef/drWFoydD1JsMzuFf8100nZl+GT+yacc2bEced5f9Rjk4z+WtFUTBu9PhOi9j/jfmBPu0mMEY4wIdAF8A==",
+        "dependencies": {}
+      },
       "proxy-from-env@1.1.0": {
         "integrity": "sha512-D+zkORCbA9f1tdWRK0RaCR3GPv50cMxcrz4X8k5LTSUD1Dkw47mKJEZQNunItRTkWwgtaUSo1RVFRIG9ZXiFYg==",
+        "dependencies": {}
+      },
+      "util@0.10.4": {
+        "integrity": "sha512-0Pm9hTQ3se5ll1XihRic3FDIku70C+iHUdT/W926rSgHV5QgXsYbKZN8MSC3tJtSkhuROzvsQjAaFENRXr+19A==",
+        "dependencies": {
+          "inherits": "inherits@2.0.3"
+        }
+      },
+      "ws@8.18.0": {
+        "integrity": "sha512-8VbfWfHLbbwu3+N6OKsOMpBdT4kXPDDB9cJk2bJ6mh9ucxdlnNvH1e+roYkKmN9Nxw2yjz7VzeO9oOz2zJ04Pw==",
         "dependencies": {}
       }
     }
@@ -59,7 +96,11 @@
   "workspace": {
     "packageJson": {
       "dependencies": [
-        "npm:axios@^1.7.7"
+        "npm:axios@^1.7.7",
+        "npm:fs@^0.0.1-security",
+        "npm:os@^0.1.2",
+        "npm:path@^0.12.7",
+        "npm:ws@^8.18.0"
       ]
     }
   }

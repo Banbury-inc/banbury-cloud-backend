@@ -1,7 +1,6 @@
 from django.urls import path
 from helloapp import views
 from helloapp import consumers  # Make sure this matches the actual name
-from helloapp.consumers import YourConsumer  # Make sure this matches the actual name
 
 urlpatterns = [
 
@@ -57,7 +56,4 @@ urlpatterns = [
     path('download-deb/', views.download_debian_package, name='download_deb'),
 ]
 
-websocket_urlpatterns = [
-    path('ws/some_path/', consumers.YourConsumer.as_asgi()),  # Make sure this matches the class in consumers.py
-]
 
