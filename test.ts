@@ -57,7 +57,7 @@ function createWebSocketConnection(username: string, device_name: string, callba
     const message = {
       message: `Initiate live data connection`,
       username: username,
-      device_name: device_name,
+      requesting_device_name: device_name,
     };
     socket.send(JSON.stringify(message));
     console.log(`Sent: ${JSON.stringify(message)}`);
@@ -74,6 +74,8 @@ function createWebSocketConnection(username: string, device_name: string, callba
     const message = data.message;
     const request_type = data.request_type;
     const file_name = data.file_name;
+    const requesting_device_name = data.requesting_device_name;
+    const sending_device_name = data.sending_device_name;
 
     if (request_type === 'file_request') {
       console.log(`Received download request for file: ${file_name}`);
@@ -98,7 +100,8 @@ function createWebSocketConnection(username: string, device_name: string, callba
         const message = {
           message: `File sent successfully`,
           username: username,
-          device_name: device_name,
+          requesting_device_name: requesting_device_name,
+          sending_device_name: sending_device_name,
         };
 
         socket.send(JSON.stringify(message));
@@ -110,7 +113,7 @@ function createWebSocketConnection(username: string, device_name: string, callba
         const message = {
           message: `File not found`,
           username: username,
-          device_name: device_name,
+          requesting_device_name: requesting_device_name,
           file_name: request_file_name,
         };
         socket.send(JSON.stringify(message));
@@ -137,7 +140,7 @@ function download_request(username: string, file_name: string, socket: WebSocket
     message: `Download Request`,
     username: username,
     file_name: file_name,
-    device_name: 'michael-ubuntu', // Make sure to pass device_name here
+    requesting_device_name: 'michael-ubuntu', // Make sure to pass device_name here
   };
   socket.send(JSON.stringify(message));
   console.log(`Sent: ${JSON.stringify(message)}`);

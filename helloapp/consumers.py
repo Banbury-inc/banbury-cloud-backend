@@ -35,9 +35,9 @@ class Live_Data(AsyncWebsocketConsumer):
             text_data_json = json.loads(text_data)
 
             # Check if 'device_name' exists in the incoming message
-            if 'device_name' not in text_data_json:
+            if 'requesting_device_name' not in text_data_json:
                 print("Error: 'device_name' not found in the message")
-                await self.send(text_data=json.dumps({'error': "'device_name' not found"}))
+                await self.send(text_data=json.dumps({'error': "'requesting_device_name' not found"}))
                 return
 
             if 'file_name' in text_data_json:
@@ -46,23 +46,24 @@ class Live_Data(AsyncWebsocketConsumer):
                 print(f"File name set in WebSocket scope: {self.scope['file_name']}")
 
             message = text_data_json['message']
-            device_name = text_data_json['device_name']
+            sending_device_name = text_data_json['sending_device_name'] if 'sending_device_name' in text_data_json else None
+            requesting_device_name = text_data_json['requesting_device_name'] if 'requesting_device_name' in text_data_json else None
             username = text_data_json['username']
             file_name = text_data_json['file_name'] if 'file_name' in text_data_json else None
             if file_name:
                 self.scope['file_name'] = file_name
                 print(f"File name set in WebSocket scope: {self.scope['file_name']}")
 
-            print(f"Message: {message}, Device Name: {device_name}")
+            print(f"Message: {message}, Device Name: {requesting_device_name}")
 
             # Register the device WebSocket
-            if device_name not in connected_devices:
-                connected_devices[device_name] = self
-                print(f"Device {device_name} connected.")
+            if requesting_device_name not in connected_devices:
+                connected_devices[requesting_device_name] = self
+                print(f"Device {requesting_device_name} connected.")
 
             if message == "Initiate live data connection":
                 await self.send(text_data=json.dumps({
-                    'message': f"Live data connection initiated for {device_name}"
+                    'message': f"Live data connection initiated for {requesting_device_name}"
                 }))
             if message == "Download Request":
                 # Send 'Searching for file...' message
@@ -79,24 +80,27 @@ class Live_Data(AsyncWebsocketConsumer):
 
                     # Extract the necessary file and device information
                     file_name = file_data['file_name']
-                    device_name = file_data['device_name']  # The device that contains the file
+                    sending_device_name = file_data['device_name']  # The device that contains the file
 
                     # Send 'Found file, requesting...' message
-                    response = f"Found file on {device_name}, requesting..."
+                    response = f"Found file on {sending_device_name}, requesting..."
                     await self.send(text_data=json.dumps({
                         'message': response,
                         'request_type': 'update'
                     }))
 
                     # Look up the WebSocket connection for the device that contains the file
-                    if device_name in connected_devices:
-                        device_ws = connected_devices[device_name]
-                        print(f"Sending request to device {device_name} via Live_Data WebSocket...")
+                    if sending_device_name in connected_devices:
+                        device_ws = connected_devices[sending_device_name]
+                        print(f"Sending request to device {sending_device_name} via Live_Data WebSocket...")
 
                         # Send a request to the device WebSocket to send the file
                         await device_ws.send(text_data=json.dumps({
-                            'message': f"Requesting file {file_name} from {device_name}",
+                            'message': f"Requesting file {file_name} from {sending_device_name}",
                             'request_type': 'file_request',
+                            'username': username,
+                            'requesting_device_name': requesting_device_name,
+                            'sending_device_name': sending_device_name,
                             'file_name': file_name
                         }))
 
@@ -108,7 +112,7 @@ class Live_Data(AsyncWebsocketConsumer):
                         }))
                     else:
                         # The device is not connected
-                        response = f"Device {device_name} is not connected."
+                        response = f"Device {sending_device_name} is not connected."
                         await self.send(text_data=json.dumps({
                             'message': response
                         }))
@@ -119,6 +123,61 @@ class Live_Data(AsyncWebsocketConsumer):
                     'message': response
                 }))
 
+            if message == "File sent successfully":
+                # Send 'Searching for file...' message
+                print("Entire file received, sending to requesting client...")
+
+                # Look up the WebSocket connection for the device that contains the file
+                if requesting_device_name in connected_devices:
+                    device_ws = connected_devices[requesting_device_name]
+                    print(f"Sending request to device {requesting_device_name} via Live_Data WebSocket...")
+
+                    response = "Sending requested file!"
+                    await device_ws.send(text_data=json.dumps({
+                        'message': response,
+                        'username': username,
+                        'file_name': file_name,
+                        'requesting_device_name': requesting_device_name,
+                        'sending_device_name': sending_device_name
+                    }))
+     
+
+                    """Send the file in chunks over WebSocket."""
+                    try:
+                        # Ensure that file_name is a valid string
+                        if not isinstance(file_name, str) or not file_name:
+                            raise ValueError("Invalid file name")
+
+                        # Define the path to the file you want to send
+                        current_dir = os.path.dirname(os.path.abspath(__file__))  # Get current directory
+                        file_dir = os.path.join(current_dir, 'files')  # Join current directory with 'files' directory
+                        file_path = os.path.join(file_dir, file_name)  # Full path to the file
+
+                        if not os.path.exists(file_path):
+                            raise FileNotFoundError(f"File not found: {file_path}")
+
+                        # Open the file in binary mode
+                        with open(file_path, 'rb') as file:
+                            while True:
+                                # Read the file in chunks (e.g., 1024 bytes per chunk)
+                                chunk = file.read(1024)
+                                if not chunk:
+                                    break
+
+                                # Send the chunk as binary data via WebSocket
+                                await device_ws.send(bytes_data=chunk)
+
+                        # Once all chunks are sent, notify the client that the file transfer is complete
+                        await device_ws.send(text_data=json.dumps({
+                            'message': "File transfer complete",
+                            'file_name': file_name
+                        }))
+                    except FileNotFoundError:
+                                    print(f"File {file_name} not found.")
+                                    await device_ws.send(text_data=json.dumps({
+                                        'message': "File not found",
+                                        'file_name': file_name
+                                    }))
 
 
 
