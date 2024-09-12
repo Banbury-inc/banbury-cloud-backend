@@ -13,7 +13,7 @@ class Live_Data(AsyncWebsocketConsumer):
         await self.accept()
 
     async def disconnect(self, close_code):
-        device_name = self.scope.get('device_name')
+        device_name = self.scope.get('requesting_device_name')
         if device_name in connected_devices:
             del connected_devices[device_name]
             print(f"Device {device_name} disconnected.")
@@ -36,7 +36,8 @@ class Live_Data(AsyncWebsocketConsumer):
 
             # Check if 'device_name' exists in the incoming message
             if 'requesting_device_name' not in text_data_json:
-                print("Error: 'device_name' not found in the message")
+                print("Error: 'requesting_device_name' not found in the message")
+                print(text_data_json)
                 await self.send(text_data=json.dumps({'error': "'requesting_device_name' not found"}))
                 return
 
@@ -141,20 +142,16 @@ class Live_Data(AsyncWebsocketConsumer):
                         'sending_device_name': sending_device_name
                     }))
      
+                    file_name = self.scope.get("file_name")  # Store the file name in the WebSocket's scope    
 
                     """Send the file in chunks over WebSocket."""
                     try:
-                        # Ensure that file_name is a valid string
-                        if not isinstance(file_name, str) or not file_name:
-                            raise ValueError("Invalid file name")
 
-                        # Define the path to the file you want to send
-                        current_dir = os.path.dirname(os.path.abspath(__file__))  # Get current directory
-                        file_dir = os.path.join(current_dir, 'files')  # Join current directory with 'files' directory
-                        file_path = os.path.join(file_dir, file_name)  # Full path to the file
+                        current_dir = os.path.dirname(os.path.abspath(__file__))
+                        file_dir = os.path.join(current_dir, 'files')
 
-                        if not os.path.exists(file_path):
-                            raise FileNotFoundError(f"File not found: {file_path}")
+                        # set the file path
+                        file_path = os.path.join(file_dir, file_name)
 
                         # Open the file in binary mode
                         with open(file_path, 'rb') as file:
@@ -170,7 +167,9 @@ class Live_Data(AsyncWebsocketConsumer):
                         # Once all chunks are sent, notify the client that the file transfer is complete
                         await device_ws.send(text_data=json.dumps({
                             'message': "File transfer complete",
-                            'file_name': file_name
+                            'file_name': file_name,
+                            'requesting_device_name': requesting_device_name,
+                            'sending_device_name': sending_device_name,
                         }))
                     except FileNotFoundError:
                                     print(f"File {file_name} not found.")
@@ -178,6 +177,9 @@ class Live_Data(AsyncWebsocketConsumer):
                                         'message': "File not found",
                                         'file_name': file_name
                                     }))
+            if message == "Download complete":
+                print("Download complete")
+
 
 
 
