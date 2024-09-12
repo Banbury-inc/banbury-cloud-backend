@@ -26,8 +26,6 @@ export async function addTask(
     if (result === 'pong') {
       console.log("pong received successfully");
 
-      // Open a WebSocket connection
-      createWebSocketConnection(username, device_name);
 
       return taskInfo;
     } else if (result === 'fail') {
@@ -46,8 +44,8 @@ export async function addTask(
   }
 }
 
-// Function to create a WebSocket connection
-function createWebSocketConnection(username: string, device_name: string) {
+// Function to create a WebSocket connection and invoke the callback after the connection is open
+function createWebSocketConnection(username: string, device_name: string, callback: (socket: WebSocket) => void) {
   // Replace the URL with your WebSocket endpoint
   const socket = new WebSocket('ws://0.0.0.0:8080/ws/live_data/');
   // const socket = new WebSocket('wss://website2-389236221119.us-central1.run.app/ws/live_data/');
@@ -57,86 +55,68 @@ function createWebSocketConnection(username: string, device_name: string) {
     console.log('WebSocket connection established');
 
     const message = {
-      'message': `Initiate live data connection`,
-      'username': username,
-      'device_name': device_name
+      message: `Initiate live data connection`,
+      username: username,
+      device_name: device_name,
     };
     socket.send(JSON.stringify(message));
     console.log(`Sent: ${JSON.stringify(message)}`);
 
-    // Message event: When a message is received from the server
-    socket.onmessage = function(event: any) {
-      console.log('Message from server: ', event.data);
-
-      // Split the message into separate variables
-      const data = JSON.parse(event.data);
-      const message = data.message;
-      const request_type = data.request_type;
-      const file_name = data.file_name;
-
-      if (request_type === 'file_request') {
-        console.log(`Received download request for file: ${file_name}`);
-        // Search for the file in the local directory
-        console.log(`Searching for file: ${file_name}`);
-        const directory_name: string = "BCloud";
-        const directory_path: string = path.join(os.homedir(), directory_name);
-        const file_save_path: string = path.join(directory_path, file_name);
-        let request_file_name = path.basename(file_save_path);
-        // If the file exists, send the file to the server
-        const file: fs.ReadStream = fs.createReadStream(file_save_path);
-        file.on('open', () => {
-          console.log(`Sending file: ${request_file_name}`);
-          // Send the file to the server
-        });
-        // If the file does not exist, send a message to the server
-        file.on('error', (err: any) => {
-          console.log(`File not found: ${request_file_name}`);
-          const message = {
-            'message': `File not found`,
-            'username': username,
-            'device_name': device_name,
-            'file_name': request_file_name
-          };
-          socket.send(JSON.stringify(message));
-          console.log(`Sent: ${JSON.stringify(message)}`);
-        });
-      }
-    };
-
-    // Close event: When the WebSocket connection is closed
-    socket.onclose = function() {
-      console.log('WebSocket connection closed');
-    };
-
-    // Error event: When an error occurs with the WebSocket connection
-    socket.onerror = function(error) {
-      console.error('WebSocket error: ', error);
-    };
-  }
-}
-
-function download_request(username: string, file_name: string) {
-  // Replace the URL with your WebSocket endpoint
-  const socket = new WebSocket('ws://0.0.0.0:8080/ws/download_request/');
-  // const socket = new WebSocket('wss://website2-389236221119.us-central1.run.app/ws/download_request/');
-
-  // Message event: When a message is received from the server
-  socket.onmessage = function(event) {
-    console.log('Message from server: ', event.data);
+    // Call the callback function with the socket
+    callback(socket);
   };
 
-  // Open event: When the connection is established
-  socket.onopen = function() {
-    console.log('WebSocket connection established');
+  // Message event: When a message is received from the server
+  socket.onmessage = function(event: any) {
+    console.log('Message from server: ', event.data);
 
-    // Send a download request message to the server
-    const message = {
-      'message': `Download Request`,
-      'username': username,
-      'file_name': file_name
-    };
-    socket.send(JSON.stringify(message));
-    console.log(`Sent: ${JSON.stringify(message)}`);
+    const data = JSON.parse(event.data);
+    const message = data.message;
+    const request_type = data.request_type;
+    const file_name = data.file_name;
+
+    if (request_type === 'file_request') {
+      console.log(`Received download request for file: ${file_name}`);
+      // Search for the file in the local directory
+      console.log(`Searching for file: ${file_name}`);
+      const directory_name: string = 'BCloud';
+      const directory_path: string = path.join(os.homedir(), directory_name);
+      const file_save_path: string = path.join(directory_path, file_name);
+      let request_file_name = path.basename(file_save_path);
+
+      // If the file exists, read the file and send it chunk by chunk
+      const fileStream = fs.createReadStream(file_save_path);
+
+      fileStream.on('data', (chunk) => {
+        console.log(`Sending file chunk: ${chunk.length} bytes`);
+
+        // Send the chunk as a binary frame
+        socket.send(chunk); // Send the chunk as bytes
+      });
+
+      fileStream.on('end', () => {
+        const message = {
+          message: `File sent successfully`,
+          username: username,
+          device_name: device_name,
+        };
+
+        socket.send(JSON.stringify(message));
+      });
+
+      // If the file does not exist, send a message to the server
+      fileStream.on('error', (err: any) => {
+        console.log(`File not found: ${request_file_name}`);
+        const message = {
+          message: `File not found`,
+          username: username,
+          device_name: device_name,
+          file_name: request_file_name,
+        };
+        socket.send(JSON.stringify(message));
+        console.log(`Sent: ${JSON.stringify(message)}`);
+      });
+    }
   };
 
   // Close event: When the WebSocket connection is closed
@@ -150,15 +130,26 @@ function download_request(username: string, file_name: string) {
   };
 }
 
+// Function to send a download request using the provided socket
+function download_request(username: string, file_name: string, socket: WebSocket) {
+  // Send a download request message to the server
+  const message = {
+    message: `Download Request`,
+    username: username,
+    file_name: file_name,
+    device_name: 'michael-ubuntu', // Make sure to pass device_name here
+  };
+  socket.send(JSON.stringify(message));
+  console.log(`Sent: ${JSON.stringify(message)}`);
+}
 
-// Call the addTask function
-// addTask('test_user', 'test_task', [], (newTasks: any) => {
-// console.log('Updated tasks:', newTasks);
-// });
-
+// Usage of the functions
 const username = 'mmills';
 const file_name = 'Logo.png';
 const device_name = 'michael-ubuntu';
-createWebSocketConnection(username, device_name);
-download_request(username, file_name);
 
+// Create the WebSocket connection and pass the callback to call download_request once the connection is open
+createWebSocketConnection(username, device_name, (socket) => {
+  // This will be called after the WebSocket connection is established
+  download_request(username, file_name, socket);
+});

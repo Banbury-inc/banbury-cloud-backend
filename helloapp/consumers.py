@@ -1,40 +1,152 @@
 
 import json
+import os
 import asyncio
 from channels.generic.websocket import AsyncWebsocketConsumer
 from .src.search_for_file import search_for_file
 
 connected_devices = {}
 
+
 class Live_Data(AsyncWebsocketConsumer):
     async def connect(self):
-
-
         await self.accept()
 
     async def disconnect(self, close_code):
-        # Handle WebSocket disconnection
-        pass
+        device_name = self.scope.get('device_name')
+        if device_name in connected_devices:
+            del connected_devices[device_name]
+            print(f"Device {device_name} disconnected.")
 
-    async def receive(self, text_data):
-        # Receive data from WebSocket and process it
-        text_data_json = json.loads(text_data)
-        message = text_data_json['message']
-        username = text_data_json['username']
-        device_name = text_data_json['device_name']
+    async def receive(self, text_data=None, bytes_data=None):
+        """Handle both text and binary data based on the type of the input."""
+        
+        # Check if the data is bytes (binary data)
+        if bytes_data is not None and isinstance(bytes_data, (bytes, bytearray)):
+            # Handle the binary data (file chunks)
+            await self.receive_bytes(bytes_data)
+        elif text_data is not None and isinstance(text_data, str):
+            # Handle the text data (JSON messages)
+            await self.receive_text(text_data)
 
-        print(f"Message: {message}", f"Username: {username}", f"Device Name: {device_name}")
+    async def receive_text(self, text_data):
+        """Handle incoming text data."""
+        try:
+            text_data_json = json.loads(text_data)
 
-        if device_name not in connected_devices:
-            connected_devices[device_name] = self
-            print(f"Device {device_name} connected.")
+            # Check if 'device_name' exists in the incoming message
+            if 'device_name' not in text_data_json:
+                print("Error: 'device_name' not found in the message")
+                await self.send(text_data=json.dumps({'error': "'device_name' not found"}))
+                return
 
-        if message == "Initiate live data connection":
-            # Send a confirmation back to the client
-            await self.send(text_data=json.dumps({
-                'message': f"Live data connection initiated for {device_name}"
-            }))
+            if 'file_name' in text_data_json:
+                # Set the file name in the WebSocket's scope
+                self.scope['file_name'] = text_data_json['file_name']
+                print(f"File name set in WebSocket scope: {self.scope['file_name']}")
 
+            message = text_data_json['message']
+            device_name = text_data_json['device_name']
+            username = text_data_json['username']
+            file_name = text_data_json['file_name'] if 'file_name' in text_data_json else None
+            if file_name:
+                self.scope['file_name'] = file_name
+                print(f"File name set in WebSocket scope: {self.scope['file_name']}")
+
+            print(f"Message: {message}, Device Name: {device_name}")
+
+            # Register the device WebSocket
+            if device_name not in connected_devices:
+                connected_devices[device_name] = self
+                print(f"Device {device_name} connected.")
+
+            if message == "Initiate live data connection":
+                await self.send(text_data=json.dumps({
+                    'message': f"Live data connection initiated for {device_name}"
+                }))
+            if message == "Download Request":
+                # Send 'Searching for file...' message
+                response = "Searching for file..."
+                await self.send(text_data=json.dumps({
+                    'message': response
+                }))
+                # Search for the file and the device that has it
+                file_info = search_for_file(username, file_name)
+
+                if file_info and 'file_data' in file_info:
+                    file_data = file_info['file_data']  # Extract the file_data dict
+                    print(file_data)
+
+                    # Extract the necessary file and device information
+                    file_name = file_data['file_name']
+                    device_name = file_data['device_name']  # The device that contains the file
+
+                    # Send 'Found file, requesting...' message
+                    response = f"Found file on {device_name}, requesting..."
+                    await self.send(text_data=json.dumps({
+                        'message': response,
+                        'request_type': 'update'
+                    }))
+
+                    # Look up the WebSocket connection for the device that contains the file
+                    if device_name in connected_devices:
+                        device_ws = connected_devices[device_name]
+                        print(f"Sending request to device {device_name} via Live_Data WebSocket...")
+
+                        # Send a request to the device WebSocket to send the file
+                        await device_ws.send(text_data=json.dumps({
+                            'message': f"Requesting file {file_name} from {device_name}",
+                            'request_type': 'file_request',
+                            'file_name': file_name
+                        }))
+
+                        # Notify the client that the request has been sent to the device
+                        response = "Request sent to device to retrieve the file"
+                        await self.send(text_data=json.dumps({
+                            'message': response,
+                            'request_type': 'update'
+                        }))
+                    else:
+                        # The device is not connected
+                        response = f"Device {device_name} is not connected."
+                        await self.send(text_data=json.dumps({
+                            'message': response
+                        }))
+            else:
+                # If file not found
+                response = "File not found."
+                await self.send(text_data=json.dumps({
+                    'message': response
+                }))
+
+
+
+
+
+        except json.JSONDecodeError:
+            print("Error parsing JSON data.")
+            await self.send(text_data=json.dumps({'error': "Invalid JSON format"}))
+
+    async def receive_bytes(self, bytes_data):
+        file_name = self.scope.get("file_name")  # Store the file name in the WebSocket's scope
+        print(f"File name in WebSocket scope: {file_name}")
+        # Save the file chunks to the 'files' directory
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        file_dir = os.path.join(current_dir, 'files')
+        os.makedirs(file_dir, exist_ok=True)
+        file_path = os.path.join(file_dir, file_name)
+
+        # Write the binary data to the file
+        with open(file_path, 'ab') as f:
+            f.write(bytes_data)
+            print(f"Received {len(bytes_data)} bytes and written to {file_path}")
+
+    async def finalize_file_transfer(self, file_name):
+        """This function is called when file transfer is complete."""
+        await self.send(text_data=json.dumps({
+            'message': f"File {file_name} transfer completed."
+        }))
+        print(f"File {file_name} has been fully transferred.")
 
 
 class Download_File_Request(AsyncWebsocketConsumer):
@@ -52,6 +164,9 @@ class Download_File_Request(AsyncWebsocketConsumer):
         message = text_data_json['message']
         username = text_data_json['username']
         file_name = text_data_json['file_name']
+        if file_name:
+            self.scope['file_name'] = file_name
+            print(f"File name set in WebSocket scope: {self.scope['file_name']}")
 
         print(message)
         print(username)
@@ -111,3 +226,39 @@ class Download_File_Request(AsyncWebsocketConsumer):
             await self.send(text_data=json.dumps({
                 'message': response
             }))
+
+    async def receive_bytes(self, data):
+        """Handle incoming binary data (file chunks) from the device."""
+        file_name = self.scope.get("file_name")  # Store the file name in the WebSocket's scope
+        if not file_name:
+            print("File name not found in WebSocket scope.")
+            return
+
+        # Get the current directory of the script
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+
+        # Construct the path to the adjacent 'files' directory
+        file_dir = os.path.join(current_dir, 'files')
+
+        # Ensure the 'files' directory exists, create it if it doesn't
+        os.makedirs(file_dir, exist_ok=True)
+
+        # Construct the full path for the file to be saved
+        file_path = os.path.join(file_dir, file_name)
+
+        # Open the file in binary mode and append the incoming data
+        with open(file_path, 'ab') as f:
+            f.write(data)
+            print(f"Received {len(data)} bytes and written to {file_path}")
+
+        # You can add additional logic to notify when the transfer is complete if necessary
+
+    async def finalize_file_transfer(self, file_name):
+        """This function is called when file transfer is complete."""
+        # Notify the original client (or process as needed)
+        await self.send(text_data=json.dumps({
+            'message': f"File {file_name} transfer completed."
+        }))
+        print(f"File {file_name} has been fully transferred.")
+
+
