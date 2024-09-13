@@ -50,6 +50,7 @@ urlpatterns = [
     # Task Management
     path('add_task/<str:username>/', views.add_task, name='add_task'),
     path('update_task/<str:username>/', views.update_task, name='update_task'),
+    path('fail_task/<str:username>/', views.fail_task, name='update_task'),
 
     # Settings and Package Downloads
     path('update_settings/<str:username>/', views.update_settings, name='update_settings'),
