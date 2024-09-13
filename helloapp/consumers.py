@@ -4,6 +4,8 @@ import os
 import asyncio
 from channels.generic.websocket import AsyncWebsocketConsumer
 from .src.search_for_file import search_for_file
+from .src.declare_device_offline import declare_device_offline
+from .src.declare_device_online import declare_device_online
 
 connected_devices = {}
 
@@ -11,12 +13,29 @@ connected_devices = {}
 class Live_Data(AsyncWebsocketConsumer):
     async def connect(self):
         await self.accept()
+        # Set a flag to track if the connection logic has been triggered
+        self.connect_triggered = False
 
     async def disconnect(self, close_code):
         device_name = self.scope.get('requesting_device_name')
-        if device_name in connected_devices:
-            del connected_devices[device_name]
-            print(f"Device {device_name} disconnected.")
+        username = self.scope.get('username')
+
+        if device_name:
+            await self.trigger_post_disconnect(username, device_name)
+
+    async def trigger_connect(self, username, device_name):
+        """Custom function to handle what happens after disconnect."""
+        print(f"Performing actions after {device_name} disconnects.")
+        declare_device_online(username, device_name)
+        print(f"Device {device_name} is now online.")
+
+
+
+    async def trigger_post_disconnect(self, username, device_name):
+        """Custom function to handle what happens after disconnect."""
+        print(f"Performing actions after {device_name} disconnects.")
+        declare_device_offline(username, device_name)
+        print(f"Device {device_name} is now offline.")
 
     async def receive(self, text_data=None, bytes_data=None):
         """Handle both text and binary data based on the type of the input."""
@@ -40,6 +59,27 @@ class Live_Data(AsyncWebsocketConsumer):
                 print(text_data_json)
                 await self.send(text_data=json.dumps({'error': "'requesting_device_name' not found"}))
                 return
+
+            # Check if 'device_name' exists in the incoming message
+            if 'requesting_device_name' in text_data_json:
+                print("Device name found in the message, adding to scope")
+                self.scope['requesting_device_name'] = text_data_json['requesting_device_name']
+
+            # Check if 'device_name' exists in the incoming message
+            if 'username' in text_data_json:
+                print("Username found in the message, adding to scope")
+                self.scope['username'] = text_data_json['username']
+
+            # Once both username and device_name are available, trigger the connect action
+            username = self.scope.get('username')
+            device_name = self.scope.get('requesting_device_name')
+
+            if username and device_name and not self.connect_triggered:
+                # Trigger the connect logic only once
+                await self.trigger_connect(username, device_name)
+                # Mark connect as triggered
+                self.connect_triggered = True
+
 
             if 'file_name' in text_data_json:
                 # Set the file name in the WebSocket's scope
