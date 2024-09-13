@@ -993,7 +993,7 @@ def fail_task(request, username):
         {
             "$set": {
                 "task_status": task_status,
-                'task_name': result,
+                "task_name": result,
                 "task_date_modified": datetime.now()  # Update the modification date
             }
         }
