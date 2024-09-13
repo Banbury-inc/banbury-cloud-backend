@@ -962,6 +962,51 @@ def update_task(request, username):
 
     return JsonResponse({"result": "success", "message": "Task status updated successfully."})    
 
+@csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
+@require_http_methods(["POST"])
+def fail_task(request, username):
+    try:
+        # Parse the JSON body
+        data = json.loads(request.body)
+
+        task_name = data.get('task_name')
+        result = data.get('result')
+        task_device = data.get('task_device')  # You may also want to use the device name for better specificity
+        task_status = data.get('task_status')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client['NeuraNet']
+    session_collection = db['sessions']
+
+    # Use both task_name and task_device to find the specific task
+    query = {"task_name": task_name}
+    if task_device:
+        query["task_device"] = task_device
+
+    # Update the task with the new status and update the task_date_modified field
+    update_result = session_collection.update_one(
+        query,
+        {
+            "$set": {
+                "task_status": task_status,
+                'task_name': result,
+                "task_date_modified": datetime.now()  # Update the modification date
+            }
+        }
+    )
+
+    if update_result.matched_count == 0:
+        return JsonResponse({"result": "task_not_found", "message": "Task not found."})
+
+    return JsonResponse({"result": "success", "message": "Task status updated successfully."})    
+
+
+
+
 @csrf_exempt
 @require_http_methods(["POST"])
 def get_session(request, username):
