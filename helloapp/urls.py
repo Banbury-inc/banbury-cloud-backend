@@ -41,6 +41,8 @@ urlpatterns = [
     path('add_device/<str:username>/<str:device_name>/', views.add_device, name='add_device'),
     path('update_devices/<str:username>/', views.update_devices, name='update_devices'),
     path('getdeviceinfo/<str:username>/', views.getdeviceinfo, name='getdeviceinfo'),
+    path('declare_device_online/<str:username>/', views.declare_device_online, name='getdeviceinfo'),
+    path('declare_device_offline/<str:username>/', views.declare_device_offline, name='getdeviceinfo'),
 
     path('add_file/<str:username>/', views.add_file, name='add_file'),
     path('add_files/<str:username>/', views.add_files, name='add_files'),

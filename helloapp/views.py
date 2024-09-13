@@ -121,6 +121,8 @@ def getuserinfo(request, username):
                         "email": email,
                         }
                 return JsonResponse(user_data)
+
+
 def getdeviceinfo(request, username):
 
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
@@ -162,6 +164,98 @@ def getdeviceinfo(request, username):
     }
     
     return JsonResponse(device_data)
+
+
+@csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
+@require_http_methods(["POST"])
+def declare_device_online(request, username):
+    try:
+        data = json.loads(request.body)
+        device_name = data.get('device_name')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    # MongoDB connection
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client['NeuraNet']
+    user_collection = db['users']
+    device_collection = db['devices']
+
+    # Find the user by username
+    user = user_collection.find_one({'username': username})
+    if not user:
+        return JsonResponse({"error": "User not found."}, status=404)
+
+    # Find the device belonging to the user by device_name
+    device = device_collection.find_one({'user_id': user['_id'], 'device_name': device_name})
+    if not device:
+        return JsonResponse({"error": "Device not found."}, status=404)
+
+    # Update the "online" field to True
+    try:
+        device_collection.update_one(
+            {'_id': device['_id']},  # Find the device by its ID
+            {'$set': {'online': True}}  # Update only the 'online' field
+        )
+    except Exception as e:
+        print(f"Error updating device status: {e}")
+        return JsonResponse({"error": "Failed to update device status."}, status=500)
+
+    # Return success response
+    user_data = {
+        "result": "success",
+        "username": username
+    }
+
+    return JsonResponse(user_data)
+
+@csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
+@require_http_methods(["POST"])
+def declare_device_offline(request, username):
+    try:
+        data = json.loads(request.body)
+        device_name = data.get('device_name')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    # MongoDB connection
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client['NeuraNet']
+    user_collection = db['users']
+    device_collection = db['devices']
+
+    # Find the user by username
+    user = user_collection.find_one({'username': username})
+    if not user:
+        return JsonResponse({"error": "User not found."}, status=404)
+
+    # Find the device belonging to the user by device_name
+    device = device_collection.find_one({'user_id': user['_id'], 'device_name': device_name})
+    if not device:
+        return JsonResponse({"error": "Device not found."}, status=404)
+
+    # Update the "online" field to True
+    try:
+        device_collection.update_one(
+            {'_id': device['_id']},  # Find the device by its ID
+            {'$set': {'online': False}}  # Update only the 'online' field
+        )
+    except Exception as e:
+        print(f"Error updating device status: {e}")
+        return JsonResponse({"error": "Failed to update device status."}, status=500)
+
+    # Return success response
+    user_data = {
+        "result": "success",
+        "username": username
+    }
+
+    return JsonResponse(user_data)
+
+
+
 
 def getfileinfo(request, username):
 
