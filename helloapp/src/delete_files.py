@@ -22,9 +22,7 @@ def delete_files(username, device_name, files):
     # Delete existing files that match the criteria
     for file_data in files:
         file_criteria = {
-            "device_id": device_id,  # Ensure we delete files specific to this device
             "file_name": file_data.get('file_name'),
-            "file_path": file_data.get('file_path'),
         }
         if not file_criteria["file_name"] or not file_criteria["file_path"]:
             return "file_data_invalid"
