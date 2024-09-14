@@ -24,9 +24,8 @@ def delete_files(username, device_name, files):
     # Delete existing files that match the criteria
     for file_data in files:
         file_criteria = {
-            "device_id": device_id,
             "file_name": file_data.get('file_name'),
-            "file_type": file_data.get('file_type'),
+            "file_path": file_data.get('file_path'),
         }
         file_collection.delete_many(file_criteria)
 
