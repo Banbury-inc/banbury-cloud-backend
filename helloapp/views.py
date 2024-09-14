@@ -14,6 +14,9 @@ from .forms import UserForm
 import bcrypt
 from .forms import LoginForm
 from .forms import UserProfileForm
+from .src.delete_files import delete_files
+from .src.update_files import update_files
+
 import json
 import re
 
@@ -959,6 +962,61 @@ def add_files(request, username):
         return JsonResponse({"result": "failure", "message": f"Error inserting files: {str(e)}"}, status=500)
 
     return JsonResponse({"result": "success", "message": f"{len(new_files)} files added successfully."})
+
+@csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
+@require_http_methods(["POST"])
+def handle_delete_files(request, username):
+    try:
+        # Parse the JSON body
+        data = json.loads(request.body)
+        
+        # Extract specific data from the JSON
+        files = data.get('files')
+        device_name = data.get('device_name')
+        
+        if not files or not device_name:
+            return JsonResponse({'error': 'Missing files or device_name'}, status=400)
+
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    response = delete_files(username, device_name, files)
+
+    if response == "device_not_found":
+        return JsonResponse({"result": "device_not_found", "message": "Device not found."})
+    if response == "device_id_not_found":
+        return JsonResponse({"result": "device_id_not_found", "message": "Device id not found."})
+    if response == "success":
+        return JsonResponse({"result": "success", "message": "Files deleted successfully."})
+
+@csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
+@require_http_methods(["POST"])
+def handle_update_files(request, username):
+    try:
+        # Parse the JSON body
+        data = json.loads(request.body)
+        
+        # Extract specific data from the JSON
+        files = data.get('files')
+        device_name = data.get('device_name')
+        
+        if not files or not device_name:
+            return JsonResponse({'error': 'Missing files or device_name'}, status=400)
+
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    response = update_files(username, device_name, files)
+
+    if response == "device_not_found":
+        return JsonResponse({"result": "device_not_found", "message": "Device not found."})
+    if response == "device_id_not_found":
+        return JsonResponse({"result": "device_id_not_found", "message": "Device id not found."})
+    if response == "success":
+        return JsonResponse({"result": "success", "message": "Files deleted successfully."})
+
+
+
 
 
 

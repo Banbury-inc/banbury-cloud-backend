@@ -46,6 +46,8 @@ urlpatterns = [
 
     path('add_file/<str:username>/', views.add_file, name='add_file'),
     path('add_files/<str:username>/', views.add_files, name='add_files'),
+    path('delete_files/<str:username>/', views.handle_delete_files, name='add_files'),
+    path('update_files/<str:username>/', views.handle_update_files, name='add_files'),
     path('getfileinfo/<str:username>/', views.getfileinfo, name='getfileinfo'),
     path('getpartialfileinfo/<str:username>/', views.get_partial_file_info, name='getpartialfileinfo'),
 
