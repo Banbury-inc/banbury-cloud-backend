@@ -24,8 +24,6 @@ def delete_files(username, device_name, files):
         file_criteria = {
             "file_name": file_data.get('file_name'),
         }
-        if not file_criteria["file_name"] or not file_criteria["file_path"]:
-            return "file_data_invalid"
         
         file_collection.delete_many(file_criteria)
 
