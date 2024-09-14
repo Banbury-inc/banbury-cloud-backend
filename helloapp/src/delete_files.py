@@ -1,5 +1,4 @@
-
-from pymongo.mongo_client import MongoClient
+from pymongo import MongoClient
 
 def delete_files(username, device_name, files):
     # Connect to MongoDB
@@ -12,26 +11,24 @@ def delete_files(username, device_name, files):
     # Find the device_id based on device_name
     device = device_collection.find_one({"device_name": device_name})
     if not device:
-        response = "device_not_found"
-        return response
+        return "device_not_found"
 
-    try:
-        device_id = device['_id']  # Get the ObjectId for the device
-    except KeyError:
-        response = "device_id_not_found"
-        return response
+    device_id = device.get('_id')  # Get the ObjectId for the device
+
+    # Ensure files is a list, in case it's passed incorrectly
+    if not isinstance(files, list):
+        return "invalid_files"
 
     # Delete existing files that match the criteria
     for file_data in files:
         file_criteria = {
+            "device_id": device_id,  # Ensure we delete files specific to this device
             "file_name": file_data.get('file_name'),
             "file_path": file_data.get('file_path'),
         }
+        if not file_criteria["file_name"] or not file_criteria["file_path"]:
+            return "file_data_invalid"
+        
         file_collection.delete_many(file_criteria)
 
-
-    response = "success"
-    return response
-
-
-
+    return "success"
