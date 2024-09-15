@@ -35,4 +35,5 @@ def delete_files(username, device_name, files):
     if delete_result.deleted_count == 0:
         return "no_files_deleted"
 
-    return f"success: {delete_result.deleted_count} files deleted"
+    return "success"
+
