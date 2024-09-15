@@ -955,8 +955,8 @@ def add_files(request, username):
             "file_path": file_data.get('file_path'),
             "date_uploaded": file_data.get('date_uploaded'),
             "date_modified": file_data.get('date_modified'),
-            "file_size": file_data.get('file_size'),
-            "file_priority": file_data.get('file_priority'),
+            # "file_size": file_data.get('file_size'),
+            # "file_priority": file_data.get('file_priority'),
             "file_parent": file_data.get('file_parent'),
             "original_device": file_data.get('original_device'),
             "kind": file_data.get('kind')
