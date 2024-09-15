@@ -19,12 +19,20 @@ def delete_files(username, device_name, files):
     if not isinstance(files, list):
         return "invalid_files"
 
-    # Delete existing files that match the criteria
-    for file_data in files:
-        file_criteria = {
-            "file_name": file_data.get('file_name'),
-        }
-        
-        file_collection.delete_many(file_criteria)
+    # Prepare the list of file names to be deleted
+    file_names = [file_data.get('file_name') for file_data in files if 'file_name' in file_data]
 
-    return "success"
+    if not file_names:
+        return "no_files_to_delete"
+
+    # Delete files that match both the file names and device_id
+    delete_result = file_collection.delete_many({
+        "device_id": device_id,
+        "file_name": {"$in": file_names}
+    })
+
+    # Check if files were deleted
+    if delete_result.deleted_count == 0:
+        return "no_files_deleted"
+
+    return f"success: {delete_result.deleted_count} files deleted"
