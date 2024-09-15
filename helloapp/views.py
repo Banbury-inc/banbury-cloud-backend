@@ -188,12 +188,22 @@ def declare_device_online(request, username):
     # Find the user by username
     user = user_collection.find_one({'username': username})
     if not user:
-        return JsonResponse({"error": "User not found."}, status=404)
+        user_data = {
+            "result": "fail cant find user",
+            "username": username
+        }
+        return JsonResponse(user_data)
 
     # Find the device belonging to the user by device_name
     device = device_collection.find_one({'user_id': user['_id'], 'device_name': device_name})
     if not device:
-        return JsonResponse({"error": "Device not found."}, status=405)
+        # Return success response
+        user_data = {
+            "result": "fail cant find device",
+            "username": username
+        }
+        return JsonResponse(user_data)
+
 
     # Update the "online" field to True
     try:
