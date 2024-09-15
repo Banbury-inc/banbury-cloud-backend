@@ -931,14 +931,23 @@ def add_files(request, username):
     if not device:
         return JsonResponse({"result": "device_not_found", "message": "Device not found."})
 
-    try:
-        device_id = device['_id']  # Get the ObjectId for the device
-    except KeyError:
-        return JsonResponse({"result": "object_id_not_found", "message": "Device id not found."})
+    device_id = device.get('_id')
+    if not device_id:
+        return JsonResponse({"result": "object_id_not_found", "message": "Device ID not found."})
 
     # Prepare the list of new files to insert
     new_files = []
     for file_data in files:
+        # Validate that file_data is a dictionary and contains the necessary fields
+        if not isinstance(file_data, dict):
+            return JsonResponse({'error': f'Invalid file data format: {file_data}'}, status=400)
+
+        required_fields = ['file_name', 'file_path']
+        missing_fields = [field for field in required_fields if not file_data.get(field)]
+        if missing_fields:
+            return JsonResponse({'error': f'Missing fields: {missing_fields}'}, status=400)
+
+        # Prepare new file data for insertion
         new_file = {
             "device_id": device_id,
             "file_type": file_data.get('file_type'),
@@ -954,6 +963,10 @@ def add_files(request, username):
         }
         new_files.append(new_file)
 
+    # If no valid files to add, return early
+    if not new_files:
+        return JsonResponse({"result": "no_files_to_add", "message": "No valid files to add."})
+
     # Insert all new files in one go
     try:
         file_collection.insert_many(new_files)
@@ -962,7 +975,6 @@ def add_files(request, username):
         return JsonResponse({"result": "failure", "message": f"Error inserting files: {str(e)}"}, status=500)
 
     return JsonResponse({"result": "success", "message": f"{len(new_files)} files added successfully."})
-
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
 def handle_delete_files(request, username):
