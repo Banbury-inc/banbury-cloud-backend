@@ -16,6 +16,7 @@ from .forms import LoginForm
 from .forms import UserProfileForm
 from .src.delete_files import delete_files
 from .src.update_files import update_files
+from .src.get_online_devices import get_online_devices
 
 import json
 import re
@@ -167,6 +168,27 @@ def getdeviceinfo(request, username):
     }
     
     return JsonResponse(device_data)
+
+
+@csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
+@require_http_methods(["POST"])
+def handle_get_online_devices(request, username):
+    try:
+        # Parse the JSON body
+        data = json.loads(request.body)
+        
+        
+
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    response = get_online_devices(username)
+
+    if response == "fail":
+        return JsonResponse({"result": "fail", "message": "fail"})
+    if response == "success":
+        return JsonResponse({"result": "success", "message": "Files deleted successfully."})
+
 
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
