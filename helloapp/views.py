@@ -17,6 +17,7 @@ from .forms import UserProfileForm
 from .src.delete_files import delete_files
 from .src.update_files import update_files
 from .src.get_online_devices import get_online_devices
+from consumers import broadcast_new_file
 
 import json
 import re
@@ -873,6 +874,10 @@ def add_file(request, username):
             "result": result,
             "username": username  # Return username if success, None if fail
         }
+
+
+        result = broadcast_new_file(new_file) 
+
         return JsonResponse(user_data)
 
 

@@ -26,7 +26,8 @@ def get_online_devices(username):
         "online_devices": online_device_list,
         "username": username
     }
-
     return response
+
+
 
 

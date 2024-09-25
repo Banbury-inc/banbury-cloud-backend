@@ -6,6 +6,7 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 from .src.search_for_file import search_for_file
 from .src.declare_device_offline import declare_device_offline
 from .src.declare_device_online import declare_device_online
+from .src.get_online_devices import get_online_devices
 
 connected_devices = {}
 
@@ -15,6 +16,8 @@ class Live_Data(AsyncWebsocketConsumer):
         await self.accept()
         # Set a flag to track if the connection logic has been triggered
         self.connect_triggered = False
+        device_name = self.scope.get('requesting_device_name')
+        connected_devices[device_name] = self
 
     async def disconnect(self, close_code):
         device_name = self.scope.get('requesting_device_name')
@@ -249,7 +252,14 @@ class Live_Data(AsyncWebsocketConsumer):
         }))
         print(f"File {file_name} has been fully transferred.")
 
+async def broadcast_new_file(new_file):
+    for device_name, device_ws in connected_devices.items():
+        await device_ws.send(text_data=json.dumps({
+            'message': f"New file {new_file} available for download."
+        }))
 
+    return "Broadcasted new file to all connected devices."
+    
 class Download_File_Request(AsyncWebsocketConsumer):
     async def connect(self):
         # Accept the WebSocket connection
