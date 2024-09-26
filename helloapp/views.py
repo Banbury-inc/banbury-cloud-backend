@@ -17,7 +17,7 @@ from .forms import UserProfileForm
 from .src.delete_files import delete_files
 from .src.update_files import update_files
 from .src.get_online_devices import get_online_devices
-from consumers import broadcast_new_file
+from .consumers import broadcast_new_file
 
 import json
 import re
