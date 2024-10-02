@@ -26,6 +26,7 @@ daphne -p 8080 helloproject.asgi:application
 # Websocket endpoints
 
 request file
+test
 
 
 
