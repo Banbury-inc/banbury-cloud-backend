@@ -980,13 +980,13 @@ def add_files(request, username):
                 {"error": f"Invalid file data format: {file_data}"}, status=400
             )
 
-        required_fields = ["file_name", "file_path", "file_size"]
+        required_fields = ["file_name", "file_path"]
         missing_fields = [
             field for field in required_fields if not file_data.get(field)
         ]
         if missing_fields:
             return JsonResponse(
-                {"error": f"Missing fields: {missing_fields}"}, status=400
+                {"error": f"Missing fields: {missing_fields}"}, status=401
             )
 
         # Prepare new file data for insertion
