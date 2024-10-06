@@ -993,7 +993,7 @@ def add_files(request, username):
             "file_type": file_data.get("file_type"),
             "file_name": file_data.get("file_name"),
             "file_path": file_data.get("file_path"),
-            "file_size": file_data.get("file_size"),
+            "file_size": '',
             "date_uploaded": file_data.get("date_uploaded"),
             "date_modified": file_data.get("date_modified"),
             # "file_size": file_data.get('file_size'),
