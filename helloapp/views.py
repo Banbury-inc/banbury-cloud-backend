@@ -1104,7 +1104,7 @@ def handle_update_files(request, username):
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
-def search_file(request):
+def search_file(request, username):
     try:
         # Parse the JSON body
         data = json.loads(request.body)
