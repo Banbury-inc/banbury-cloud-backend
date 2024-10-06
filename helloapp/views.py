@@ -978,7 +978,7 @@ def add_files(request, username):
                 {"error": f"Invalid file data format: {file_data}"}, status=400
             )
 
-        required_fields = ["file_name", "file_path"]
+        required_fields = ["file_name", "file_path", "file_size"]
         missing_fields = [
             field for field in required_fields if not file_data.get(field)
         ]
