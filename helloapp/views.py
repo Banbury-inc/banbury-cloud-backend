@@ -1132,14 +1132,14 @@ def search_file(request):
         return JsonResponse({
             "result": "device_not_found",
             "message": "Device not found.",
-        }, status=404)
+        }, status=200)
 
     device_id = device.get("_id")
     if not device_id:
         return JsonResponse({
             "result": "object_id_not_found",
             "message": "Device ID not found.",
-        }, status=404)
+        }, status=200)
 
     # Search for the file based on device_id and file_name
     file = file_collection.find_one({"device_id": device_id, "file_name": file_name})
@@ -1147,7 +1147,7 @@ def search_file(request):
         return JsonResponse({
             "result": "file_not_found",
             "message": "File not found for the given device.",
-        }, status=404)
+        }, status=200)
 
     # If file is found, return all the file information
     return JsonResponse({
