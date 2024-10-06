@@ -1101,6 +1101,71 @@ def handle_update_files(request, username):
         })
 
 
+
+@csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
+@require_http_methods(["POST"])
+def search_file(request):
+    try:
+        # Parse the JSON body
+        data = json.loads(request.body)
+
+        # Extract specific data from the JSON
+        device_name = data.get("device_name")
+        file_name = data.get("file_name")
+
+        if not device_name or not file_name:
+            return JsonResponse({"error": "Missing device_name or file_name"}, status=400)
+
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+    # Connect to MongoDB
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client["NeuraNet"]
+    file_collection = db["files"]
+    device_collection = db["devices"]
+
+    # Find the device_id based on device_name
+    device = device_collection.find_one({"device_name": device_name})
+    if not device:
+        return JsonResponse({
+            "result": "device_not_found",
+            "message": "Device not found.",
+        }, status=404)
+
+    device_id = device.get("_id")
+    if not device_id:
+        return JsonResponse({
+            "result": "object_id_not_found",
+            "message": "Device ID not found.",
+        }, status=404)
+
+    # Search for the file based on device_id and file_name
+    file = file_collection.find_one({"device_id": device_id, "file_name": file_name})
+    if not file:
+        return JsonResponse({
+            "result": "file_not_found",
+            "message": "File not found for the given device.",
+        }, status=404)
+
+    # If file is found, return all the file information
+    return JsonResponse({
+        "result": "success",
+        "file": {
+            "file_name": file.get("file_name"),
+            "file_path": file.get("file_path"),
+            "file_size": file.get("file_size"),
+            "file_type": file.get("file_type"),
+            "date_uploaded": file.get("date_uploaded"),
+            "date_modified": file.get("date_modified"),
+            "file_parent": file.get("file_parent"),
+            "original_device": file.get("original_device"),
+            "kind": file.get("kind"),
+        }
+    }, status=200)
+
+
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
 def add_task(request, username):

@@ -79,15 +79,9 @@ urlpatterns = [
         name="getdeviceinfo",
     ),
     path(
-        "declare_device_online/<str:username>/",
-        views.declare_device_online,
-        name="getdeviceinfo",
+        "declare_device_online/<str:username>/", views.declare_device_online, name="getdeviceinfo",
     ),
-    path(
-        "declare_device_offline/<str:username>/",
-        views.declare_device_offline,
-        name="getdeviceinfo",
-    ),
+    path("declare_device_offline/<str:username>/", views.declare_device_offline, name="getdeviceinfo"),
     path("add_file/<str:username>/", views.add_file, name="add_file"),
     path("add_files/<str:username>/", views.add_files, name="add_files"),
     path("delete_files/<str:username>/", views.handle_delete_files, name="add_files"),
@@ -98,6 +92,9 @@ urlpatterns = [
         views.get_partial_file_info,
         name="getpartialfileinfo",
     ),
+
+    path("search_file/<str:username>/", views.search_file, name="search_file"),
+
     # Task Management
     path("add_task/<str:username>/", views.add_task, name="add_task"),
     path("update_task/<str:username>/", views.update_task, name="update_task"),
