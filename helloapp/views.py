@@ -815,6 +815,7 @@ def add_file(request, username):
         date_uploaded = data.get("date_uploaded")
         date_modified = data.get("date_modified")
         file_size = data.get("file_size")
+        file_size = 2
         file_priority = data.get("file_priority")
         file_parent = data.get("file_parent")
         original_device = data.get("original_device")
@@ -852,6 +853,7 @@ def add_file(request, username):
         "date_uploaded": date_uploaded,
         "date_modified": date_modified,
         "file_size": file_size,
+        "file_size": 2,
         "file_priority": file_priority,
         "file_parent": file_parent,
         "original_device": original_device,
@@ -993,7 +995,7 @@ def add_files(request, username):
             "file_type": file_data.get("file_type"),
             "file_name": file_data.get("file_name"),
             "file_path": file_data.get("file_path"),
-            "file_size": '',
+            "file_size": 2,
             "date_uploaded": file_data.get("date_uploaded"),
             "date_modified": file_data.get("date_modified"),
             # "file_size": file_data.get('file_size'),
