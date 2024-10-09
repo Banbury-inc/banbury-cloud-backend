@@ -309,10 +309,31 @@ class Download_File_Request(AsyncWebsocketConsumer):
                 'request_type': 'update'
             }))
 
+
+            # Look up the WebSocket connections for all connected devices
+            if connected_devices:
+                for device_name, device_ws in connected_devices.items():
+                    print(f"Sending request to device {device_name} via Live_Data WebSocket...")
+                    print(f"Device WS: {device_ws}")
+
+                    # Send a request to each device WebSocket to check for the file
+                    await device_ws.send(text_data=json.dumps({
+                        'message': f"Requesting file {file_name} from {device_name}",
+                        'request_type': 'file_request',
+                        'file_name': file_name
+                    }))
+            else:
+                # No devices are connected
+                response = "No devices are currently connected."
+                await self.send(text_data=json.dumps({
+                    'message': response
+                }))
+
             # Look up the WebSocket connection for the device that contains the file
             if device_name in connected_devices:
                 device_ws = connected_devices[device_name]
                 print(f"Sending request to device {device_name} via Live_Data WebSocket...")
+                print(f"Device WS: {device_ws}")
 
                 # Send a request to the device WebSocket to send the file
                 await device_ws.send(text_data=json.dumps({
@@ -321,7 +342,7 @@ class Download_File_Request(AsyncWebsocketConsumer):
                     'file_name': file_name
                 }))
 
-                await devic.send(text_data=json.dumps({
+                await device_ws.send(text_data=json.dumps({
                     'message': f"Requesting file {file_name} from {device_name}",
                     'request_type': 'file_request',
                     'file_name': file_name
