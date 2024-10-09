@@ -135,8 +135,10 @@ class Live_Data(AsyncWebsocketConsumer):
 
                     # Look up the WebSocket connection for the device that contains the file
                     if sending_device_name in connected_devices:
+                        # device_ws = connected_devices[sending_device_name]
                         device_ws = connected_devices[sending_device_name]
                         print(f"Sending request to device {sending_device_name} via Live_Data WebSocket...")
+                        print(f"Device WS: {device_ws}")
 
                         # Send a request to the device WebSocket to send the file
                         await device_ws.send(text_data=json.dumps({
@@ -314,6 +316,12 @@ class Download_File_Request(AsyncWebsocketConsumer):
 
                 # Send a request to the device WebSocket to send the file
                 await device_ws.send(text_data=json.dumps({
+                    'message': f"Requesting file {file_name} from {device_name}",
+                    'request_type': 'file_request',
+                    'file_name': file_name
+                }))
+
+                await devic.send(text_data=json.dumps({
                     'message': f"Requesting file {file_name} from {device_name}",
                     'request_type': 'file_request',
                     'file_name': file_name
