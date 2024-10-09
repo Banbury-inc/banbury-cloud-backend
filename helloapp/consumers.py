@@ -103,7 +103,7 @@ class Live_Data(AsyncWebsocketConsumer):
             # Register the device WebSocket
             if requesting_device_name not in connected_devices:
                 connected_devices[requesting_device_name] = self
-                print(f"Device {requesting_device_name} connected.")
+                print(f"Device {requesting_device_name} is not connected.")
 
             if message == "Initiate live data connection":
                 await self.send(text_data=json.dumps({
@@ -333,7 +333,7 @@ class Download_File_Request(AsyncWebsocketConsumer):
                 }))
         else:
             # If file not found
-            response = "File not found."
+            response = f"File not found. File info: {file_info}"
             await self.send(text_data=json.dumps({
                 'message': response
             }))
