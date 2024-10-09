@@ -18,10 +18,16 @@ class Live_Data(AsyncWebsocketConsumer):
         self.connect_triggered = False
         device_name = self.scope.get('requesting_device_name')
         connected_devices[device_name] = self
+        print(f"Device {device_name} is now connected.")
+        print(f"Connected Devices: {connected_devices}")
 
     async def disconnect(self, close_code):
         device_name = self.scope.get('requesting_device_name')
         username = self.scope.get('username')
+        connected_devices.pop(device_name)
+        print(f"Device {device_name} is now disconnected.")
+        print(f"Connected Devices: {connected_devices}")
+
 
         if device_name:
             await self.trigger_post_disconnect(username, device_name)
