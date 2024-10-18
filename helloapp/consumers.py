@@ -1,4 +1,3 @@
-
 import json
 import os
 import asyncio
@@ -55,7 +54,15 @@ class Live_Data(AsyncWebsocketConsumer):
             await self.receive_bytes(bytes_data)
         elif text_data is not None and isinstance(text_data, str):
             # Handle the text data (JSON messages)
-            await self.receive_text(text_data)
+            try:
+                text_data_json = json.loads(text_data)
+                if 'file_name' in text_data_json:
+                    self.scope['file_name'] = text_data_json['file_name']
+                    print(f"File name set in WebSocket scope: {self.scope['file_name']}")
+                await self.receive_text(text_data)
+            except json.JSONDecodeError:
+                print("Error parsing JSON data.")
+                await self.send(text_data=json.dumps({'error': "Invalid JSON format"}))
 
     async def receive_text(self, text_data):
         """Handle incoming text data."""
@@ -241,6 +248,10 @@ class Live_Data(AsyncWebsocketConsumer):
 
     async def receive_bytes(self, bytes_data):
         file_name = self.scope.get("file_name")  # Store the file name in the WebSocket's scope
+        if file_name is None:
+            print("Error: file_name is None in WebSocket scope")
+            return  # Exit the method if file_name is None
+
         print(f"File name in WebSocket scope: {file_name}")
         # Save the file chunks to the 'files' directory
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -406,5 +417,7 @@ class Download_File_Request(AsyncWebsocketConsumer):
             'message': f"File {file_name} transfer completed."
         }))
         print(f"File {file_name} has been fully transferred.")
+
+
 
 
