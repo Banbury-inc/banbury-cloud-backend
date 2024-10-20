@@ -15,6 +15,7 @@ class Live_Data(AsyncWebsocketConsumer):
     def __init__(self, *args, **kwargs):
         super().__init__(args, kwargs)
         self.file_name = None
+        self.device_info_task = None
 
     async def connect(self):
         await self.accept()
@@ -34,13 +35,18 @@ class Live_Data(AsyncWebsocketConsumer):
         print(f"Device {device_name} is now disconnected.")
         print(f"Connected Devices: {connected_devices}")
 
-
         if device_name:
             await self.trigger_post_disconnect(username, device_name)
 
+        # Cancel the device info task if it's running
+        if self.device_info_task:
+            self.device_info_task.cancel()
+
     async def start_device_info_loop(self, username, device_name):
         """Start a loop to periodically update device information."""
-        await self.request_device_info(username, device_name)
+        while True:
+            await self.request_device_info(username, device_name)
+            await asyncio.sleep(600)  # Sleep for 10 minutes (600 seconds)
 
     async def request_device_info(self, username, device_name):
         """Request device information from the device."""
@@ -57,7 +63,7 @@ class Live_Data(AsyncWebsocketConsumer):
 
         # Start device info loop
         print(f"Starting device info loop for {device_name}")
-        await self.start_device_info_loop(username, device_name)
+        self.device_info_task = asyncio.create_task(self.start_device_info_loop(username, device_name))
 
 
     async def trigger_post_disconnect(self, username, device_name):
