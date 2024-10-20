@@ -1260,6 +1260,7 @@ def update_task(request, username):
         },
     )
 
+
     if update_result.matched_count == 0:
         return JsonResponse({"result": "task_not_found", "message": "Task not found."})
 
