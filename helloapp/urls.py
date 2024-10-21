@@ -71,6 +71,7 @@ urlpatterns = [
         views.add_device,
         name="add_device",
     ),
+    path("delete_device/<str:username>/", views.delete_device, name="delete_device"),
     path("update_devices/<str:username>/", views.update_devices, name="update_devices"),
     path("getdeviceinfo/<str:username>/", views.getdeviceinfo, name="getdeviceinfo"),
     path(

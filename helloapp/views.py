@@ -17,6 +17,7 @@ from .forms import UserProfileForm
 from .src.delete_files import delete_files
 from .src.update_files import update_files
 from .src.get_online_devices import get_online_devices
+from .src.db.remove_device import remove_device
 from .consumers import broadcast_new_file
 
 import json
@@ -195,6 +196,25 @@ def handle_get_online_devices(request, username):
             "message": "Files deleted successfully.",
         })
 
+@csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
+@require_http_methods(["POST"])
+def delete_device(request, username):
+    try:
+        data = json.loads(request.body)
+        device_name = data.get("device_name")
+        response = remove_device(username, device_name)
+        if response == "success":
+            return JsonResponse({
+                "result": "success",
+                "message": "Device deleted successfully.",
+            })
+        else:
+            return JsonResponse({
+                "result": "fail",
+                "message": "Device not deleted.",
+            })
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
