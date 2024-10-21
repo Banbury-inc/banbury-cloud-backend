@@ -1,7 +1,7 @@
 #!/bin/bash
 
 DJANGO_PORT=8080
-DAPHNE_PORT=8081
+DAPHNE_PORT=8082
 
 # Function to kill process on a given port
 kill_process_on_port() {
