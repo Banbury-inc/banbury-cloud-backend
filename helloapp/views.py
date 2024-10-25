@@ -309,6 +309,61 @@ def declare_device_offline(request, username):
     return JsonResponse(user_data)
 
 
+@csrf_exempt
+@require_http_methods(["POST"])
+def add_scanned_folder(request, username):
+    try:
+        data = json.loads(request.body)
+        device_name = data.get("device_name")
+        folder_path = data.get("scanned_folder")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+    # MongoDB connection
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client["NeuraNet"]
+    user_collection = db["users"]
+    device_collection = db["devices"]
+
+    # Find the user by username
+    user = user_collection.find_one({"username": username})
+    if not user:
+        return JsonResponse({"error": "User not found."}, status=404)
+
+    # Find the device belonging to the user by device_name
+    device = device_collection.find_one({
+        "user_id": user["_id"],
+        "device_name": device_name,
+    })
+    if not device:
+        return JsonResponse({"error": "Device not found."}, status=404)
+
+    # Ensure "scanned_folders" is an array, then add "folder_path" to it
+    try:
+        # Check if "scanned_folders" is not an array, set it as an empty array
+        if not isinstance(device.get("scanned_folders"), list):
+            device_collection.update_one(
+                {"_id": device["_id"]},
+                {"$set": {"scanned_folders": []}}
+            )
+
+        # Push "folder_path" to the "scanned_folders" array
+        device_collection.update_one(
+            {"_id": device["_id"]},
+            {"$push": {"scanned_folders": folder_path}}
+        )
+    except Exception as e:
+        print(f"Error updating device status: {e}")
+        return JsonResponse({"error": "Failed to update device status."}, status=500)
+
+    # Return success response
+    user_data = {"result": "success", "username": username}
+
+    return JsonResponse(user_data)
+
+
+
 def getfileinfo(request, username):
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)

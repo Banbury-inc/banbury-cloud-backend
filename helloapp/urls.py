@@ -95,6 +95,7 @@ urlpatterns = [
     ),
 
     path("search_file/<str:username>/", views.search_file, name="search_file"),
+    path("add_scanned_folder/<str:username>/", views.add_scanned_folder, name="search_file"),
 
     # Task Management
     path("add_task/<str:username>/", views.add_task, name="add_task"),
