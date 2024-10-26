@@ -167,6 +167,7 @@ def getdeviceinfo(request, username):
             "ram_free": device.get("ram_free"),
             "sync_status": device.get("sync_status"),
             "online": device.get("online"),
+            "scanned_folders": device.get("scanned_folders"),
         })
 
     device_data = {
@@ -361,6 +362,89 @@ def add_scanned_folder(request, username):
     user_data = {"result": "success", "username": username}
 
     return JsonResponse(user_data)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def remove_scanned_folder(request, username):
+    try:
+        data = json.loads(request.body)
+        device_name = data.get("device_name")
+        folder_to_remove = data.get("scanned_folder")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+    # MongoDB connection
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client["NeuraNet"]
+    user_collection = db["users"]
+    device_collection = db["devices"]
+
+    # Find the user by username
+    user = user_collection.find_one({"username": username})
+    if not user:
+        return JsonResponse({"error": "User not found."}, status=404)
+
+    # Find the device belonging to the user by device_name
+    device = device_collection.find_one({
+        "user_id": user["_id"],
+        "device_name": device_name,
+    })
+    if not device:
+        return JsonResponse({"error": "Device not found."}, status=404)
+
+    # Ensure "scanned_folders" is an array
+    if not isinstance(device.get("scanned_folders"), list):
+        device_collection.update_one(
+            {"_id": device["_id"]},
+            {"$set": {"scanned_folders": []}}
+        )
+    
+    # Find the device and remove the matching folder from scanned_folders
+    result = device_collection.update_one(
+        {"_id": device["_id"]},
+        {"$pull": {"scanned_folders": folder_to_remove}}
+    )
+    
+    if result.modified_count == 1:
+        return JsonResponse({"status": "success", "message": "Folder removed successfully"})
+    else:
+        return JsonResponse({"status": "not_found", "message": "Folder not found in scanned_folders"})
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def get_scanned_folders(request, username):
+    try:
+        data = json.loads(request.body)
+        device_name = data.get("device_name")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+    
+    # MongoDB connection
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client["NeuraNet"]
+    user_collection = db["users"]
+    device_collection = db["devices"]
+
+    # Find the user by username
+    user = user_collection.find_one({"username": username})
+    if not user:
+        return JsonResponse({"error": "User not found."}, status=404)
+    
+    # Find the device belonging to the user by device_name
+    device = device_collection.find_one({
+        "user_id": user["_id"],
+        "device_name": device_name,
+    })
+    if not device:
+        return JsonResponse({"error": "Device not found."}, status=404)
+    
+    # Return the scanned folders
+    return JsonResponse({
+        "result": "success",
+        "scanned_folders": device.get("scanned_folders", [])
+    })
 
 
 
