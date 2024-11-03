@@ -71,6 +71,7 @@ urlpatterns = [
         views.add_device,
         name="add_device",
     ),
+    path("delete_device/<str:username>/", views.delete_device, name="delete_device"),
     path("update_devices/<str:username>/", views.update_devices, name="update_devices"),
     path("getdeviceinfo/<str:username>/", views.getdeviceinfo, name="getdeviceinfo"),
     path(
@@ -94,6 +95,9 @@ urlpatterns = [
     ),
 
     path("search_file/<str:username>/", views.search_file, name="search_file"),
+    path("add_scanned_folder/<str:username>/", views.add_scanned_folder, name="add_scanned_folder"),
+    path("remove_scanned_folder/<str:username>/", views.remove_scanned_folder, name="remove_scanned_folder"),
+    path("get_scanned_folders/<str:username>/", views.get_scanned_folders, name="get_scanned_folders"),
 
     # Task Management
     path("add_task/<str:username>/", views.add_task, name="add_task"),

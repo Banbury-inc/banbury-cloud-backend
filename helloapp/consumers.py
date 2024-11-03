@@ -6,6 +6,7 @@ from .src.search_for_file import search_for_file
 from .src.declare_device_offline import declare_device_offline
 from .src.declare_device_online import declare_device_online
 from .src.get_online_devices import get_online_devices
+from .src.process_device_info import process_device_info
 
 connected_devices = {}
 
@@ -14,15 +15,18 @@ class Live_Data(AsyncWebsocketConsumer):
     def __init__(self, *args, **kwargs):
         super().__init__(args, kwargs)
         self.file_name = None
+        self.device_info_task = None
 
     async def connect(self):
         await self.accept()
         # Set a flag to track if the connection logic has been triggered
         self.connect_triggered = False
         device_name = self.scope.get('requesting_device_name')
+        username = self.scope.get('username')
         connected_devices[device_name] = self
         print(f"Device {device_name} is now connected.")
         print(f"Connected Devices: {connected_devices}")
+
 
     async def disconnect(self, close_code):
         device_name = self.scope.get('requesting_device_name')
@@ -31,16 +35,35 @@ class Live_Data(AsyncWebsocketConsumer):
         print(f"Device {device_name} is now disconnected.")
         print(f"Connected Devices: {connected_devices}")
 
-
         if device_name:
             await self.trigger_post_disconnect(username, device_name)
 
+        # Cancel the device info task if it's running
+        if self.device_info_task:
+            self.device_info_task.cancel()
+
+    async def start_device_info_loop(self, username, device_name):
+        """Start a loop to periodically update device information."""
+        while True:
+            await self.request_device_info(username, device_name)
+            await asyncio.sleep(600)  # Sleep for 10 minutes (600 seconds)
+
+    async def request_device_info(self, username, device_name):
+        """Request device information from the device."""
+        await self.send(text_data=json.dumps({
+            'message': "Requesting device information",
+            'request_type': 'device_info'
+        }))
+
     async def trigger_connect(self, username, device_name):
-        """Custom function to handle what happens after disconnect."""
-        print(f"Performing actions after {device_name} disconnects.")
+        """Custom function to handle what happens after connect."""
+        print(f"Performing actions after {device_name} connects.")
         declare_device_online(username, device_name)
         print(f"Device {device_name} is now online.")
 
+        # Start device info loop
+        print(f"Starting device info loop for {device_name}")
+        self.device_info_task = asyncio.create_task(self.start_device_info_loop(username, device_name))
 
 
     async def trigger_post_disconnect(self, username, device_name):
@@ -73,6 +96,7 @@ class Live_Data(AsyncWebsocketConsumer):
         """Handle incoming text data."""
         try:
             text_data_json = json.loads(text_data)
+            print(text_data_json)
 
             # Check if 'device_name' exists in the incoming message
             if 'requesting_device_name' not in text_data_json:
@@ -114,7 +138,6 @@ class Live_Data(AsyncWebsocketConsumer):
             requesting_device_name = text_data_json['requesting_device_name'] if 'requesting_device_name' in text_data_json else None
             username = text_data_json['username']
 
-            print(f"Message: {message}, Device Name: {requesting_device_name}")
 
             # Register the device WebSocket
             if requesting_device_name not in connected_devices:
@@ -291,7 +314,13 @@ class Live_Data(AsyncWebsocketConsumer):
                                     }))
             if message == "Download complete":
                 print("Download complete")
-
+            if message == "device_info_response":
+                print("Device info response received")
+                username = text_data_json['username']
+                sending_device_name = text_data_json['sending_device_name']
+                requesting_device_name = text_data_json['requesting_device_name']
+                device_info = text_data_json['device_info']
+                process_device_info(username, sending_device_name, requesting_device_name, device_info)
         except json.JSONDecodeError:
             print("Error parsing JSON data.")
             await self.send(text_data=json.dumps({'error': "Invalid JSON format"}))

@@ -17,6 +17,7 @@ from .forms import UserProfileForm
 from .src.delete_files import delete_files
 from .src.update_files import update_files
 from .src.get_online_devices import get_online_devices
+from .src.db.remove_device import remove_device
 from .consumers import broadcast_new_file
 
 import json
@@ -146,9 +147,19 @@ def getdeviceinfo(request, username):
             "device_name": device.get("device_name"),
             "device_type": device.get("device_type"),
             "storage_capacity_gb": device.get("storage_capacity_gb"),
+            "device_manufacturer": device.get("device_manufacturer"),
+            "device_model": device.get("device_model"),
+            "device_version": device.get("device_version"),
+            "cpu_info_manufacturer": device.get("cpu_info_manufacturer"),
+            "cpu_info_brand": device.get("cpu_info_brand"),
+            "cpu_info_speed": device.get("cpu_info_speed"),
+            "cpu_info_cores": device.get("cpu_info_cores"),
+            "cpu_info_physical_cores": device.get("cpu_info_physical_cores"),
+            "cpu_info_processors": device.get("cpu_info_processors"),
             "date_added": device.get("date_added"),
-            "upload_network_speed": device.get("upload_network_speed"),
-            "download_network_speed": device.get("download_network_speed"),
+            "upload_speed": device.get("upload_speed"),
+            "download_speed": device.get("download_speed"),
+            "battery_status": device.get("battery_status"),
             "gpu_usage": device.get("gpu_usage"),
             "cpu_usage": device.get("cpu_usage"),
             "ram_usage": device.get("ram_usage"),
@@ -156,6 +167,7 @@ def getdeviceinfo(request, username):
             "ram_free": device.get("ram_free"),
             "sync_status": device.get("sync_status"),
             "online": device.get("online"),
+            "scanned_folders": device.get("scanned_folders"),
         })
 
     device_data = {
@@ -185,6 +197,25 @@ def handle_get_online_devices(request, username):
             "message": "Files deleted successfully.",
         })
 
+@csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
+@require_http_methods(["POST"])
+def delete_device(request, username):
+    try:
+        data = json.loads(request.body)
+        device_name = data.get("device_name")
+        response = remove_device(username, device_name)
+        if response == "success":
+            return JsonResponse({
+                "result": "success",
+                "message": "Device deleted successfully.",
+            })
+        else:
+            return JsonResponse({
+                "result": "fail",
+                "message": "Device not deleted.",
+            })
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
@@ -277,6 +308,144 @@ def declare_device_offline(request, username):
     user_data = {"result": "success", "username": username}
 
     return JsonResponse(user_data)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def add_scanned_folder(request, username):
+    try:
+        data = json.loads(request.body)
+        device_name = data.get("device_name")
+        folder_path = data.get("scanned_folder")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+    # MongoDB connection
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client["NeuraNet"]
+    user_collection = db["users"]
+    device_collection = db["devices"]
+
+    # Find the user by username
+    user = user_collection.find_one({"username": username})
+    if not user:
+        return JsonResponse({"error": "User not found."}, status=404)
+
+    # Find the device belonging to the user by device_name
+    device = device_collection.find_one({
+        "user_id": user["_id"],
+        "device_name": device_name,
+    })
+    if not device:
+        return JsonResponse({"error": "Device not found."}, status=404)
+
+    # Ensure "scanned_folders" is an array, then add "folder_path" to it
+    try:
+        # Check if "scanned_folders" is not an array, set it as an empty array
+        if not isinstance(device.get("scanned_folders"), list):
+            device_collection.update_one(
+                {"_id": device["_id"]},
+                {"$set": {"scanned_folders": []}}
+            )
+
+        # Push "folder_path" to the "scanned_folders" array
+        device_collection.update_one(
+            {"_id": device["_id"]},
+            {"$push": {"scanned_folders": folder_path}}
+        )
+    except Exception as e:
+        print(f"Error updating device status: {e}")
+        return JsonResponse({"error": "Failed to update device status."}, status=500)
+
+    # Return success response
+    user_data = {"result": "success", "username": username}
+
+    return JsonResponse(user_data)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def remove_scanned_folder(request, username):
+    try:
+        data = json.loads(request.body)
+        device_name = data.get("device_name")
+        folder_to_remove = data.get("scanned_folder")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+    # MongoDB connection
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client["NeuraNet"]
+    user_collection = db["users"]
+    device_collection = db["devices"]
+
+    # Find the user by username
+    user = user_collection.find_one({"username": username})
+    if not user:
+        return JsonResponse({"error": "User not found."}, status=404)
+
+    # Find the device belonging to the user by device_name
+    device = device_collection.find_one({
+        "user_id": user["_id"],
+        "device_name": device_name,
+    })
+    if not device:
+        return JsonResponse({"error": "Device not found."}, status=404)
+
+    # Ensure "scanned_folders" is an array
+    if not isinstance(device.get("scanned_folders"), list):
+        device_collection.update_one(
+            {"_id": device["_id"]},
+            {"$set": {"scanned_folders": []}}
+        )
+    
+    # Find the device and remove the matching folder from scanned_folders
+    result = device_collection.update_one(
+        {"_id": device["_id"]},
+        {"$pull": {"scanned_folders": folder_to_remove}}
+    )
+    
+    if result.modified_count == 1:
+        return JsonResponse({"status": "success", "message": "Folder removed successfully"})
+    else:
+        return JsonResponse({"status": "not_found", "message": "Folder not found in scanned_folders"})
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def get_scanned_folders(request, username):
+    try:
+        data = json.loads(request.body)
+        device_name = data.get("device_name")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+    
+    # MongoDB connection
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client["NeuraNet"]
+    user_collection = db["users"]
+    device_collection = db["devices"]
+
+    # Find the user by username
+    user = user_collection.find_one({"username": username})
+    if not user:
+        return JsonResponse({"error": "User not found."}, status=404)
+    
+    # Find the device belonging to the user by device_name
+    device = device_collection.find_one({
+        "user_id": user["_id"],
+        "device_name": device_name,
+    })
+    if not device:
+        return JsonResponse({"error": "Device not found."}, status=404)
+    
+    # Return the scanned folders
+    return JsonResponse({
+        "result": "success",
+        "scanned_folders": device.get("scanned_folders", [])
+    })
+
 
 
 def getfileinfo(request, username):
@@ -1259,6 +1428,7 @@ def update_task(request, username):
             }
         },
     )
+
 
     if update_result.matched_count == 0:
         return JsonResponse({"result": "task_not_found", "message": "Task not found."})
