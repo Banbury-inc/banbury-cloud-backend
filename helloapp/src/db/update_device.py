@@ -48,6 +48,7 @@ def update_device(username, sending_device_name, requesting_device_name, device_
             {
                 "$set": update_data,
                 "$push": {
+                    "current_time": device_info['current_time'],
                     "cpu_usage": device_info['cpu_usage'],
                     "gpu_usage": device_info['gpu_usage'],
                     "ram_usage": device_info['ram_usage'],
