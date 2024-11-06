@@ -57,3 +57,5 @@ class AllocationService():
                     break
 
         return devices
+
+
