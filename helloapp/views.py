@@ -447,6 +447,25 @@ def get_scanned_folders(request, username):
     })
 
 
+@csrf_exempt
+@require_http_methods(["POST"])
+def get_prediction_data(request, username):
+    try:
+        data = json.loads(request.body)
+        device_name = data.get("device_name")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+
+    result = "success"
+    
+    
+    # Return the scanned folders
+    return JsonResponse({
+        "result": "success",
+        "prediction_data": result
+    })
+
 
 def getfileinfo(request, username):
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
