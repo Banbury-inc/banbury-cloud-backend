@@ -166,11 +166,11 @@ class PredictionService:
             
             individual_performance_data = {
                 'device_name': device_name,
-                'predicted_upload_speed': predicted_upload_speed if predicted_upload_speed is not None else "Insufficient data",
-                'predicted_download_speed': predicted_download_speed if predicted_download_speed is not None else "Insufficient data",
-                'predicted_gpu_usage': predicted_gpu_usage if predicted_gpu_usage is not None else "Insufficient data",
-                'predicted_cpu_usage': predicted_cpu_usage if predicted_cpu_usage is not None else "Insufficient data",
-                'predicted_ram_usage': predicted_ram_usage if predicted_ram_usage is not None else "Insufficient data",
+                'predicted_upload_speed': int(predicted_upload_speed) if predicted_upload_speed is not None else None,
+                'predicted_download_speed': int(predicted_download_speed) if predicted_download_speed is not None else None,
+                'predicted_gpu_usage': int(predicted_gpu_usage) if predicted_gpu_usage is not None else None,
+                'predicted_cpu_usage': int(predicted_cpu_usage) if predicted_cpu_usage is not None else None,
+                'predicted_ram_usage': int(predicted_ram_usage) if predicted_ram_usage is not None else None,
             }
 
             # Only plot if we have valid predictions
