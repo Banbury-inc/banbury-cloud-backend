@@ -59,6 +59,25 @@ class PredictionService:
                                  if speed is not None] 
                 print(f"Found {len(download_speeds)} download speeds")
 
+            cpu_usage = []
+            if 'cpu_usage' in device:
+                cpu_usage = [float(usage) for usage in device['cpu_usage']
+                            if usage is not None]
+                print(f"Found {len(cpu_usage)} cpu usage values")
+
+            ram_usage = []
+            if 'ram_usage' in device:
+                ram_usage = [float(usage) for usage in device['ram_usage']
+                            if usage is not None]
+                print(f"Found {len(ram_usage)} ram usage values")
+
+
+            gpu_usage = []
+            if 'gpu_usage' in device:
+                gpu_usage = [float(usage) for usage in device['gpu_usage']
+                            if usage is not None]
+                print(f"Found {len(gpu_usage)} gpu usage values")
+
             current_times = []
             if 'current_time' in device:
                 current_times = [speed for speed in device['current_time']]
@@ -88,6 +107,9 @@ class PredictionService:
             timestamps = timestamps[:min_length]
             upload_speeds = upload_speeds[:min_length]
             download_speeds = download_speeds[:min_length]
+            cpu_usage = cpu_usage[:min_length]
+            ram_usage = ram_usage[:min_length]
+            gpu_usage = gpu_usage[:min_length]
 
 
             # Create and sort dataframes
@@ -111,8 +133,38 @@ class PredictionService:
                 print("Warning: No data available for download speeds")
                 df_download_speed = pd.DataFrame(columns=['timestamp', 'speed'])
 
+            if len(timestamps) > 0 and len(cpu_usage) > 0:
+                df_cpu_usage = pd.DataFrame({
+                    'timestamp': timestamps,
+                    'usage': cpu_usage
+                })
+                df_cpu_usage.sort_values('timestamp', inplace=True) 
+            else:
+                print("Warning: No data available for cpu usage")
+                df_cpu_usage = pd.DataFrame(columns=['timestamp', 'usage'])
+
+            if len(timestamps) > 0 and len(ram_usage) > 0:
+                df_ram_usage = pd.DataFrame({
+                    'timestamp': timestamps,
+                    'usage': ram_usage
+                })
+                df_ram_usage.sort_values('timestamp', inplace=True)
+            else:
+                print("Warning: No data available for ram usage")
+                df_ram_usage = pd.DataFrame(columns=['timestamp', 'usage'])
+
+            if len(timestamps) > 0 and len(gpu_usage) > 0:
+                df_gpu_usage = pd.DataFrame({
+                    'timestamp': timestamps,
+                    'usage': gpu_usage
+                })
+                df_gpu_usage.sort_values('timestamp', inplace=True) 
+
             print(f"df_upload_speed: {df_upload_speed}")
             print(f"df_download_speed: {df_download_speed}")
+            print(f"df_cpu_usage: {df_cpu_usage}")
+            print(f"df_ram_usage: {df_ram_usage}")
+            print(f"df_gpu_usage: {df_gpu_usage}")
 
             # Scale the features
             scaler = MinMaxScaler(feature_range=(0, 1))
@@ -159,10 +211,56 @@ class PredictionService:
             else:
                 predicted_download_speed = None
 
-            # Initialize predictions to None
-            predicted_gpu_usage = None
-            predicted_cpu_usage = None
-            predicted_ram_usage = None
+            # For gpu usage prediction
+            if not df_gpu_usage.empty:
+                X, y = self.create_dataset(df_gpu_usage[['usage']], 
+                                         df_gpu_usage['usage'], 
+                                         time_steps)
+                
+                model = self.train_model_with_data(X, y, time_steps, 1)
+                if model is not None:
+                    predicted_gpu_usage = self.predict_future_speed(
+                        model, df_gpu_usage, scaler, time_steps, data_type='usage'
+                    )
+                else:
+                    predicted_gpu_usage = None
+            else:
+                predicted_gpu_usage = None
+            
+            # For cpu usage prediction
+            if not df_cpu_usage.empty:
+                X, y = self.create_dataset(df_cpu_usage[['usage']], 
+                                         df_cpu_usage['usage'], 
+                                         time_steps)
+                
+                model = self.train_model_with_data(X, y, time_steps, 1)
+                if model is not None:
+                    predicted_cpu_usage = self.predict_future_speed(
+                        model, df_cpu_usage, scaler, time_steps, data_type='usage'
+                    )
+                else:
+                    predicted_cpu_usage = None
+            else:
+                predicted_cpu_usage = None
+
+            # For ram usage prediction
+            if not df_ram_usage.empty:
+                X, y = self.create_dataset(df_ram_usage[['usage']], 
+                                         df_ram_usage['usage'], 
+                                         time_steps)
+                
+                model = self.train_model_with_data(X, y, time_steps, 1)
+                if model is not None:
+                    predicted_ram_usage = self.predict_future_speed(
+                        model, df_ram_usage, scaler, time_steps, data_type='usage'
+                    )
+                else:
+                    predicted_ram_usage = None
+            else:
+                predicted_ram_usage = None
+
+
+
             
             individual_performance_data = {
                 'device_name': device_name,
