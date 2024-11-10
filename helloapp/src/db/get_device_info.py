@@ -12,14 +12,14 @@ def get_device_info(username):
         device_collection = db["devices"]
     except Exception as e:
         print(f"Error connecting to MongoDB: {e}")
-        return JsonResponse({"error": "Failed to connect to MongoDB"}, status=500)
+        return {"error": "Failed to connect to MongoDB"}
 
 
     # Find the user by username
     user = user_collection.find_one({"username": username})
 
     if not user:
-        return JsonResponse({"error": "Please login first."}, status=401)
+        return {"error": "Please login first."}
 
     # Find all devices belonging to the user
     devices = list(device_collection.find({"user_id": user["_id"]}))
@@ -61,5 +61,5 @@ def get_device_info(username):
     return device_data
 
 if __name__ == "__main__":
-    device_info = get_device_info("mmills6060")
+    device_info = get_device_info("mmills")
     print(device_info)

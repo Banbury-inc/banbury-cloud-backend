@@ -18,6 +18,7 @@ from .src.delete_files import delete_files
 from .src.update_files import update_files
 from .src.get_online_devices import get_online_devices
 from .src.db.remove_device import remove_device
+from .src.pipeline import pipeline
 from .consumers import broadcast_new_file
 
 import json
@@ -1550,6 +1551,20 @@ def get_session(request, username):
     response_data = {"result": "success", "sessions": all_sessions_data}
 
     return JsonResponse(response_data, status=200)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def run_pipeline(request, username):
+    result = pipeline(username)
+
+    response_data = {
+        "result": "success",
+        "data": result,
+    }   
+    return JsonResponse(response_data)
+
+
 
 
 @csrf_exempt
