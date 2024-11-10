@@ -19,6 +19,7 @@ from .src.update_files import update_files
 from .src.get_online_devices import get_online_devices
 from .src.db.remove_device import remove_device
 from .src.pipeline import pipeline
+from .src.prediction_service import PredictionService
 from .consumers import broadcast_new_file
 
 import json
@@ -1565,6 +1566,16 @@ def run_pipeline(request, username):
     return JsonResponse(response_data)
 
 
+@csrf_exempt
+@require_http_methods(["GET"])
+def make_device_predictions(request, username):
+    result = PredictionService().predict(username)
+
+    response_data = {
+        "result": "success",
+        "data": result,
+    }   
+    return JsonResponse(response_data)
 
 
 @csrf_exempt

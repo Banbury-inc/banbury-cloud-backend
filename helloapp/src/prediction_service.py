@@ -37,39 +37,79 @@ class PredictionService:
         predicted_speed = scaler.inverse_transform(predicted_speed_scaled)[0][0]
         return predicted_speed
 
-    def plot_data(self, df, predicted, future_datetime, label, ylabel):
-        plt.figure(figsize=(10, 5))
-        plt.plot(df['timestamp'], df[label], label=f'Historical {label}', marker='o')
-        plt.axvline(x=future_datetime, color='r', linestyle='--', label='Prediction Point')
-        plt.plot(future_datetime, predicted, 'ro', label=f'Predicted {label}: {predicted:.2f}')
-        plt.title(f'{label} Prediction')
-        plt.xlabel('Timestamp')
-        plt.ylabel(ylabel)
-        plt.legend()
-        plt.grid(True)
-        plt.xticks(rotation=45)
-        plt.tight_layout()
-
     def performance_data(self, devices, show_graph):
         future_datetime = datetime.strptime('2024-04-30 12:00:00', '%Y-%m-%d %H:%M:%S')
         performance_data = []
 
-
-        for device in devices:
+        # devices is a list containing a single device dictionary
+        for device in devices['devices']:
             device_name = device.get('device_name', 'Unknown Device')
-            upload_speeds = [float(speed) for speed in device.get('upload_network_speed', []) if isinstance(speed, (int, str, float)) and speed != '']
-            download_speeds = [float(speed) for speed in device.get('download_network_speed', []) if isinstance(speed, (int, str, float)) and speed != '']
-            timestamps = [datetime.strptime(ts, "%Y-%m-%d %H:%M:%S.%f") for ts in device.get('date_added', []) if ts]
-            df_upload_speed = pd.DataFrame({'timestamp': timestamps, 'upload_speed': upload_speeds})
-            df_download_speed = pd.DataFrame({'timestamp': timestamps, 'download_speed': download_speeds})
+            print(f"Processing device: {device_name}")
+
+            # Get network speeds and timestamps
+            upload_speeds = []
+            if 'upload_speed' in device:
+                upload_speeds = [float(speed) for speed in device['upload_speed'] 
+                               if speed is not None]
+                print(f"Found {len(upload_speeds)} upload speeds")
+            
+            download_speeds = []
+            if 'download_speed' in device:
+                download_speeds = [float(speed) for speed in device['download_speed']
+                                 if speed is not None] 
+                print(f"Found {len(download_speeds)} download speeds")
+
+            current_times = []
+            if 'current_time' in device:
+                current_times = [float(time) for time in device['current_time']
+                                 if time is not None]
+                print(f"Found {len(current_times)} timestamps")
+            # Try both timestamp formats
+            timestamps = []
+            for ts in current_times:
+                if not ts:
+                    continue
+                try:
+                    # Try first format with microseconds
+                    dt = datetime.strptime(ts, "%Y-%m-%d %H:%M:%S.%f")
+                except ValueError:
+                    try:
+                        # Try second format without microseconds
+                        dt = datetime.strptime(ts, "%Y-%m-%d %H:%M:%S")
+                    except ValueError:
+                        print(f"Skipping invalid timestamp: {ts}")
+                        continue
+                timestamps.append(dt)
+
+
+            # Ensure all arrays are same length by taking minimum length
+            min_length = min(len(timestamps), len(upload_speeds), len(download_speeds))
+            timestamps = timestamps[:min_length]
+            upload_speeds = upload_speeds[:min_length]
+            download_speeds = download_speeds[:min_length]
+
+
+            # Create and sort dataframes
+            df_upload_speed = pd.DataFrame({
+                'timestamp': timestamps,
+                'upload_speed': upload_speeds
+            })
+
+            df_download_speed = pd.DataFrame({
+                'timestamp': timestamps, 
+                'download_speed': download_speeds
+            })
             df_upload_speed.sort_values('timestamp', inplace=True)
             df_download_speed.sort_values('timestamp', inplace=True)
+
+            print(f"df_upload_speed: {df_upload_speed}")
+            print(f"df_download_speed: {df_download_speed}")
 
             # Scale the features
             scaler = MinMaxScaler(feature_range=(0, 1))
             df_upload_speed['scaled_speed'] = scaler.fit_transform(df_upload_speed[['upload_speed']])
 
-            time_steps = 50  # Length of input sequences
+            time_steps = min(50, len(df_upload_speed) - 1)  # Adjust time steps based on data length
             X, y = self.create_dataset(df_upload_speed[['scaled_speed']], df_upload_speed['scaled_speed'], time_steps)
             
             if X.size == 0:
@@ -82,24 +122,17 @@ class PredictionService:
 
             df_download_speed['scaled_speed'] = scaler.fit_transform(df_download_speed[['download_speed']])
 
-            time_steps = 5  # Length of input sequences
+            time_steps = min(5, len(df_download_speed) - 1)  # Adjust time steps based on data length
             X, y = self.create_dataset(df_download_speed[['scaled_speed']], df_download_speed['scaled_speed'], time_steps)
             
             if X.size == 0:
                 print(f"Skipping {device_name}: not enough data points for training.")
                 continue
-            
             X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
             model = self.build_and_train_model(X_train, y_train, time_steps, 1)
             predicted_download_speed = self.predict_future_speed(model, df_download_speed, scaler, time_steps, data_type='download_speed')
 
 
-            # Plotting
-            plt.figure(figsize=(10, 5))
-            plt.plot(df_upload_speed['timestamp'], df_upload_speed['upload_speed'], label='Historical Upload Speeds', marker='o')
-            plt.plot(df_download_speed['timestamp'], df_download_speed['download_speed'], label='Historical Download Speeds', marker='o')
-            plt.axvline(x=future_datetime, color='r', linestyle='--', label='Prediction Point')
-            plt.plot(future_datetime, predicted_upload_speed, 'ro', label=f'Predicted Upload Speed: {predicted_upload_speed:.2f} Mbps')
             plt.plot(future_datetime, predicted_download_speed, 'ro', label=f'Predicted Download Speed: {predicted_download_speed:.2f} Mbps')
             plt.title(f"Upload Speeds Prediction for {device_name}")
             plt.xlabel('Timestamp')
@@ -107,7 +140,13 @@ class PredictionService:
             plt.legend()
             plt.grid(True)
             plt.xticks(rotation=45)
-
+# Plotting
+            plt.figure(figsize=(10, 5))
+            plt.plot(df_upload_speed['timestamp'], df_upload_speed['upload_speed'], label='Historical Upload Speeds', marker='o')
+            plt.plot(df_download_speed['timestamp'], df_download_speed['download_speed'], label='Historical Download Speeds', marker='o')
+            plt.axvline(x=future_datetime, color='r', linestyle='--', label='Prediction Point')
+            plt.plot(future_datetime, predicted_upload_speed, 'ro', label=f'Predicted Upload Speed: {predicted_upload_speed:.2f} Mbps')
+            
             device_name = device.get('device_name', 'Unknown Device')
             gpu_usage = [float(speed) for speed in device.get('gpu_usage', []) if isinstance(speed, (int, str, float)) and speed != '']
             cpu_usage = [float(speed) for speed in device.get('cpu_usage', []) if isinstance(speed, (int, str, float)) and speed != '']
@@ -165,21 +204,6 @@ class PredictionService:
 
             performance_data.append(individual_performance_data)
 
-            # Plotting
-            plt.figure(figsize=(10, 5))
-            plt.plot(df_gpu_usage['timestamp'], df_gpu_usage['gpu_usage'], label='Historical GPU Usage %', marker='o')
-            plt.plot(df_cpu_usage['timestamp'], df_cpu_usage['cpu_usage'], label='Historical CPU Usage %', marker='o')
-            plt.plot(df_ram_usage['timestamp'], df_ram_usage['ram_usage'], label='Historical RAM Usage %', marker='o')
-            plt.axvline(x=future_datetime, color='r', linestyle='--', label='Prediction Point')
-            plt.plot(future_datetime, predicted_gpu_usage, 'ro', label=f'Predicted GPU Usage %: {predicted_gpu_usage:.2f} %')
-            plt.plot(future_datetime, predicted_cpu_usage, 'ro', label=f'Predicted CPU Usage %: {predicted_cpu_usage:.2f} %')
-            plt.plot(future_datetime, predicted_ram_usage, 'ro', label=f'Predicted RAM Usage %: {predicted_ram_usage:.2f} %')
-            plt.title(f"Performance Prediction for {device_name}")
-            plt.xlabel('Timestamp')
-            plt.ylabel('GPU, CPU, and RAM Usage %')
-            plt.legend()
-            plt.grid(True)
-            plt.xticks(rotation=45)
 
         if show_graph:
             plt.tight_layout()
