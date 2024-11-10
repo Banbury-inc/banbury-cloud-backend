@@ -41,6 +41,7 @@ def get_device_info(username):
             "cpu_info_physical_cores": device.get("cpu_info_physical_cores"),
             "cpu_info_processors": device.get("cpu_info_processors"),
             "date_added": device.get("date_added"),
+            "current_time": device.get("current_time"),
             "upload_speed": device.get("upload_speed"),
             "download_speed": device.get("download_speed"),
             "battery_status": device.get("battery_status"),
