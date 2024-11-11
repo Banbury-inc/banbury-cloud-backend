@@ -19,7 +19,9 @@ from .src.update_files import update_files
 from .src.get_online_devices import get_online_devices
 from .src.db.remove_device import remove_device
 from .src.pipeline import pipeline
+from .src.prediction_service import PredictionService
 from .consumers import broadcast_new_file
+from .src.db.add_file_to_sync import add_file_to_sync
 
 import json
 import re
@@ -912,6 +914,7 @@ def add_device(request, username, device_name):
         device_name = data.get("device_name")
         device_type = data.get("device_type")
         storage_capacity_gb = data.get("storage_capacity_gb")
+        sync_storage_capacity_gb = data.get("sync_storage_capacity_gb")
         date_added = data.get("date_added")
         upload_network_speed = data.get("upload_network_speed")
         download_network_speed = data.get("download_network_speed")
@@ -941,6 +944,7 @@ def add_device(request, username, device_name):
         "device_name": device_name,
         "device_type": device_type,
         "storage_capacity_gb": storage_capacity_gb,
+        "sync_storage_capacity_gb": sync_storage_capacity_gb,
         "date_added": [],
         "upload_network_speed": [],
         "download_network_speed": [],
@@ -1565,6 +1569,15 @@ def run_pipeline(request, username):
     return JsonResponse(response_data)
 
 
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def add_file_to_sync(request, username):
+    data = json.loads(request.body)
+    device_name = data.get("device_name")
+    files = data.get("files")
+    result = add_file_to_sync(username, device_name, files)
+    return JsonResponse({"result": "success", "data": result})
 
 
 @csrf_exempt

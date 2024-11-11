@@ -49,6 +49,8 @@ urlpatterns = [
     path("get_scanned_folders/<str:username>/", views.get_scanned_folders, name="get_scanned_folders"),
     # Prediction Service
     path("run_pipeline/<str:username>/", views.run_pipeline, name="run_pipeline"),
+    path("add_file_to_sync/<str:username>/", views.add_file_to_sync, name="add_file_to_sync"),
+
     # Task Management
     path("add_task/<str:username>/", views.add_task, name="add_task"),
     path("update_task/<str:username>/", views.update_task, name="update_task"),
