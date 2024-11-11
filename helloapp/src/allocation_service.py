@@ -12,50 +12,50 @@ class AllocationService():
     def bytes_to_gigabytes(self, bytes):
         return bytes / (1024 ** 3)  # Convert bytes to gigabytes
 
-    def devices(self, devices, files):
+    def devices(self, scored_devices, files):
         # Sort devices by score (descending)
-        devices.sort(key=lambda x: x['score'], reverse=True)
+        scored_devices.sort(key=lambda x: x['score'], reverse=True)
 
         # Sort files by priority and size (descending)
         priority_map = {"high": 3, "medium": 2, "low": 1}
         files.sort(key=lambda x: (priority_map[x['priority']], -x['size']), reverse=True)
 
         # Allocate files to devices
-        for device in devices:
+        for device in scored_devices:
             device['files'] = []
             device['used_capacity'] = 0  # Initialize used capacity in gigabytes
 
         for file in files:
             file_size_gb = self.bytes_to_gigabytes(file['size'])  # Convert file size to gigabytes
-            for device in devices:
+            for device in scored_devices:
                 if device['used_capacity'] + file_size_gb <= device['capacity']:
                     device['files'].append(file['file_name'])
                     device['used_capacity'] += file_size_gb
                     break
 
-        return devices
-    def devices_with_capacity_cap(self, devices, files, device_capcity_cap):
+        return scored_devices
+    def devices_with_capacity_cap(self, scored_devices, files, device_capcity_cap):
         # Sort devices by score (descending)
-        devices.sort(key=lambda x: x['score'], reverse=True)
+        scored_devices.sort(key=lambda x: x['score'], reverse=True)
 
         # Sort files by priority and size (descending)
         priority_map = {"high": 3, "medium": 2, "low": 1}
         files.sort(key=lambda x: (priority_map[x['priority']], -x['size']), reverse=True)
 
         # Allocate files to devices
-        for device in devices:
+        for device in scored_devices:
             device['capacity'] = device_capcity_cap
             device['files'] = []
             device['used_capacity'] = 0  # Initialize used capacity in gigabytes
 
         for file in files:
             file_size_gb = self.bytes_to_gigabytes(file['size'])  # Convert file size to gigabytes
-            for device in devices:
+            for device in scored_devices:
                 if device['used_capacity'] + file_size_gb <= device['capacity']:
                     device['files'].append(file['file_name'])
                     device['used_capacity'] += file_size_gb
                     break
 
-        return devices
+        return scored_devices
 
 

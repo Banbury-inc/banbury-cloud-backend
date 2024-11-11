@@ -913,6 +913,7 @@ def add_device(request, username, device_name):
         device_name = data.get("device_name")
         device_type = data.get("device_type")
         storage_capacity_gb = data.get("storage_capacity_gb")
+        sync_storage_capacity_gb = data.get("sync_storage_capacity_gb")
         date_added = data.get("date_added")
         upload_network_speed = data.get("upload_network_speed")
         download_network_speed = data.get("download_network_speed")
@@ -942,6 +943,7 @@ def add_device(request, username, device_name):
         "device_name": device_name,
         "device_type": device_type,
         "storage_capacity_gb": storage_capacity_gb,
+        "sync_storage_capacity_gb": sync_storage_capacity_gb,
         "date_added": [],
         "upload_network_speed": [],
         "download_network_speed": [],
