@@ -1569,17 +1569,6 @@ def run_pipeline(request, username):
     return JsonResponse(response_data)
 
 
-@csrf_exempt
-@require_http_methods(["GET"])
-def make_device_predictions(request, username):
-    result = PredictionService().predict(username)
-
-    response_data = {
-        "result": "success",
-        "data": result,
-    }   
-    return JsonResponse(response_data)
-
 
 @csrf_exempt
 @require_http_methods(["POST"])
