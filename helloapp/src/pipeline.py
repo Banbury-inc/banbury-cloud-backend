@@ -6,6 +6,7 @@ from .db.get_file_sync import get_file_sync
 from .db.get_device_predictions import get_device_predictions
 from .db.update_device_predictions import update_device_predictions
 from .db.update_device_score import update_device_score
+from .db.update_file_sync_proposed_device_ids import update_file_sync_proposed_device_ids
 from .scoring_service import ScoringService
 from .prediction_service import PredictionService
 from .allocation_service import AllocationService
@@ -58,10 +59,27 @@ def pipeline(username):
 
     try:
         allocated_devices = AllocationService().devices(fetched_device_predictions, file_sync_info)
-        print(allocated_devices)
+        print("Allocated devices:", allocated_devices)
+
+        # Generate file-to-device mappings
+        file_device_mappings = AllocationService().generate_file_device_mappings(allocated_devices)
+        print("File device mappings:", file_device_mappings)
+
+        # Update each file's proposed device IDs
+        for mapping in file_device_mappings:
+            try:
+                result = update_file_sync_proposed_device_ids(
+                    username=username,
+                    file_id=mapping['file_id'],
+                    proposed_device_ids=mapping['proposed_device_ids']
+                )
+                if 'error' in result:
+                    print(f"Error updating file {mapping['file_id']}: {result['error']}")
+            except Exception as e:
+                print(f"Failed to update file {mapping['file_id']}: {e}")
+
     except Exception as e:
-        return {"error": f"Failed to allocate devices: {e}"}
-    return allocated_devices
+        return {"error": f"Failed in allocation pipeline: {e}"}
 
 
 

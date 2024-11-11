@@ -88,6 +88,7 @@ def add_file_to_sync(username, device_name, files):
             # Create new sync record with user_id
             sync_file = {
                 "device_ids": [device_id],
+                "proposed_device_ids": [device_id],
                 "user_id": user_id,
                 "file_name": file_data.get("file_name"),
                 "file_size": file_data.get("file_size"),

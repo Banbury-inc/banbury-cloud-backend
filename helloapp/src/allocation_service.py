@@ -19,6 +19,8 @@ class AllocationService():
         # Sort devices by score (descending)
         devices_list.sort(key=lambda x: x['score'], reverse=True)
 
+        print("file_sync_info: ", file_sync_info)
+
 
         # Sort files by priority and size (descending)
         priority_map = {3: 3, 2: 2, 1: 1}
@@ -33,7 +35,11 @@ class AllocationService():
             file_size_gb = self.bytes_to_gigabytes(file['file_size'])  # Convert file size to gigabytes
             for device in devices_list:
                 if device['used_capacity'] + file_size_gb <= device['sync_storage_capacity_gb']:
-                    device['files'].append(file['file_name'])
+                    # Store both file name and ID
+                    device['files'].append({
+                        'file_id': str(file['_id']),
+                        'file_name': file['file_name'],
+                    })
                     device['used_capacity'] += file_size_gb
                     break
 
@@ -60,10 +66,46 @@ class AllocationService():
             file_size_gb = self.bytes_to_gigabytes(file['file_size'])  # Convert file size to gigabytes
             for device in devices_list:
                 if device['used_capacity'] + file_size_gb <= device['sync_storage_capacity_gb']:
-                    device['files'].append(file['file_name'])
+                    # Store both file name and ID
+                    device['files'].append({
+                        'file_id': str(file['_id']),
+                        'file_name': file['file_name'],
+                    })
                     device['used_capacity'] += file_size_gb
                     break
 
         return devices_list
+
+    def generate_file_device_mappings(self, allocated_devices):
+        """
+        Converts device-centric allocation data to file-centric mapping
+        Returns a list of dictionaries, each containing a file_id and its proposed_device_ids
+        """
+        file_mappings = {}
+
+        # Iterate through each device and its allocated files
+        for device in allocated_devices:
+            device_name = device.get('device_name')  # Using device_name instead of device_id
+            if not device_name:
+                continue
+
+            # Go through each file allocated to this device
+            for file_info in device.get('files', []):
+                file_id = file_info.get('file_id')
+                if not file_id:
+                    continue
+
+                # Initialize the list of device names if this is the first time seeing this file
+                if file_id not in file_mappings:
+                    file_mappings[file_id] = {
+                        'file_id': file_id,
+                        'proposed_device_ids': []
+                    }
+                
+                # Add this device to the file's proposed devices
+                file_mappings[file_id]['proposed_device_ids'].append(device_name)
+
+        # Convert the dictionary to a list
+        return list(file_mappings.values())
 
 
