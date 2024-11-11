@@ -68,6 +68,7 @@ def add_file_to_sync(username, device_name, files):
             if device_id not in existing_sync.get("device_ids", []):
                 file_sync_collection.update_one(
                     {"file_name": file_data.get("file_name")},
+                    {"$set": {"file_size": file_data.get("file_size")}},
                     {"$addToSet": {"device_ids": device_id}}
                 )
         else:
@@ -75,6 +76,7 @@ def add_file_to_sync(username, device_name, files):
             sync_file = {
                 "device_ids": [device_id],
                 "file_name": file_data.get("file_name"),
+                "file_size": file_data.get("file_size"),
                 "file_priority": file_data.get("file_priority", 0)  # Default priority of 0
             }
             sync_files.append(sync_file)
