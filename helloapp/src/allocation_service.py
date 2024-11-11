@@ -85,8 +85,8 @@ class AllocationService():
 
         # Iterate through each device and its allocated files
         for device in allocated_devices:
-            device_name = device.get('device_name')  # Using device_name instead of device_id
-            if not device_name:
+            device_id = device.get('device_id')  # This is now an ObjectId
+            if not device_id:
                 continue
 
             # Go through each file allocated to this device
@@ -95,15 +95,16 @@ class AllocationService():
                 if not file_id:
                     continue
 
-                # Initialize the list of device names if this is the first time seeing this file
+                # Initialize the list of device IDs if this is the first time seeing this file
                 if file_id not in file_mappings:
                     file_mappings[file_id] = {
                         'file_id': file_id,
                         'proposed_device_ids': []
                     }
                 
-                # Add this device to the file's proposed devices
-                file_mappings[file_id]['proposed_device_ids'].append(device_name)
+                # Add this device's ID to the file's proposed devices
+                # The device_id is already an ObjectId, so we can use it directly
+                file_mappings[file_id]['proposed_device_ids'].append(device_id)
 
         # Convert the dictionary to a list
         return list(file_mappings.values())

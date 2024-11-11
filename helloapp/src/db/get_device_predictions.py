@@ -1,6 +1,7 @@
 from pymongo.mongo_client import MongoClient
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
+from bson import ObjectId
 
 def get_device_predictions(username):
     try:
@@ -27,6 +28,7 @@ def get_device_predictions(username):
     predictions_data = []
     for prediction in device_predictions:
         predictions_data.append({
+            "device_id": prediction.get("_id"),  # Keep as ObjectId
             "device_name": prediction.get("device_name"),
             "sync_storage_capacity_gb": prediction.get("sync_storage_capacity_gb"),
             "predicted_upload_speed": prediction.get("predicted_upload_speed"),
