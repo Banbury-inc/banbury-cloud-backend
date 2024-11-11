@@ -34,6 +34,7 @@ def update_device_predictions(username, device_name, device_predictions):
         "user_id": user["_id"],
         "device_id": device["_id"],
         "device_name": device_name,
+        "sync_storage_capacity_gb": device.get("sync_storage_capacity_gb"),
         "predicted_upload_speed": device_predictions['predicted_upload_speed'],
         "predicted_download_speed": device_predictions['predicted_download_speed'],
         "predicted_gpu_usage": device_predictions['predicted_gpu_usage'],

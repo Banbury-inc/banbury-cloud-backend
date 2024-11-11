@@ -2,6 +2,8 @@
 
 from .db.get_device_info import get_device_info
 from .db.get_files_info import get_files_info
+from .db.get_file_sync import get_file_sync
+from .db.get_device_predictions import get_device_predictions
 from .db.update_device_predictions import update_device_predictions
 from .db.update_device_score import update_device_score
 from .scoring_service import ScoringService
@@ -14,7 +16,7 @@ def pipeline(username):
     except Exception as e:
         return {"error": f"Failed to get device info: {e}"}
     try:
-        files_info = get_files_info(username)
+        file_sync_info = get_file_sync(username)
     except Exception as e:
         return {"error": f"Failed to get files info: {e}"}
     try:
@@ -50,12 +52,16 @@ def pipeline(username):
             results.append(result)
     except Exception as e:
         return {"error": f"Failed to update device scores: {e}"}
-    #try:
-    #    allocated_devices = AllocationService().allocate(scored_devices, files_info)
-    #    print(allocated_devices)
-    #except Exception as e:
-    #    return {"error": f"Failed to allocate devices: {e}"}
-    #return allocated_devices
+
+    fetched_device_predictions = get_device_predictions(username)
+    
+
+    try:
+        allocated_devices = AllocationService().devices(fetched_device_predictions, file_sync_info)
+        print(allocated_devices)
+    except Exception as e:
+        return {"error": f"Failed to allocate devices: {e}"}
+    return allocated_devices
 
 
 

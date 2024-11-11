@@ -31,6 +31,7 @@ def get_device_info(username):
             "device_name": device.get("device_name"),
             "device_type": device.get("device_type"),
             "storage_capacity_gb": device.get("storage_capacity_gb"),
+            "sync_storage_capacity_gb": device.get("sync_storage_capacity_gb"),
             "device_manufacturer": device.get("device_manufacturer"),
             "device_model": device.get("device_model"),
             "device_version": device.get("device_version"),
