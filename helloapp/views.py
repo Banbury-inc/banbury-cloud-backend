@@ -21,6 +21,7 @@ from .src.db.remove_device import remove_device
 from .src.pipeline import pipeline
 from .src.prediction_service import PredictionService
 from .consumers import broadcast_new_file
+from .src.db.add_file_to_sync import add_file_to_sync
 
 import json
 import re
@@ -1578,6 +1579,16 @@ def make_device_predictions(request, username):
         "data": result,
     }   
     return JsonResponse(response_data)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def add_file_to_sync(request, username):
+    data = json.loads(request.body)
+    device_name = data.get("device_name")
+    files = data.get("files")
+    result = add_file_to_sync(username, device_name, files)
+    return JsonResponse({"result": "success", "data": result})
 
 
 @csrf_exempt

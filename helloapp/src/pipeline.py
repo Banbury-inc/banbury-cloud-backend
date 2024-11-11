@@ -7,6 +7,7 @@ from .db.get_device_predictions import get_device_predictions
 from .db.update_device_predictions import update_device_predictions
 from .db.update_device_score import update_device_score
 from .db.update_file_sync_proposed_device_ids import update_file_sync_proposed_device_ids
+from .db.get_download_queue import get_download_queue
 from .scoring_service import ScoringService
 from .prediction_service import PredictionService
 from .allocation_service import AllocationService
@@ -80,6 +81,13 @@ def pipeline(username):
 
     except Exception as e:
         return {"error": f"Failed in allocation pipeline: {e}"}
+
+
+
+    # for each device, get the download queue
+    for device in allocated_devices:
+        download_queue = get_download_queue(username, device['device_id'])
+        print(download_queue)
 
 
 
