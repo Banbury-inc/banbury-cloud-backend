@@ -1590,16 +1590,15 @@ def run_pipeline(request, username):
     return JsonResponse(response_data)
 
 
-@csrf_exempt
-@require_http_methods(["GET"])
-def make_device_predictions(request, username):
-    result = PredictionService().predict(username)
 
-    response_data = {
-        "result": "success",
-        "data": result,
-    }   
-    return JsonResponse(response_data)
+@csrf_exempt
+@require_http_methods(["POST"])
+def add_file_to_sync(request, username):
+    data = json.loads(request.body)
+    device_name = data.get("device_name")
+    files = data.get("files")
+    result = add_file_to_sync(username, device_name, files)
+    return JsonResponse({"result": "success", "data": result})
 
 
 @csrf_exempt
