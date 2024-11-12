@@ -21,7 +21,7 @@ from .src.db.remove_device import remove_device
 from .src.pipeline import pipeline
 from .src.prediction_service import PredictionService
 from .consumers import broadcast_new_file
-from .src.db.add_file_to_sync import add_file_to_sync
+from .src.db.add_file_to_sync import add_file_to_sync as db_add_file_to_sync
 
 import json
 import re
@@ -743,7 +743,6 @@ def update_devices(request, username):
             uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
             client = MongoClient(uri)
             db = client["myDatabase"]
-            user_collection = db["users"]
 
             # Find the user by username
             user = user_collection.find_one({"username": username})
@@ -993,6 +992,28 @@ def add_device(request, username, device_name):
     }
     return JsonResponse(user_data)
 
+@csrf_exempt
+@require_http_methods(["POST"])
+def add_file_to_sync(request, username):
+    try:
+        data = json.loads(request.body)
+        device_name = data.get("device_name")
+        file_path = data.get("file_path")
+        response = db_add_file_to_sync(username, device_name, file_path)
+        
+
+        user_data = {
+            "result": response,
+            "username": username,  # Return username if success, None if fail
+    }
+
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+
+    return JsonResponse(user_data)
+            
+        
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])

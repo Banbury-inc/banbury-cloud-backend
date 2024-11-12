@@ -2,9 +2,9 @@ from pymongo.mongo_client import MongoClient
 from django.http import JsonResponse
 from datetime import datetime
 
-def add_file_to_sync(username, device_name, files):
+def add_file_to_sync(username, device_name, file_name):
     try:
-        if not files or not device_name:
+        if not file_name or not device_name:
             return "Missing files or device_name"
 
     except Exception as e:
@@ -34,67 +34,64 @@ def add_file_to_sync(username, device_name, files):
     if not device_id:
         return "Device ID not found."
 
+    file_document = file_collection.find_one({"file_name": file_name})
+    if not file_document:
+        return "File not found."    
+
+    # Convert ObjectId to string for JSON serialization
+    file_document['_id'] = str(file_document['_id'])
+
     # Prepare lists for both collections
     new_files = []
     sync_files = []
-    
-    for file_data in files:
-        if not isinstance(file_data, dict):
-            return f"Invalid file data format: {file_data}"
 
-        required_fields = ["file_name", "file_path"]
-        missing_fields = [
-            field for field in required_fields if not file_data.get(field)
-        ]
-        if missing_fields:
-            return f"Missing fields: {missing_fields}"
 
-        # Prepare new file data for the files collection
-        new_file = {
-            "device_id": device_id,
-            "file_type": file_data.get("file_type"),
-            "file_name": file_data.get("file_name"),
-            "file_path": file_data.get("file_path"),
-            "file_size": file_data.get("file_size"),
-            "date_uploaded": file_data.get("date_uploaded"),
-            "date_modified": file_data.get("date_modified"),
-            "file_parent": file_data.get("file_parent"),
-            "original_device": file_data.get("original_device"),
-            "kind": file_data.get("kind"),
+    # Prepare new file data for the files collection
+    new_file = {
+        "device_id": device_id,
+        "file_type": file_document.get("file_type"),
+        "file_name": file_document.get("file_name"),
+        "file_path": file_document.get("file_path"),
+        "file_size": file_document.get("file_size"),
+        "date_uploaded": file_document.get("date_uploaded"),
+        "date_modified": file_document.get("date_modified"),
+        "file_parent": file_document.get("file_parent"),
+        "original_device": file_document.get("original_device"),
+        "kind": file_document.get("kind"),
+    }
+    new_files.append(new_file)
+
+    # Prepare sync file data for the file_sync collection
+    # Check if file already exists in file_sync collection
+    existing_sync = file_sync_collection.find_one({
+        "file_name": file_document.get("file_name")
+    })
+
+    if existing_sync:
+        # Update existing sync record
+        if device_id not in existing_sync.get("device_ids", []):
+            file_sync_collection.update_one(
+                {"file_name": file_document.get("file_name")},
+                {
+                    "$set": {
+                        "file_size": file_document.get("file_size"),
+                        "file_priority": file_document.get("file_priority", 1),
+                        "user_id": user_id
+                    },
+                    "$addToSet": {"device_ids": device_id}
+                }
+            )
+    else:
+        # Create new sync record with user_id
+        sync_file = {
+            "device_ids": [device_id],
+            "proposed_device_ids": [device_id],
+            "user_id": user_id,
+            "file_name": file_document.get("file_name"),
+            "file_size": file_document.get("file_size"),
+            "file_priority": file_document.get("file_priority", 1),
         }
-        new_files.append(new_file)
-
-        # Prepare sync file data for the file_sync collection
-        # Check if file already exists in file_sync collection
-        existing_sync = file_sync_collection.find_one({
-            "file_name": file_data.get("file_name")
-        })
-
-        if existing_sync:
-            # Update existing sync record
-            if device_id not in existing_sync.get("device_ids", []):
-                file_sync_collection.update_one(
-                    {"file_name": file_data.get("file_name")},
-                    {
-                        "$set": {
-                            "file_size": file_data.get("file_size"),
-                            "file_priority": file_data.get("file_priority", 1),
-                            "user_id": user_id
-                        },
-                        "$addToSet": {"device_ids": device_id}
-                    }
-                )
-        else:
-            # Create new sync record with user_id
-            sync_file = {
-                "device_ids": [device_id],
-                "proposed_device_ids": [device_id],
-                "user_id": user_id,
-                "file_name": file_data.get("file_name"),
-                "file_size": file_data.get("file_size"),
-                "file_priority": file_data.get("file_priority", 1),
-            }
-            sync_files.append(sync_file)
+        sync_files.append(sync_file)
 
     # Insert all new files in one go
     try:
@@ -110,10 +107,9 @@ def add_file_to_sync(username, device_name, files):
 
 
 def main():
-    test_data = [
-        {"file_name": "test_file.txt", "file_path": "/home/michael/test_file.txt", "file_type": "text", "file_size": 1024, "date_uploaded": datetime.now().isoformat(), "date_modified": datetime.now().isoformat(), "file_parent": "michael-ubuntu", "original_device": "michael-ubuntu", "kind": "file"}
-    ]
-    result = add_file_to_sync("mmills", "michael-ubuntu", test_data)
+
+
+    result = add_file_to_sync("mmills", "michael-ubuntu", "/home/mmills/BCloud/374-656-726_96j8_382.jpg")
     print(result)
 
 if __name__ == "__main__":
