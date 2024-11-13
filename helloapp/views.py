@@ -22,7 +22,7 @@ from .src.pipeline import pipeline
 from .src.prediction_service import PredictionService
 from .consumers import broadcast_new_file
 from .src.db.add_file_to_sync import add_file_to_sync as db_add_file_to_sync
-
+from .src.db.paginated_get_files_info import paginated_get_files_info
 import json
 import re
 
@@ -514,6 +514,18 @@ def getfileinfo(request, username):
     }
 
     return JsonResponse(files_data)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def paginated_get_files_info(request, username):
+    try:
+        data = json.loads(request.body)
+        page = data.get("page", 1)
+        items_per_page = data.get("items_per_page", 10)
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+    
+    return paginated_get_files_info(username, page=page, items_per_page=items_per_page)
 
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
@@ -1152,24 +1164,19 @@ def add_files(request, username):
     try:
         # Parse the JSON body
         data = json.loads(request.body)
-
         # Extract specific data from the JSON
         files = data.get("files")
         device_name = data.get("device_name")
-
         if not files or not device_name:
             return JsonResponse({"error": "Missing files or device_name"}, status=400)
-
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
-
     # Connect to MongoDB
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
     db = client["NeuraNet"]
     file_collection = db["files"]
     device_collection = db["devices"]
-
     # Find the device_id based on device_name
     device = device_collection.find_one({"device_name": device_name})
     if not device:
@@ -1177,14 +1184,12 @@ def add_files(request, username):
             "result": "device_not_found",
             "message": "Device not found.",
         })
-
     device_id = device.get("_id")
     if not device_id:
         return JsonResponse({
             "result": "object_id_not_found",
             "message": "Device ID not found.",
         })
-
     # Prepare the list of new files to insert
     new_files = []
     for file_data in files:
@@ -1193,7 +1198,6 @@ def add_files(request, username):
             return JsonResponse(
                 {"error": f"Invalid file data format: {file_data}"}, status=400
             )
-
         required_fields = ["file_name", "file_path"]
         missing_fields = [
             field for field in required_fields if not file_data.get(field)
@@ -1202,7 +1206,6 @@ def add_files(request, username):
             return JsonResponse(
                 {"error": f"Missing fields: {missing_fields}"}, status=401
             )
-
         # Prepare new file data for insertion
         new_file = {
             "device_id": device_id,
@@ -1219,14 +1222,12 @@ def add_files(request, username):
             "kind": file_data.get("kind"),
         }
         new_files.append(new_file)
-
     # If no valid files to add, return early
     if not new_files:
         return JsonResponse({
             "result": "no_files_to_add",
             "message": "No valid files to add.",
         })
-
     # Insert all new files in one go
     try:
         file_collection.insert_many(new_files)
@@ -1236,12 +1237,10 @@ def add_files(request, username):
             {"result": "failure", "message": f"Error inserting files: {str(e)}"},
             status=500,
         )
-
     return JsonResponse({
         "result": "success",
         "message": f"{len(new_files)} files added successfully.",
     })
-
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
@@ -1249,19 +1248,14 @@ def handle_delete_files(request, username):
     try:
         # Parse the JSON body
         data = json.loads(request.body)
-
         # Extract specific data from the JSON
         files = data.get("files")
         device_name = data.get("device_name")
-
         if not files or not device_name:
             return JsonResponse({"error": "Missing files or device_name"}, status=400)
-
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
-
     response = delete_files(username, device_name, files)
-
     if response == "device_not_found":
         return JsonResponse({
             "result": "device_not_found",
@@ -1277,7 +1271,6 @@ def handle_delete_files(request, username):
             "result": "success",
             "message": "Files deleted successfully.",
         })
-
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])

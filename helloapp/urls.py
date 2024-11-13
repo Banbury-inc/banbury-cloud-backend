@@ -42,6 +42,7 @@ urlpatterns = [
     path("delete_files/<str:username>/", views.handle_delete_files, name="add_files"),
     path("update_files/<str:username>/", views.handle_update_files, name="add_files"),
     path("getfileinfo/<str:username>/", views.getfileinfo, name="getfileinfo"),
+    path("paginated_get_files_info/<str:username>/", views.paginated_get_files_info, name="paginated_get_files_info"),
     path("getpartialfileinfo/<str:username>/",views.get_partial_file_info,name="getpartialfileinfo",),
     path("search_file/<str:username>/", views.search_file, name="search_file"),
     path("add_scanned_folder/<str:username>/", views.add_scanned_folder, name="add_scanned_folder"),
