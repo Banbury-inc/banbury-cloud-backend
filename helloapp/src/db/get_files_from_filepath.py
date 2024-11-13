@@ -21,36 +21,92 @@ def get_files_from_filepath(username, filepath):
     devices = list(device_collection.find({"user_id": user["_id"]}))
     device_ids = [device["_id"] for device in devices]
 
-    print(f"File path: {filepath}")
+    print("filepath")
+    print(filepath)
 
-    if filepath == None:
+    if filepath == None or filepath == "" or filepath == "Core" or filepath == "Core/Devices":
+        print("filepath is none or core or devices")
         files_data = []
-        files_data.append({
-            "file_name": "file_name",
-            "file_size": "file_size", 
-            "file_type": "file_type",
-            "file_path": "file_path",
-            "date_uploaded": "date_uploaded",
-            "date_modified": "date_modified",
-            "date_accessed": "date_accessed",
-            "kind": "kind",
-            "device_name": "device_name"
-        })
+        for device in devices:
+            files_data.append({
+                "file_name": "file_name",
+                "file_size": "file_size", 
+                "file_type": "file_type",
+                "file_path": "file_path",
+                "date_uploaded": "date_uploaded",
+                "date_modified": "date_modified",
+                "date_accessed": "date_accessed",
+                "kind": "kind",
+                "device_name": device["device_name"]
+            })
+
         return {
             "result": "success",
             "files": files_data
         }
-    else:
-        # Get directory path without filename
-        directory_path = os.path.dirname(filepath)
-        if directory_path:
-            directory_path += '/'  # Add trailing slash if path exists
 
-        # Find all files in the directory and immediate subdirectories across user's devices
-        files = list(file_collection.find({
-            "device_id": {"$in": device_ids},
-            "file_path": {"$regex": f"^{directory_path}[^/]*(/[^/]*)?$"}  # Match files in current dir and one level deep
-        }))
+    else:
+
+        # take filepath and remove Core/Devices from the front
+        filepath = filepath.replace("Core/Devices/","")
+
+        print("true filepath")
+        print(filepath)
+
+        # Take the value until the next / and set it as the device name
+        device_name = filepath.split("/")[0]
+        print("device_name")
+        print(device_name)
+
+        # Get the remaining path after device name
+        remaining_path = '/'.join(filepath.split("/")[1:])
+        directory_path = remaining_path + '/' if remaining_path else ""
+
+        print("directory_path")
+        print(directory_path)
+
+        # If directory_path is empty, find all files for the specific device
+        if directory_path == "":
+            # First find the specific device by device_name
+            target_device = next((d for d in devices if d["device_name"] == device_name), None)
+            print("target_device")
+            print(target_device.get("device_name"))
+            if not target_device:
+                return {
+                    "result": "error",
+                    "message": f"Device '{device_name}' not found"
+                }
+            
+            # Start with first level search
+            files = list(file_collection.find({
+                "device_id": target_device.get("_id"),
+                "file_path": {"$regex": "^[^/]+(/[^/]+)?$"}  # Match first level dirs and their immediate children
+            }))
+
+            # If no files found, progressively search deeper until files are found
+            depth = 2
+            while not files and depth <= 10:  # Limit depth to avoid infinite loops
+                regex_pattern = "^" + ("/[^/]+" * depth) + "(/[^/]+)?$"
+                files = list(file_collection.find({
+                    "device_id": target_device.get("_id"),
+                    "file_path": {"$regex": regex_pattern}
+                }))
+                depth += 1
+
+        else:
+
+            # add a / in front of directory_path if it doesn't have one
+            if not directory_path.startswith('/'):
+                directory_path = '/' + directory_path
+
+            # Modified query to get all nested directories
+            files = list(file_collection.find({
+                    "device_id": {"$in": device_ids},
+                    "file_path": {"$regex": f"^{directory_path}.*"}  # Match all files under this directory path
+                }))
+
+
+
 
         # Process files and add device names
         files_data = []
@@ -72,5 +128,6 @@ def get_files_from_filepath(username, filepath):
             })
 
         return {
+            "result": "success",
             "files": files_data
         }

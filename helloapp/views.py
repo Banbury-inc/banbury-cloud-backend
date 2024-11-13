@@ -522,8 +522,8 @@ def getfileinfo(request, username):
 def get_files_from_filepath(request, username):
     try:
         data = json.loads(request.body)
-        file_path = data.get("file_path")
-        response = db_get_files_from_filepath(username, file_path)
+        filepath = data.get("global_file_path")
+        response = db_get_files_from_filepath(username, filepath)
         if response.get('result') == "success":
 
             files_data = {
