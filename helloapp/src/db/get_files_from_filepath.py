@@ -2,6 +2,8 @@ from pymongo.mongo_client import MongoClient
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 import os
+import motor.motor_asyncio
+from asgiref.sync import sync_to_async
 
 
 uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
@@ -33,12 +35,12 @@ def get_files_from_filepath(username, filepath):
         for device in devices:
             files_data.append({
                 "file_name": "file_name",
-                "file_size": "file_size", 
+                # "file_size": "file_size", 
                 "file_type": "file_type",
                 "file_path": "file_path",
-                "date_uploaded": "date_uploaded",
-                "date_modified": "date_modified",
-                "date_accessed": "date_accessed",
+                # "date_uploaded": "date_uploaded",
+                # "date_modified": "date_modified",
+                # "date_accessed": "date_accessed",
                 "kind": "kind",
                 "device_name": device["device_name"]
             })
@@ -72,28 +74,41 @@ def get_files_from_filepath(username, filepath):
             # You might need to adjust this depending on your exact path structure
             query["file_parent"] = {"$regex": f".*{remaining_path}$"}
 
-        files = list(file_collection.find(query).limit(100))  # Limit added for safety
-
-        # Process files and add device names
-        files_data = []
-        for file in files:
-            # Find matching device to get device name
-            device = next((d for d in devices if d["_id"] == file["device_id"]), None)
-            device_name = device["device_name"] if device else "Unknown Device"
-            
-            files_data.append({
-                "file_name": file.get("file_name"),
-                "file_size": file.get("file_size"), 
-                "file_type": file.get("file_type"),
-                "file_path": file.get("file_path"),
-                "date_uploaded": file.get("date_uploaded"),
-                "date_modified": file.get("date_modified"),
-                "date_accessed": file.get("date_accessed"),
-                "kind": file.get("kind"),
-                "device_name": device_name
-            })
+        pipeline = [
+            {"$match": query},
+            {"$limit": 100},
+            {"$lookup": {
+                "from": "devices",
+                "localField": "device_id",
+                "foreignField": "_id",
+                "as": "device"
+            }},
+            {"$project": {
+                "file_name": 1,
+                # "file_size": 1,
+                "file_type": 1,
+                "file_path": 1,
+                # "date_uploaded": 1,
+                # "date_modified": 1,
+                # "date_accessed": 1,
+                "kind": 1,
+                "device_name": {"$arrayElemAt": ["$device.device_name", 0]}
+            }}
+        ]
+        
+        files_data = list(file_collection.aggregate(pipeline))
 
         return {
             "result": "success",
             "files": files_data
         }
+
+async def get_files_from_filepath_async(username, filepath):
+    # Convert your MongoDB client to async
+    client = motor.motor_asyncio.AsyncIOMotorClient(uri)
+    db = client["NeuraNet"]
+    
+    # Perform async queries
+    user = await db.users.find_one({"username": username})
+    devices = await db.devices.find({"user_id": user["_id"]}).to_list(None)
+    
