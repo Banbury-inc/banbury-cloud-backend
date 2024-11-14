@@ -1,7 +1,7 @@
-from .get_files_from_filepath import get_files_from_filepath
+from .get_user_info import get_user_info
 import time
 
-def test_get_files_from_filepath():
+def test_get_user_info():
 
     #username = "mmills"
     #filepath = "/home/mmills/BCloud/IMG_0099.JPG"
@@ -11,27 +11,26 @@ def test_get_files_from_filepath():
 
     #filepath = "/home/mmills/BCloud/"
     username = "mmills"
-    filepath = "Core/Devices/michael-ubuntu"
-    result = get_files_from_filepath(username, filepath)
+    result = get_user_info(username)
     print(result)
 
 
 
-def test_time_to_get_files_from_filepath():
+def test_time_to_get_user_info():
     
     username = "mmills"
-    filepath = "Core/Devices/michael-ubuntu"
     
     start_time = time.time()
-    result = get_files_from_filepath(username, filepath)
+    result = get_user_info(username)
     end_time = time.time()
     
     print(f"Time taken: {end_time - start_time:.4f} seconds")
+    print(result)
 
 
 def main():
-    #test_get_files_from_filepath()
-    test_time_to_get_files_from_filepath()
+    #test_get_user_info()
+    test_time_to_get_user_info()
 
 if __name__ == "__main__":
     main()
