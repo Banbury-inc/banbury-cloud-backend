@@ -23,6 +23,7 @@ from .src.prediction_service import PredictionService
 from .consumers import broadcast_new_file
 from .src.db.add_file_to_sync import add_file_to_sync as db_add_file_to_sync
 from .src.db.paginated_get_files_info import paginated_get_files_info
+from .src.db.get_files_from_filepath import get_files_from_filepath as db_get_files_from_filepath
 import json
 import re
 
@@ -514,6 +515,29 @@ def getfileinfo(request, username):
     }
 
     return JsonResponse(files_data)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def get_files_from_filepath(request, username):
+    try:
+        data = json.loads(request.body)
+        filepath = data.get("global_file_path")
+        response = db_get_files_from_filepath(username, filepath)
+        if response.get('result') == "success":
+
+            files_data = {
+                "files": response.get("files"),
+            }
+            return JsonResponse(files_data)
+
+
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+
+
+
 
 @csrf_exempt
 @require_http_methods(["POST"])
