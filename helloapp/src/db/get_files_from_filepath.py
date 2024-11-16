@@ -31,19 +31,33 @@ def get_files_from_filepath(username, filepath):
 
 
     if filepath == None or filepath == "" or filepath == "Core" or filepath == "Core/Devices":
-        files_data = []
-        for device in devices:
-            files_data.append({
-                "file_name": "file_name",
-                # "file_size": "file_size", 
-                "file_type": "file_type",
-                "file_path": "file_path",
-                # "date_uploaded": "date_uploaded",
-                # "date_modified": "date_modified",
-                # "date_accessed": "date_accessed",
-                "kind": "kind",
-                "device_name": device["device_name"]
-            })
+        query = {
+            "device_id": {"$in": device_ids}
+        }
+
+        pipeline = [
+            {"$match": query},
+            {"$limit": 100},
+            {"$lookup": {
+                "from": "devices",
+                "localField": "device_id",
+                "foreignField": "_id",
+                "as": "device"
+            }},
+            {"$project": {
+                "file_name": 1,
+                "file_type": 1,
+                "file_path": 1,
+                "file_size": 1,
+                "date_uploaded": 1,
+                "kind": 1,
+                "device_name": {"$arrayElemAt": ["$device.device_name", 0]},
+                "device_id": {"$toString": "$device_id"},
+                "_id": {"$toString": "$_id"}
+            }}
+        ]
+
+        files_data = list(file_collection.aggregate(pipeline))
 
         return {
             "result": "success",
@@ -87,6 +101,8 @@ def get_files_from_filepath(username, filepath):
                 "file_name": 1,
                 "file_type": 1,
                 "file_path": 1,
+                "file_size": 1,
+                "date_uploaded": 1,
                 "kind": 1,
                 "device_name": {"$arrayElemAt": ["$device.device_name", 0]},
                 "device_id": {"$toString": "$device_id"},
