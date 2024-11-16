@@ -30,71 +30,44 @@ def get_files_from_filepath(username, filepath):
     device_ids = [device["_id"] for device in devices]
 
 
-    if filepath == "Core":
-        # Query the file_sync collection
-        pipeline = [
-            {"$match": {
-                "user_id": user["_id"]  # Match files for the current user
-            }},
-            {"$limit": 100},
-            {"$project": {
-                "file_name": 1,
-                "file_size": 1,
-                "file_priority": 1,
-                "device_ids": 1,
-                "proposed_device_ids": 1,
-                "_id": {"$toString": "$_id"},
-                "user_id": {"$toString": "$user_id"}
-            }}
-        ]
+    if filepath == None or filepath == "" or filepath == "Core" or filepath == "Core/Devices":
+        files_data = []
+        for device_id in device_ids:
+            query = {
+                "device_id": device_id
+            }
 
-        files_data = list(db.file_sync.aggregate(pipeline))
+            pipeline = [
+                {"$match": query},
+                {"$limit": 1},  # Ensure at least one file from each device
+                {"$lookup": {
+                    "from": "devices",
+                    "localField": "device_id",
+                    "foreignField": "_id",
+                    "as": "device"
+                }},
+                {"$project": {
+                    "file_name": 1,
+                    "file_type": 1,
+                    "file_path": 1,
+                    "file_size": 1,
+                    "date_uploaded": 1,
+                    "kind": 1,
+                    "device_name": {"$arrayElemAt": ["$device.device_name", 0]},
+                    "device_id": {"$toString": "$device_id"},
+                    "_id": {"$toString": "$_id"}
+                }}
+            ]
 
-        # Convert ObjectId fields to strings
-        for file in files_data:
-            file["_id"] = str(file["_id"])
-            file["user_id"] = str(file["user_id"])
-            file["device_ids"] = [str(device_id) for device_id in file["device_ids"]]
-            file["proposed_device_ids"] = [str(device_id) for device_id in file["proposed_device_ids"]]
+            device_files = list(file_collection.aggregate(pipeline))
+            files_data.extend(device_files)
 
-        return {
-            "result": "success",
-            "files": files_data
-        }
-
-
-    elif filepath == "" or filepath == "Core" or filepath == "Core/Devices":
-        query = {
-            "device_id": {"$in": device_ids}
-        }
-
-        pipeline = [
-            {"$match": query},
-            {"$limit": 100},
-            {"$lookup": {
-                "from": "devices",
-                "localField": "device_id",
-                "foreignField": "_id",
-                "as": "device"
-            }},
-            {"$project": {
-                "file_name": 1,
-                "file_type": 1,
-                "file_path": 1,
-                "file_size": 1,
-                "date_uploaded": 1,
-                "kind": 1,
-                "device_name": {"$arrayElemAt": ["$device.device_name", 0]},
-                "device_id": {"$toString": "$device_id"},
-                "_id": {"$toString": "$_id"}
-            }}
-        ]
-
-        files_data = list(file_collection.aggregate(pipeline))
+            if len(files_data) >= 100:
+                break
 
         return {
             "result": "success",
-            "files": files_data
+            "files": files_data[:100]  # Ensure the total does not exceed 100
         }
 
     else:
