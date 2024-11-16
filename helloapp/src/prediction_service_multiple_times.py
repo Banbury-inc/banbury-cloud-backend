@@ -1,0 +1,345 @@
+import os
+import numpy as np
+import pandas as pd
+from datetime import datetime, timedelta
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.model_selection import train_test_split
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, LSTM
+import matplotlib.pyplot as plt
+
+class PredictionServiceMultipleTimes:
+    def __init__(self):
+        pass
+    
+    def create_dataset(self, X, y, time_steps=1):
+        Xs, ys = [], []
+        for i in range(len(X) - time_steps):
+            v = X.iloc[i:(i + time_steps)].values
+            Xs.append(v)
+            ys.append(y.iloc[i + time_steps])
+        return np.array(Xs), np.array(ys)
+
+    def build_and_train_model(self, X_train, y_train, time_steps, features):
+        model = Sequential([
+            LSTM(50, activation='relu', input_shape=(time_steps, features)),
+            Dense(1)
+        ])
+        model.compile(optimizer='adam', loss='mean_squared_error')
+        model.fit(X_train, y_train, epochs=20, batch_size=32, verbose=1)
+        return model
+
+    def predict_future_speed(self, model, df, scaler, time_steps, data_type):
+        # Get initial data for prediction
+        data = df[[data_type]].tail(time_steps).values
+        predictions = []
+        
+        # Generate predictions for next 24 hours in 10 minute intervals
+        num_predictions = 24 * 6  # 24 hours * 6 predictions per hour (10 min intervals)
+        
+        current_data = data.copy()
+        for _ in range(num_predictions):
+            # Scale and reshape current data
+            current_scaled = scaler.transform(current_data)
+            current_X = current_scaled.reshape(1, time_steps, 1)
+            
+            # Make prediction
+            next_pred_scaled = model.predict(current_X)
+            next_pred = scaler.inverse_transform(next_pred_scaled)[0][0]
+            predictions.append(next_pred)
+            
+            # Update data for next prediction by removing oldest and adding new prediction
+            current_data = np.roll(current_data, -1)
+            current_data[-1] = next_pred
+            
+        return predictions
+
+    def performance_data(self, devices, show_graph=False):
+        # Generate future timestamps for predictions (every 10 minutes for 24 hours)
+        start_time = datetime.now()
+        future_times = [start_time + timedelta(minutes=10*i) for i in range(24*6)]
+        
+        performance_data = []
+
+        # devices is a list containing a single device dictionary
+        for device in devices:
+            device_name = device.get('device_name', 'Unknown Device')
+            print(f"Processing device: {device_name}")
+
+            # Get network speeds and timestamps
+            upload_speeds = []
+            if 'upload_speed' in device:
+                upload_speeds = [float(speed) for speed in device['upload_speed'] 
+                               if speed is not None]
+                print(f"Found {len(upload_speeds)} upload speeds")
+            
+            download_speeds = []
+            if 'download_speed' in device:
+                download_speeds = [float(speed) for speed in device['download_speed']
+                                 if speed is not None] 
+                print(f"Found {len(download_speeds)} download speeds")
+
+            cpu_usage = []
+            if 'cpu_usage' in device:
+                cpu_usage = [float(usage) for usage in device['cpu_usage']
+                            if usage is not None]
+                print(f"Found {len(cpu_usage)} cpu usage values")
+
+            ram_usage = []
+            if 'ram_usage' in device:
+                ram_usage = [float(usage) for usage in device['ram_usage']
+                            if usage is not None]
+                print(f"Found {len(ram_usage)} ram usage values")
+
+            gpu_usage = []
+            if 'gpu_usage' in device:
+                gpu_usage = [float(usage) for usage in device['gpu_usage']
+                            if usage is not None]
+                print(f"Found {len(gpu_usage)} gpu usage values")
+
+            current_times = []
+            if 'current_time' in device:
+                current_times = [speed for speed in device['current_time']]
+                print(f"Found {len(current_times)} timestamps")
+            else:
+                print("Warning: No data available for current times")
+            # Try both timestamp formats
+            timestamps = []
+            for ts in current_times:
+                if not ts:
+                    continue
+                try:
+                    # Try first format with microseconds
+                    dt = datetime.strptime(ts, "%Y-%m-%d %H:%M:%S.%f")
+                except ValueError:
+                    try:
+                        # Try second format without microseconds
+                        dt = datetime.strptime(ts, "%Y-%m-%d %H:%M:%S")
+                    except ValueError:
+                        print(f"Skipping invalid timestamp: {ts}")
+                        continue
+                timestamps.append(dt)
+
+            # Ensure all arrays are same length by taking minimum length
+            min_length = min(len(timestamps), len(upload_speeds), len(download_speeds))
+            timestamps = timestamps[:min_length]
+            upload_speeds = upload_speeds[:min_length]
+            download_speeds = download_speeds[:min_length]
+            cpu_usage = cpu_usage[:min_length]
+            ram_usage = ram_usage[:min_length]
+            gpu_usage = gpu_usage[:min_length]
+
+            # Create and sort dataframes
+            if len(timestamps) > 0 and len(upload_speeds) > 0:
+                df_upload_speed = pd.DataFrame({
+                    'timestamp': timestamps,
+                    'speed': upload_speeds
+                })
+                df_upload_speed.sort_values('timestamp', inplace=True)
+            else:
+                print("Warning: No data available for upload speeds")
+                df_upload_speed = pd.DataFrame(columns=['timestamp', 'speed'])
+
+            if len(timestamps) > 0 and len(download_speeds) > 0:
+                df_download_speed = pd.DataFrame({
+                    'timestamp': timestamps,
+                    'speed': download_speeds
+                })
+                df_download_speed.sort_values('timestamp', inplace=True)
+            else:
+                print("Warning: No data available for download speeds")
+                df_download_speed = pd.DataFrame(columns=['timestamp', 'speed'])
+
+            if len(timestamps) > 0 and len(cpu_usage) > 0:
+                df_cpu_usage = pd.DataFrame({
+                    'timestamp': timestamps,
+                    'usage': cpu_usage
+                })
+                df_cpu_usage.sort_values('timestamp', inplace=True) 
+            else:
+                print("Warning: No data available for cpu usage")
+                df_cpu_usage = pd.DataFrame(columns=['timestamp', 'usage'])
+
+            if len(timestamps) > 0 and len(ram_usage) > 0:
+                df_ram_usage = pd.DataFrame({
+                    'timestamp': timestamps,
+                    'usage': ram_usage
+                })
+                df_ram_usage.sort_values('timestamp', inplace=True)
+            else:
+                print("Warning: No data available for ram usage")
+                df_ram_usage = pd.DataFrame(columns=['timestamp', 'usage'])
+
+            if len(timestamps) > 0 and len(gpu_usage) > 0:
+                df_gpu_usage = pd.DataFrame({
+                    'timestamp': timestamps,
+                    'usage': gpu_usage
+                })
+                df_gpu_usage.sort_values('timestamp', inplace=True) 
+            else:
+                print("Warning: No data available for gpu usage")
+                df_gpu_usage = pd.DataFrame(columns=['timestamp', 'usage'])
+
+            print(f"df_upload_speed: {df_upload_speed}")
+            print(f"df_download_speed: {df_download_speed}")
+            print(f"df_cpu_usage: {df_cpu_usage}")
+            print(f"df_ram_usage: {df_ram_usage}")
+            print(f"df_gpu_usage: {df_gpu_usage}")
+
+            # Scale the features
+            scaler = MinMaxScaler(feature_range=(0, 1))
+            
+            # Scale upload speeds
+            if not df_upload_speed.empty:
+                df_upload_speed['scaled_speed'] = scaler.fit_transform(df_upload_speed[['speed']])
+            
+            time_steps = max(2, min(5, len(df_upload_speed) // 2))  # Adjust time_steps based on data size
+
+            # For upload speed prediction
+            if not df_upload_speed.empty:
+                X, y = self.create_dataset(df_upload_speed[['scaled_speed']], 
+                                         df_upload_speed['scaled_speed'], 
+                                         time_steps)
+                
+                model = self.train_model_with_data(X, y, time_steps, 1)
+                if model is not None:
+                    predicted_upload_speeds = self.predict_future_speed(
+                        model, df_upload_speed, scaler, time_steps, data_type='speed'
+                    )
+                else:
+                    predicted_upload_speeds = [None] * len(future_times)
+            else:
+                predicted_upload_speeds = [None] * len(future_times)
+
+            # Scale download speeds
+            if not df_download_speed.empty:
+                df_download_speed['scaled_speed'] = scaler.fit_transform(df_download_speed[['speed']])
+
+            # For download speed prediction 
+            if not df_download_speed.empty:
+                X, y = self.create_dataset(df_download_speed[['scaled_speed']], 
+                                         df_download_speed['scaled_speed'], 
+                                         time_steps)
+                
+                model = self.train_model_with_data(X, y, time_steps, 1)
+                if model is not None:
+                    predicted_download_speeds = self.predict_future_speed(
+                        model, df_download_speed, scaler, time_steps, data_type='speed'
+                    )
+                else:
+                    predicted_download_speeds = [None] * len(future_times)
+            else:
+                predicted_download_speeds = [None] * len(future_times)
+
+            # For gpu usage prediction
+            if not df_gpu_usage.empty:
+                X, y = self.create_dataset(df_gpu_usage[['usage']], 
+                                         df_gpu_usage['usage'], 
+                                         time_steps)
+                
+                model = self.train_model_with_data(X, y, time_steps, 1)
+                if model is not None:
+                    predicted_gpu_usages = self.predict_future_speed(
+                        model, df_gpu_usage, scaler, time_steps, data_type='usage'
+                    )
+                else:
+                    predicted_gpu_usages = [None] * len(future_times)
+            else:
+                predicted_gpu_usages = [None] * len(future_times)
+            
+            # For cpu usage prediction
+            if not df_cpu_usage.empty:
+                X, y = self.create_dataset(df_cpu_usage[['usage']], 
+                                         df_cpu_usage['usage'], 
+                                         time_steps)
+                
+                model = self.train_model_with_data(X, y, time_steps, 1)
+                if model is not None:
+                    predicted_cpu_usages = self.predict_future_speed(
+                        model, df_cpu_usage, scaler, time_steps, data_type='usage'
+                    )
+                else:
+                    predicted_cpu_usages = [None] * len(future_times)
+            else:
+                predicted_cpu_usages = [None] * len(future_times)
+
+            # For ram usage prediction
+            if not df_ram_usage.empty:
+                X, y = self.create_dataset(df_ram_usage[['usage']], 
+                                         df_ram_usage['usage'], 
+                                         time_steps)
+                
+                model = self.train_model_with_data(X, y, time_steps, 1)
+                if model is not None:
+                    predicted_ram_usages = self.predict_future_speed(
+                        model, df_ram_usage, scaler, time_steps, data_type='usage'
+                    )
+                else:
+                    predicted_ram_usages = [None] * len(future_times)
+            else:
+                predicted_ram_usages = [None] * len(future_times)
+
+            # Create predictions for each timestamp
+            predictions_over_time = []
+            for i, future_time in enumerate(future_times):
+                prediction = {
+                    'timestamp': future_time.strftime("%Y-%m-%d %H:%M:%S"),
+                    'predicted_upload_speed': int(predicted_upload_speeds[i]) if predicted_upload_speeds[i] is not None else None,
+                    'predicted_download_speed': int(predicted_download_speeds[i]) if predicted_download_speeds[i] is not None else None,
+                    'predicted_gpu_usage': int(predicted_gpu_usages[i]) if predicted_gpu_usages[i] is not None else None,
+                    'predicted_cpu_usage': int(predicted_cpu_usages[i]) if predicted_cpu_usages[i] is not None else None,
+                    'predicted_ram_usage': int(predicted_ram_usages[i]) if predicted_ram_usages[i] is not None else None,
+                }
+                predictions_over_time.append(prediction)
+            
+            individual_performance_data = {
+                'device_name': device_name,
+                'predictions': predictions_over_time
+            }
+
+            # Only plot if we have valid predictions
+            if show_graph and any(predicted_upload_speeds) and any(predicted_download_speeds):
+                plt.figure(figsize=(15, 7))
+                
+                # Plot historical data
+                plt.plot(df_upload_speed['timestamp'], df_upload_speed['speed'], 
+                        label='Historical Upload Speeds', marker='o')
+                plt.plot(df_download_speed['timestamp'], df_download_speed['speed'], 
+                        label='Historical Download Speeds', marker='o')
+                
+                # Plot predictions
+                plt.plot(future_times, predicted_upload_speeds, 'r--', 
+                        label='Predicted Upload Speeds')
+                plt.plot(future_times, predicted_download_speeds, 'b--', 
+                        label='Predicted Download Speeds')
+                
+                plt.title(f"Network Speeds Prediction for {device_name}")
+                plt.xlabel('Timestamp')
+                plt.ylabel('Speed (Mbps)')
+                plt.legend()
+                plt.grid(True)
+                plt.xticks(rotation=45)
+                plt.tight_layout()
+                plt.show()
+
+            performance_data.append(individual_performance_data)
+
+        return performance_data
+
+    def train_model_with_data(self, X, y, time_steps, features):
+        if len(X) < 2:  # If we have too few samples
+            print("Not enough data points for prediction")
+            return None
+            
+        # Adjust test_size based on data size
+        test_size = min(0.2, 1/len(X))
+        
+        try:
+            X_train, X_test, y_train, y_test = train_test_split(
+                X, y, test_size=test_size, random_state=42
+            )
+            model = self.build_and_train_model(X_train, y_train, time_steps, features)
+            return model
+        except Exception as e:
+            print(f"Error training model: {str(e)}")
+            return None
