@@ -30,7 +30,40 @@ def get_files_from_filepath(username, filepath):
     device_ids = [device["_id"] for device in devices]
 
 
-    if filepath == None or filepath == "" or filepath == "Core" or filepath == "Core/Devices":
+    if filepath == "Core":
+        # Query the file_sync collection
+        pipeline = [
+            {"$match": {
+                "user_id": user["_id"]  # Match files for the current user
+            }},
+            {"$limit": 100},
+            {"$project": {
+                "file_name": 1,
+                "file_size": 1,
+                "file_priority": 1,
+                "device_ids": 1,
+                "proposed_device_ids": 1,
+                "_id": {"$toString": "$_id"},
+                "user_id": {"$toString": "$user_id"}
+            }}
+        ]
+
+        files_data = list(db.file_sync.aggregate(pipeline))
+
+        # Convert ObjectId fields to strings
+        for file in files_data:
+            file["_id"] = str(file["_id"])
+            file["user_id"] = str(file["user_id"])
+            file["device_ids"] = [str(device_id) for device_id in file["device_ids"]]
+            file["proposed_device_ids"] = [str(device_id) for device_id in file["proposed_device_ids"]]
+
+        return {
+            "result": "success",
+            "files": files_data
+        }
+
+
+    elif filepath == "" or filepath == "Core" or filepath == "Core/Devices":
         query = {
             "device_id": {"$in": device_ids}
         }

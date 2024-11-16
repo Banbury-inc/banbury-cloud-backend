@@ -21,7 +21,7 @@ from .src.db.remove_device import remove_device
 from .src.pipeline import pipeline
 from .src.prediction_service import PredictionService
 from .consumers import broadcast_new_file
-from .src.db.add_file_to_sync import add_file_to_sync as db_add_file_to_sync
+from .src.db.db_add_file_to_sync import db_add_file_to_sync as db_add_file_to_sync
 from .src.db.paginated_get_files_info import paginated_get_files_info
 from .src.db.get_files_from_filepath import get_files_from_filepath as db_get_files_from_filepath
 import json
@@ -1031,21 +1031,15 @@ def add_device(request, username, device_name):
 @csrf_exempt
 @require_http_methods(["POST"])
 def add_file_to_sync(request, username):
-    try:
-        data = json.loads(request.body)
-        device_name = data.get("device_name")
-        file_path = data.get("file_path")
-        response = db_add_file_to_sync(username, device_name, file_path)
-        
+    data = json.loads(request.body)
+    device_name = data.get("device_name")
+    file_path = data.get("file_path")
+    response = db_add_file_to_sync(username, device_name, file_path)
 
-        user_data = {
-            "result": response,
-            "username": username,  # Return username if success, None if fail
+    user_data = {
+        "result": response,
+        "username": username,  # Return username if success, None if fail
     }
-
-    except json.JSONDecodeError:
-        return JsonResponse({"error": "Invalid JSON"}, status=400)
-
 
     return JsonResponse(user_data)
             
@@ -1608,14 +1602,6 @@ def run_pipeline(request, username):
 
 
 
-@csrf_exempt
-@require_http_methods(["POST"])
-def add_file_to_sync(request, username):
-    data = json.loads(request.body)
-    device_name = data.get("device_name")
-    files = data.get("files")
-    result = add_file_to_sync(username, device_name, files)
-    return JsonResponse({"result": "success", "data": result})
 
 
 @csrf_exempt
