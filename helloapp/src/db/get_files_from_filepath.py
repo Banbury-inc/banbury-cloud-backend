@@ -85,14 +85,12 @@ def get_files_from_filepath(username, filepath):
             }},
             {"$project": {
                 "file_name": 1,
-                # "file_size": 1,
                 "file_type": 1,
                 "file_path": 1,
-                # "date_uploaded": 1,
-                # "date_modified": 1,
-                # "date_accessed": 1,
                 "kind": 1,
-                "device_name": {"$arrayElemAt": ["$device.device_name", 0]}
+                "device_name": {"$arrayElemAt": ["$device.device_name", 0]},
+                "device_id": {"$toString": "$device_id"},
+                "_id": {"$toString": "$_id"}
             }}
         ]
         
