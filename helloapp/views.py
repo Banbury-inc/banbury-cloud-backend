@@ -21,9 +21,11 @@ from .src.db.remove_device import remove_device
 from .src.pipeline import pipeline
 from .src.prediction_service import PredictionService
 from .consumers import broadcast_new_file
-from .src.db.add_file_to_sync import add_file_to_sync as db_add_file_to_sync
+from .src.db.db_add_file_to_sync import db_add_file_to_sync as db_add_file_to_sync
 from .src.db.paginated_get_files_info import paginated_get_files_info
 from .src.db.get_files_from_filepath import get_files_from_filepath as db_get_files_from_filepath
+from .src.db.get_file_sync import get_file_sync as db_get_file_sync
+from .src.db.update_file_priority import update_file_priority as db_update_file_priority
 import json
 import re
 
@@ -536,6 +538,64 @@ def get_files_from_filepath(request, username):
         return JsonResponse({"error": "Invalid JSON"}, status=400)
 
 
+@csrf_exempt
+@require_http_methods(["POST"])
+def get_files_to_sync(request, username):
+    try:
+        # Parse request body
+        data = json.loads(request.body)
+        global_file_path = data.get('global_file_path')
+        
+        # Call database function with optional global_file_path
+        response, status_code = db_get_file_sync(username, global_file_path)
+        
+        if status_code != 200:
+            return JsonResponse({
+                "result": "error",
+                "message": response.get("error", "Unknown error occurred"),
+                "files": []
+            }, status=status_code)
+            
+        return JsonResponse({
+            "result": "success",
+            "files": response.get("files", [])
+        })
+
+    except json.JSONDecodeError:
+        return JsonResponse({
+            "result": "error",
+            "message": "Invalid JSON",
+            "files": []
+        }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            "result": "error",
+            "message": str(e),
+            "files": []
+        }, status=500)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def update_file_priority(request, username):
+    try:
+        data = json.loads(request.body)
+        file_id = data.get("file_id")
+        priority = data.get("priority")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+    response = db_update_file_priority(username, file_id, priority)
+
+
+    files_data = {
+        "result": response.get("result"),
+        "message": response.get("message"),
+    }
+
+
+
+    return JsonResponse(files_data)
+
 
 
 
@@ -1031,21 +1091,15 @@ def add_device(request, username, device_name):
 @csrf_exempt
 @require_http_methods(["POST"])
 def add_file_to_sync(request, username):
-    try:
-        data = json.loads(request.body)
-        device_name = data.get("device_name")
-        file_path = data.get("file_path")
-        response = db_add_file_to_sync(username, device_name, file_path)
-        
+    data = json.loads(request.body)
+    device_name = data.get("device_name")
+    file_path = data.get("file_path")
+    response = db_add_file_to_sync(username, device_name, file_path)
 
-        user_data = {
-            "result": response,
-            "username": username,  # Return username if success, None if fail
+    user_data = {
+        "result": response,
+        "username": username,  # Return username if success, None if fail
     }
-
-    except json.JSONDecodeError:
-        return JsonResponse({"error": "Invalid JSON"}, status=400)
-
 
     return JsonResponse(user_data)
             
@@ -1608,14 +1662,6 @@ def run_pipeline(request, username):
 
 
 
-@csrf_exempt
-@require_http_methods(["POST"])
-def add_file_to_sync(request, username):
-    data = json.loads(request.body)
-    device_name = data.get("device_name")
-    files = data.get("files")
-    result = add_file_to_sync(username, device_name, files)
-    return JsonResponse({"result": "success", "data": result})
 
 
 @csrf_exempt
@@ -1968,3 +2014,8 @@ def update_user_profile(request, username):
         form = UserProfileForm(initial=user)
 
     return render(request, "update_profile.html", {"form": form, "username": username})
+
+
+def file_sync_view(request, username):
+    response_data, status_code = get_file_sync(username)
+    return JsonResponse(response_data, status=status_code)

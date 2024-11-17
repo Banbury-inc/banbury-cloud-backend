@@ -2,7 +2,7 @@ from pymongo.mongo_client import MongoClient
 from django.http import JsonResponse
 from datetime import datetime
 
-def add_file_to_sync(username, device_name, file_name):
+def db_add_file_to_sync(username, device_name, file_name):
     try:
         if not file_name or not device_name:
             return "Missing files or device_name"
@@ -23,14 +23,14 @@ def add_file_to_sync(username, device_name, file_name):
     user = user_collection.find_one({"username": username})
     if not user:
         return "User not found."
-    user_id = user.get("_id")
+    user_id = user["_id"]
 
     # Find the device_id based on device_name
     device = device_collection.find_one({"device_name": device_name})
     if not device:
         return "Device not found."
 
-    device_id = device.get("_id")
+    device_id = device["_id"]
     if not device_id:
         return "Device ID not found."
 
@@ -89,6 +89,7 @@ def add_file_to_sync(username, device_name, file_name):
             "user_id": user_id,
             "file_name": file_document.get("file_name"),
             "file_size": file_document.get("file_size"),
+            "file_path": file_document.get("file_path"),
             "file_priority": file_document.get("file_priority", 1),
         }
         sync_files.append(sync_file)
@@ -109,7 +110,7 @@ def add_file_to_sync(username, device_name, file_name):
 def main():
 
 
-    result = add_file_to_sync("mmills", "michael-ubuntu", "/home/mmills/BCloud/374-656-726_96j8_382.jpg")
+    result = process_file_sync("mmills", "michael-ubuntu", "/home/mmills/BCloud/374-656-726_96j8_382.jpg")
     print(result)
 
 if __name__ == "__main__":
