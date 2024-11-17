@@ -31,43 +31,37 @@ def get_files_from_filepath(username, filepath):
 
 
     if filepath == None or filepath == "" or filepath == "Core" or filepath == "Core/Devices":
-        files_data = []
-        for device_id in device_ids:
-            query = {
-                "device_id": device_id
-            }
+        query = {
+            "device_id": {"$in": device_ids}
+        }
 
-            pipeline = [
-                {"$match": query},
-                {"$limit": 1},  # Ensure at least one file from each device
-                {"$lookup": {
-                    "from": "devices",
-                    "localField": "device_id",
-                    "foreignField": "_id",
-                    "as": "device"
-                }},
-                {"$project": {
-                    "file_name": 1,
-                    "file_type": 1,
-                    "file_path": 1,
-                    "file_size": 1,
-                    "date_uploaded": 1,
-                    "kind": 1,
-                    "device_name": {"$arrayElemAt": ["$device.device_name", 0]},
-                    "device_id": {"$toString": "$device_id"},
-                    "_id": {"$toString": "$_id"}
-                }}
-            ]
+        pipeline = [
+            {"$match": query},
+            {"$limit": 100},
+            {"$lookup": {
+                "from": "devices",
+                "localField": "device_id",
+                "foreignField": "_id",
+                "as": "device"
+            }},
+            {"$project": {
+                "file_name": 1,
+                "file_type": 1,
+                "file_path": 1,
+                "file_size": 1,
+                "date_uploaded": 1,
+                "kind": 1,
+                "device_name": {"$arrayElemAt": ["$device.device_name", 0]},
+                "device_id": {"$toString": "$device_id"},
+                "_id": {"$toString": "$_id"}
+            }}
+        ]
 
-            device_files = list(file_collection.aggregate(pipeline))
-            files_data.extend(device_files)
-
-            if len(files_data) >= 100:
-                break
+        files_data = list(file_collection.aggregate(pipeline))
 
         return {
             "result": "success",
-            "files": files_data[:100]  # Ensure the total does not exceed 100
+            "files": files_data
         }
 
     else:
@@ -83,15 +77,16 @@ def get_files_from_filepath(username, filepath):
                 "message": f"Device '{device_name}' not found"
             }
 
-        # Get the remaining path after device name
-        remaining_path = '/'.join(filepath.split("/")[1:])
-        directory_path = '/' + remaining_path if remaining_path else "/"
-
-        # Query to get all nested directories
+        # Simple query using device_id only
         query = {
-            "device_id": target_device["_id"],
-            "file_path": {"$regex": f"^{directory_path}.*"}  # Match all files under this directory path
+            "device_id": target_device["_id"]
         }
+
+        # If we're looking at a specific directory, use file_parent
+        remaining_path = '/'.join(filepath.split("/")[1:])
+        if remaining_path:
+            # You might need to adjust this depending on your exact path structure
+            query["file_parent"] = {"$regex": f".*{remaining_path}$"}
 
         pipeline = [
             {"$match": query},

@@ -25,6 +25,7 @@ from .src.db.db_add_file_to_sync import db_add_file_to_sync as db_add_file_to_sy
 from .src.db.paginated_get_files_info import paginated_get_files_info
 from .src.db.get_files_from_filepath import get_files_from_filepath as db_get_files_from_filepath
 from .src.db.get_file_sync import get_file_sync as db_get_file_sync
+from .src.db.update_file_priority import update_file_priority as db_update_file_priority
 import json
 import re
 
@@ -573,7 +574,27 @@ def get_files_to_sync(request, username):
             "files": []
         }, status=500)
 
+@csrf_exempt
+@require_http_methods(["POST"])
+def update_file_priority(request, username):
+    try:
+        data = json.loads(request.body)
+        file_id = data.get("file_id")
+        priority = data.get("priority")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
 
+    response = db_update_file_priority(username, file_id, priority)
+
+
+    files_data = {
+        "result": response.get("result"),
+        "message": response.get("message"),
+    }
+
+
+
+    return JsonResponse(files_data)
 
 
 
