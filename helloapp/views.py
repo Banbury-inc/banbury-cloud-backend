@@ -24,6 +24,7 @@ from .consumers import broadcast_new_file
 from .src.db.db_add_file_to_sync import db_add_file_to_sync as db_add_file_to_sync
 from .src.db.paginated_get_files_info import paginated_get_files_info
 from .src.db.get_files_from_filepath import get_files_from_filepath as db_get_files_from_filepath
+from .src.db.get_file_sync import get_file_sync as db_get_file_sync
 import json
 import re
 
@@ -534,6 +535,44 @@ def get_files_from_filepath(request, username):
 
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def get_files_to_sync(request, username):
+    try:
+        # Parse request body
+        data = json.loads(request.body)
+        global_file_path = data.get('global_file_path')
+        
+        # Call database function with optional global_file_path
+        response, status_code = db_get_file_sync(username, global_file_path)
+        
+        if status_code != 200:
+            return JsonResponse({
+                "result": "error",
+                "message": response.get("error", "Unknown error occurred"),
+                "files": []
+            }, status=status_code)
+            
+        return JsonResponse({
+            "result": "success",
+            "files": response.get("files", [])
+        })
+
+    except json.JSONDecodeError:
+        return JsonResponse({
+            "result": "error",
+            "message": "Invalid JSON",
+            "files": []
+        }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            "result": "error",
+            "message": str(e),
+            "files": []
+        }, status=500)
+
 
 
 
@@ -1954,3 +1993,8 @@ def update_user_profile(request, username):
         form = UserProfileForm(initial=user)
 
     return render(request, "update_profile.html", {"form": form, "username": username})
+
+
+def file_sync_view(request, username):
+    response_data, status_code = get_file_sync(username)
+    return JsonResponse(response_data, status=status_code)

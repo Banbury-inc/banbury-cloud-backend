@@ -83,16 +83,15 @@ def get_files_from_filepath(username, filepath):
                 "message": f"Device '{device_name}' not found"
             }
 
-        # Simple query using device_id only
-        query = {
-            "device_id": target_device["_id"]
-        }
-
-        # If we're looking at a specific directory, use file_parent
+        # Get the remaining path after device name
         remaining_path = '/'.join(filepath.split("/")[1:])
-        if remaining_path:
-            # You might need to adjust this depending on your exact path structure
-            query["file_parent"] = {"$regex": f".*{remaining_path}$"}
+        directory_path = '/' + remaining_path if remaining_path else "/"
+
+        # Query to get all nested directories
+        query = {
+            "device_id": target_device["_id"],
+            "file_path": {"$regex": f"^{directory_path}.*"}  # Match all files under this directory path
+        }
 
         pipeline = [
             {"$match": query},
