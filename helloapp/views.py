@@ -26,6 +26,7 @@ from .src.db.paginated_get_files_info import paginated_get_files_info
 from .src.db.get_files_from_filepath import get_files_from_filepath as db_get_files_from_filepath
 from .src.db.get_file_sync import get_file_sync as db_get_file_sync
 from .src.db.update_file_priority import update_file_priority as db_update_file_priority
+from .src.db.update_sync_storage_capacity import update_sync_storage_capacity as db_update_sync_storage_capacity
 import json
 import re
 
@@ -537,6 +538,29 @@ def get_files_from_filepath(request, username):
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
 
+@csrf_exempt
+@require_http_methods(["POST"])
+def update_sync_storage_capacity(request, username):
+    try:
+        data = json.loads(request.body)
+        device_name = data.get("device_name")
+        storage_capacity = data.get("storage_capacity")
+        response = db_update_sync_storage_capacity(username, device_name, storage_capacity)
+
+        print(response)
+
+        files_data = {
+            "result": response.get("result"),
+            "message": response.get("message"),
+        }
+
+        return JsonResponse(files_data)
+
+
+
+    except json.JSONDecodeError:
+
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
 
 @csrf_exempt
 @require_http_methods(["POST"])
