@@ -21,10 +21,9 @@ class AllocationService():
 
         print("file_sync_info: ", file_sync_info)
 
-
         # Sort files by priority and size (descending)
         priority_map = {3: 3, 2: 2, 1: 1}
-        file_sync_info.sort(key=lambda x: (priority_map[x['file_priority']], -x['file_size']), reverse=True)
+        file_sync_info = sorted(file_sync_info[0]['files'], key=lambda x: (priority_map[x['file_priority']], -x['file_size']), reverse=True)
 
         # Allocate files to devices
         for device in devices_list:
@@ -41,7 +40,7 @@ class AllocationService():
                         'file_name': file['file_name'],
                     })
                     device['used_capacity'] += file_size_gb
-                    break
+                # Continue to the next device even if the file has been added
 
 
         return devices_list
@@ -58,7 +57,7 @@ class AllocationService():
 
         # Allocate files to devices
         for device in devices_list:
-            device['capacity'] = device_capacity_cap
+            device['sync_storage_capacity_gb'] = device_capacity_cap
             device['files'] = []
             device['used_capacity'] = 0  # Initialize used capacity in gigabytes
 

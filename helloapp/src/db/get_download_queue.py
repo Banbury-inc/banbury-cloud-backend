@@ -39,7 +39,9 @@ def get_download_queue(username, device_id):
 
 def main():
     # Test getting download queue for a specific device
-    result = get_download_queue("mmills", "test-device-id")
+    result = get_download_queue("mmills", "michael-ubuntu")
+    print(result)
+    result = get_download_queue("mmills", "Michaels-MacBook-Pro-3.local")
     print(result)
 
 if __name__ == "__main__":
