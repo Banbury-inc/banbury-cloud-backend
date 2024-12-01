@@ -50,9 +50,19 @@ def get_download_queue(username, device_name):
                     if device["online"] == True:
                         print(device_name + " is online, adding to download queue")
                         '''
-                        TODO: Download the file
+                        TODO: Download the file to the server
                         '''
+
+                        upload_success = True
+
+
+                        '''
+                        TODO: Once downloaded, send the file to the device
+                        '''
+
+
                         download_success = True
+
 
                         if download_success == True:
                             downloaded_files.append(file)
@@ -77,7 +87,8 @@ def get_download_queue(username, device_name):
 
 def main():
     # Test getting download queue for a specific device
-    # result = get_download_queue("mmills", "michael-ubuntu")
-    result = get_download_queue("mmills", "Michaels-MacBook-Pro-3.local")
+    result = get_download_queue("mmills", "michael-ubuntu")
+    # result = get_download_queue("mmills", "Michaels-MacBook-Pro-3.local")
+    print(result)
 if __name__ == "__main__":
     main()
