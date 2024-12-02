@@ -468,6 +468,13 @@ class Download_File_Request(AsyncWebsocketConsumer):
                 'message': response
             }))
 
+        # After file transfer is complete
+        await self.send(text_data=json.dumps({
+            'message': "File transfer complete",
+            'status': 'download_complete',
+            'file_name': file_name
+        }))
+
     async def receive_bytes(self, data):
         """Handle incoming binary data (file chunks) from the device."""
         file_name = self.file_name
@@ -492,7 +499,12 @@ class Download_File_Request(AsyncWebsocketConsumer):
             f.write(data)
             print(f"Received {len(data)} bytes and written to {file_path}")
 
-        # You can add additional logic to notify when the transfer is complete if necessary
+        # After writing the last chunk
+        await self.send(text_data=json.dumps({
+            'message': f"File {self.file_name} transfer completed.",
+            'status': 'download_complete',
+            'file_name': self.file_name
+        }))
 
     async def finalize_file_transfer(self, file_name):
         """This function is called when file transfer is complete."""

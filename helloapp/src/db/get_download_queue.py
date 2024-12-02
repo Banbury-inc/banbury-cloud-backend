@@ -1,6 +1,9 @@
 from pymongo.mongo_client import MongoClient
 from django.http import JsonResponse
 from datetime import datetime
+from helloapp import consumers
+import json
+import asyncio
 
 def get_download_queue(username, device_name):
     try:
@@ -34,50 +37,38 @@ def get_download_queue(username, device_name):
             "proposed_device_ids": device_id,
             "device_ids": {"$not": {"$in": [device_id]}}
         }))
-
-        downloaded_files = []
+        files_available_for_download = []
+        files = []
         # Remove MongoDB _id field for JSON serialization
         for file in sync_files:
-            print("Processing file " + str(len(downloaded_files) + 1) + " of " + str(len(sync_files)))
+            print(f"Processing file {len(files_available_for_download) + 1} of {len(sync_files)}")
             file["_id"] = str(file["_id"])
-            updated_device_ids = []
+            
+            # Find online devices that have this file
             for device_id in file['device_ids']:
                 device_obj = device_collection.find_one({"_id": device_id})
-                if device_obj:
-                    device_name = device_obj["device_name"]
-                    print(device_name + " has the file, looking to see if online")
-                    device = device_collection.find_one({"device_name": device_name})
-                    if device["online"] == True:
-                        print(device_name + " is online, adding to download queue")
-                        '''
-                        TODO: Download the file to the server
-                        '''
-
-                        upload_success = True
-
-
-                        '''
-                        TODO: Once downloaded, send the file to the device
-                        '''
-
-
-                        download_success = True
-
-
-                        if download_success == True:
-                            downloaded_files.append(file)
-                    else:
-                        print(device_name + " is offline, skipping. Looking for next device that has the file.")
-                    updated_device_ids.append({"device_id": device_id, "device_name": device_name})
+                if not device_obj:
+                    continue
+                    
+                device_name = device_obj["device_name"]
+                print(f"{device_name} has the file, checking if online")
+                
+                if device_obj.get("online"):
+                    print(f"{device_name} is online, adding to download queue")
+                    files_available_for_download.append(file)
+                    files.append({
+                        "file_name": file["file_name"],
+                        "device_name": device_name
+                    })
+                    break  # Found an online device with the file, move to next file
                 else:
-                    updated_device_ids.append({"device_id": device_id, "device_name": "Unknown"})
-            file['device_ids'] = updated_device_ids
+                    print(f"{device_name} is offline, checking next device")
 
         result = {
-            "files needed": len(sync_files),
-            "files downloaded": len(downloaded_files),
-            "files": downloaded_files
-            }
+            "files_needed": len(sync_files),
+            "files_available_for_download": len(files_available_for_download), 
+            "files": files
+        }
             
         return result
 
