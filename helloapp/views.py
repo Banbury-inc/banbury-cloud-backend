@@ -529,12 +529,12 @@ def get_files_from_filepath(request, username):
         filepath = data.get("global_file_path")
         response = db_get_files_from_filepath(username, filepath)
         if response.get('result') == "success":
-
             files_data = {
                 "files": response.get("files"),
             }
             return JsonResponse(files_data)
-
+        else:
+            return JsonResponse({"error": "Failed to get files"}, status=400)
 
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
