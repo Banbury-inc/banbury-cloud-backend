@@ -89,6 +89,8 @@ def pipeline(username):
         download_queue = get_download_queue(username, device['device_id'])
         print(download_queue)
 
+    return {"success": "Pipeline executed successfully"}
+
 
 
 

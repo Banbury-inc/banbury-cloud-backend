@@ -7,6 +7,7 @@ from .src.declare_device_offline import declare_device_offline
 from .src.declare_device_online import declare_device_online
 from .src.get_online_devices import get_online_devices
 from .src.process_device_info import process_device_info
+from .src.pipeline import pipeline
 import time
 
 
@@ -18,6 +19,7 @@ class Live_Data(AsyncWebsocketConsumer):
         super().__init__(args, kwargs)
         self.file_name = None
         self.device_info_task = None
+        self.device_predictions_task = None
         self.device_name = None
         self.should_run = True
 
@@ -30,6 +32,7 @@ class Live_Data(AsyncWebsocketConsumer):
             print(f"Connected Devices: {connected_devices}")
             print(f"Device {device_name} is now connected.")
             self.start_device_info_loop(username, device_name)
+            self.start_device_predictions_loop(username, device_name)
 
     async def disconnect(self, close_code):
         try:
@@ -68,6 +71,19 @@ class Live_Data(AsyncWebsocketConsumer):
         except Exception as e:
             print(f"Error creating device info loop for {device_name}: {e}")
             self.should_run = False
+        
+    async def start_device_predictions_loop(self, username, device_name):
+        """Start a loop to periodically take that information and make preditctions."""
+        try:
+            print(f"Inside start device predictions loop function for {device_name}")
+            # Create a task that can be tracked and cancelled
+            self.device_predictions_task = asyncio.create_task(self._device_predictions_loop(username, device_name))
+            # Give the task a name for easier tracking
+            self.device_predictions_task.set_name(f"device_predictions_loop_{username}")
+            # Don't await the task here - let it run independently
+        except Exception as e:
+            print(f"Error creating device info loop for {device_name}: {e}")
+            self.should_run = False
 
     async def _device_info_loop(self, username, device_name):
         while self.should_run:
@@ -75,12 +91,26 @@ class Live_Data(AsyncWebsocketConsumer):
             await self.request_device_info(username, device_name)
             await asyncio.sleep(600)  # Use asyncio.sleep instead of time.sleep
 
+
+    async def _device_predictions_loop(self, username, device_name):
+        print(f"Inside device predictions loop for {device_name}")
+        while self.should_run:
+            print(f"Making device predictions for {username}")
+            await self.make_device_predictions(username, device_name)
+            await asyncio.sleep(1800)  # Use asyncio.sleep instead of time.sleep
+
     async def request_device_info(self, username, device_name):
         """Request device information from the device."""
         await self.send(text_data=json.dumps({
             'message': "Requesting device information",
             'request_type': 'device_info'
         }))
+
+    async def make_device_predictions(self, username, device_name):
+        """Call pipeline"""
+        print(f"Making device predictions for {username}")
+        result = pipeline(username)
+        print(f"Device predictions result: {result}")
 
     async def trigger_connect(self, username, device_name):
         """Custom function to handle what happens after connect."""
@@ -91,6 +121,7 @@ class Live_Data(AsyncWebsocketConsumer):
         # Start device info loop
         print(f"Starting device info loop for {device_name}")
         self.device_info_task = asyncio.create_task(self.start_device_info_loop(username, device_name))
+        self.device_predictions_task = asyncio.create_task(self.start_device_predictions_loop(username, device_name))
 
 
     async def trigger_post_disconnect(self, username, device_name):
@@ -215,6 +246,7 @@ class Live_Data(AsyncWebsocketConsumer):
                 username = self.scope.get('username')
                 if username:
                     await self.start_device_info_loop(username, self.device_name)
+                    await self.start_device_predictions_loop(username, self.device_name)
                 else:
                     print("Warning: Cannot start device info loop without username")
             
