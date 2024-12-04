@@ -1,31 +1,26 @@
-# In order to deploy to gcloud
+# Banbury Cloud Back End
+This repo contains the server that provides API access to all the functionality of Banbury Cloud.
 
+# Getting Started
 
-gcloud auth login
+Run the script
+'''
+./run.sh
+'''
 
-gcloud auth configure-docker
+Or you can run each individually
 
-deploy to cloud run
-
-do i need to update dockerfile before I do a git commit?
-
-select cloud build option instead of local
-
-test
-
-# Run server in dev environemnt
+Run server in dev environemnt
 '''
 python3  manage.py runserver 0.0.0.0:8080 --noreload
 '''
 
-# Run Websocket server
+Run Websocket server
 '''
 daphne -p 8082 helloproject.asgi:application
 '''
 
-# Websocket endpoints
 
-request file
 
 
 
