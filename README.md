@@ -3,7 +3,7 @@ This repo contains the server that provides API access to all the functionality 
 
 # Getting Started
 
-Run the script
+# Run the script
 '''
 ./run.sh
 '''
