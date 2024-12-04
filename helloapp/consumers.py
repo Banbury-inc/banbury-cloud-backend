@@ -8,6 +8,7 @@ from .src.declare_device_online import declare_device_online
 from .src.get_online_devices import get_online_devices
 from .src.process_device_info import process_device_info
 from .src.pipeline import pipeline
+from .src.db.get_download_queue import get_download_queue
 import time
 
 
@@ -29,7 +30,6 @@ class Live_Data(AsyncWebsocketConsumer):
         username = self.scope.get('username')
         if device_name:
             connected_devices[device_name] = self
-            print(f"Connected Devices: {connected_devices}")
             print(f"Device {device_name} is now connected.")
             self.start_device_info_loop(username, device_name)
             self.start_device_predictions_loop(username, device_name)
@@ -110,7 +110,12 @@ class Live_Data(AsyncWebsocketConsumer):
         """Call pipeline"""
         print(f"Making device predictions for {username}")
         result = pipeline(username)
-        print(f"Device predictions result: {result}")
+        # Send a request to the device to start file sync
+        await self.send(text_data=json.dumps({
+            'message': "File sync request",
+            'request_type': 'file_sync_request',
+            }))
+
 
     async def trigger_connect(self, username, device_name):
         """Custom function to handle what happens after connect."""
@@ -132,17 +137,13 @@ class Live_Data(AsyncWebsocketConsumer):
 
     async def receive(self, text_data=None, bytes_data=None):
         """Handle both text and binary data based on the type of the input."""
-        print("Received data in receive function, text data: ", text_data)
-        print("Received data in receive function, bytes data: ", bytes_data)
         
         # Check if the data is bytes (binary data)
         if bytes_data is not None and isinstance(bytes_data, (bytes, bytearray)):
-            print("Received binary data")
             await self.receive_bytes(bytes_data)
         elif text_data is not None and isinstance(text_data, str):
             try:
                 text_data_json = json.loads(text_data)
-                print("Parsed JSON data:", text_data_json)
 
                 # Handle device info response
                 if text_data_json.get('message') == "device_info_response":
@@ -158,15 +159,12 @@ class Live_Data(AsyncWebsocketConsumer):
                     )
                     
                     if all([username, sending_device_name, device_info]):
-                        print(f"Processing device info for {sending_device_name}")
-                        print(f"Device info: {device_info}")
                         result = process_device_info(
                             username,
                             sending_device_name,
                             requesting_device_name,
                             device_info
                         )
-                        print(f"Process result: {result}")
                         
                         await self.send(text_data=json.dumps({
                             'message': 'Device info processed',
@@ -194,32 +192,27 @@ class Live_Data(AsyncWebsocketConsumer):
         print("Received text data: ", text_data)
         try:
             text_data_json = json.loads(text_data)
-            print("Parsed JSON:", text_data_json)  # Debug log
 
             # Handle device info response
             if text_data_json.get('message') == "device_info_response":
-                print("Processing device info response")
                 username = text_data_json.get('username')
                 sending_device_name = text_data_json.get('sending_device_name')
                 requesting_device_name = text_data_json.get('requesting_device_name')
                 device_info = text_data_json.get('device_info')
                 
                 if all([username, sending_device_name, device_info]):
-                    print(f"Processing device info for {sending_device_name}")
                     result = process_device_info(
                         username,
                         sending_device_name,
                         requesting_device_name,
                         device_info
                     )
-                    print(f"Process result: {result}")
                     
                     await self.send(text_data=json.dumps({
                         'message': 'Device info processed',
                         'status': result
                     }))
                 else:
-                    print("Missing required fields for device info processing")
                     await self.send(text_data=json.dumps({
                         'message': 'Error processing device info',
                         'error': 'Missing required fields'
