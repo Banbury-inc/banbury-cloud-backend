@@ -12,7 +12,8 @@ from .scoring_service import ScoringService
 from .prediction_service import PredictionService
 from .allocation_service import AllocationService
 
-def pipeline(username): 
+
+def pipeline(username):
     try:
         device_info = get_device_info(username)
     except Exception as e:
@@ -23,20 +24,21 @@ def pipeline(username):
         return {"error": f"Failed to get files info: {e}"}
     try:
         prediction_service = PredictionService()
-        device_predictions = prediction_service.performance_data(device_info, show_graph=False)
+        device_predictions = prediction_service.performance_data(
+            device_info, show_graph=False)
     except Exception as e:
         return {"error": f"Failed to predict devices: {e}"}
-    try:
-        results = []
-        for device_prediction in device_predictions:
+    results = []
+    for device_prediction in device_predictions:
+        try:
             result = update_device_predictions(
-                username, 
-                device_prediction['device_name'], 
+                username,
+                device_prediction['device_name'],
                 device_prediction
             )
             results.append(result)
-    except Exception as e:
-        return {"error": f"Failed to update device predictions: {e}"}
+        except Exception as e:
+            return {"error": f"Failed to update device predictions: {e}"}
     try:
         scored_devices = ScoringService().devices(device_predictions)
         print(scored_devices)
@@ -47,8 +49,8 @@ def pipeline(username):
         results = []
         for scored_device in scored_devices:
             result = update_device_score(
-                username, 
-                scored_device['device_name'], 
+                username,
+                scored_device['device_name'],
                 scored_device['score']
             )
             results.append(result)
@@ -56,14 +58,15 @@ def pipeline(username):
         return {"error": f"Failed to update device scores: {e}"}
 
     fetched_device_predictions = get_device_predictions(username)
-    
 
     try:
-        allocated_devices = AllocationService().devices(fetched_device_predictions, file_sync_info)
+        allocated_devices = AllocationService().devices(
+            fetched_device_predictions, file_sync_info)
         print("Allocated devices:", allocated_devices)
 
         # Generate file-to-device mappings
-        file_device_mappings = AllocationService().generate_file_device_mappings(allocated_devices)
+        file_device_mappings = AllocationService(
+        ).generate_file_device_mappings(allocated_devices)
         print("File device mappings:", file_device_mappings)
 
         # Update each file's proposed device IDs
@@ -75,14 +78,13 @@ def pipeline(username):
                     proposed_device_ids=mapping['proposed_device_ids']
                 )
                 if 'error' in result:
-                    print(f"Error updating file {mapping['file_id']}: {result['error']}")
+                    print(f"Error updating file {
+                          mapping['file_id']}: {result['error']}")
             except Exception as e:
                 print(f"Failed to update file {mapping['file_id']}: {e}")
 
     except Exception as e:
         return {"error": f"Failed in allocation pipeline: {e}"}
-
-
 
     # for each device, get the download queue
     for device in allocated_devices:
@@ -90,8 +92,6 @@ def pipeline(username):
         print(download_queue)
 
     return {"success": "Pipeline executed successfully"}
-
-
 
 
 if __name__ == "__main__":
