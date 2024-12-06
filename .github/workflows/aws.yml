@@ -36,7 +36,7 @@ env:
   ECS_SERVICE: ${{ github.ref == 'refs/heads/main' && 'banbury-cloud-backend-prod' || 'banbury-cloud-backend-dev' }}
   ECS_CLUSTER: ${{ github.ref == 'refs/heads/main' && 'banbury' || 'banbury' }}
 # set this to your Amazon ECS cluster name
-  ECS_TASK_DEFINITION: ${{ github.ref == 'refs/heads/main' && '.aws/deploy-prod' || '.aws/deploy-dev' }} 
+  ECS_TASK_DEFINITION: ${{ github.ref == 'refs/heads/main' && '.aws/deploy-prod.json' || '.aws/deploy-dev.json' }} 
   #.aws/task-definition.json 
   # set this to the path to your Amazon ECS task definition
                                                # file, e.g. .aws/task-definition.json
