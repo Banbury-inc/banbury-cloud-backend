@@ -27,6 +27,7 @@ from .src.db.get_files_from_filepath import get_files_from_filepath as db_get_fi
 from .src.db.get_file_sync import get_file_sync as db_get_file_sync
 from .src.db.update_file_priority import update_file_priority as db_update_file_priority
 from .src.db.update_sync_storage_capacity import update_sync_storage_capacity as db_update_sync_storage_capacity
+from .src.db.get_download_queue import get_download_queue as db_get_download_queue
 import json
 import re
 
@@ -528,12 +529,12 @@ def get_files_from_filepath(request, username):
         filepath = data.get("global_file_path")
         response = db_get_files_from_filepath(username, filepath)
         if response.get('result') == "success":
-
             files_data = {
                 "files": response.get("files"),
             }
             return JsonResponse(files_data)
-
+        else:
+            return JsonResponse({"error": "Failed to get files"}, status=400)
 
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
@@ -561,6 +562,22 @@ def update_sync_storage_capacity(request, username):
     except json.JSONDecodeError:
 
         return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def get_download_queue(request, username):
+    try:
+        data = json.loads(request.body)
+        device_name = data.get("device_name")
+        response = db_get_download_queue(username, device_name)
+        return JsonResponse({
+            "result": "success",
+            "download_queue": response,
+            "message": "Download queue retrieved successfully",
+        })
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
 
 @csrf_exempt
 @require_http_methods(["POST"])
@@ -1479,11 +1496,10 @@ def search_file(request, username):
 @require_http_methods(["POST"])
 def add_task(request, username):
     try:
-        # Parse the JSON body
         data = json.loads(request.body)
-        # Extract specific data from the JSON (for example: device_id and date_added)
         task_name = data.get("task_name")
         task_device = data.get("task_device")
+        task_progress = data.get("task_progress")
         task_status = data.get("task_status")
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
@@ -1516,35 +1532,31 @@ def add_task(request, username):
         "task_name": task_name,
         "task_device": task_device,
         "task_status": task_status,
+        "task_progress": task_progress,
         "task_date_added": datetime.now(),
         "task_date_modified": datetime.now(),
     }
 
     try:
-        session_collection.insert_one(new_task)
+        result = session_collection.insert_one(new_task)
+        return JsonResponse({
+            "result": "success",
+            "username": username,
+            "task_id": str(result.inserted_id)  # Return the task ID
+        })
     except Exception as e:
-        print(f"Error sending to device: {e}")
-    result = "success"
-
-    user_data = {
-        "result": result,
-        "username": username,  # Return username if success, None if fail
-    }
-    return JsonResponse(user_data)
+        return JsonResponse({"result": "error", "message": str(e)})
 
 
-@csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
+@csrf_exempt
 @require_http_methods(["POST"])
 def update_task(request, username):
     try:
-        # Parse the JSON body
         data = json.loads(request.body)
-
-        task_name = data.get("task_name")
-        task_device = data.get(
-            "task_device"
-        )  # You may also want to use the device name for better specificity
+        task_id = data.get("task_id")  # Get task_id instead of task_name
+        task_progress = data.get("task_progress")
         task_status = data.get("task_status")
+        task_name = data.get("task_name")  # Optional for updating name
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
 
@@ -1553,28 +1565,25 @@ def update_task(request, username):
     db = client["NeuraNet"]
     session_collection = db["sessions"]
 
-    # Use both task_name and task_device to find the specific task
-    query = {"task_name": task_name}
-    if task_device:
-        query["task_device"] = task_device
+    update_fields = {
+        "task_status": task_status,
+        "task_progress": task_progress,
+        "task_date_modified": datetime.now(),
+    }
+    if task_name:
+        update_fields["task_name"] = task_name
 
-    # Update the task with the new status and update the task_date_modified field
     update_result = session_collection.update_one(
-        query,
-        {
-            "$set": {
-                "task_status": task_status,
-                "task_date_modified": datetime.now(),  # Update the modification date
-            }
-        },
+        {"_id": ObjectId(task_id)},  # Use task_id to find the task
+        {"$set": update_fields}
     )
-
 
     if update_result.matched_count == 0:
         return JsonResponse({"result": "task_not_found", "message": "Task not found."})
 
     return JsonResponse({
         "result": "success",
+        "task_id": str(task_id),
         "message": "Task status updated successfully.",
     })
 
@@ -1587,6 +1596,7 @@ def fail_task(request, username):
         data = json.loads(request.body)
 
         task_name = data.get("task_name")
+        task_progress = data.get("task_progress")
         result = data.get("result")
         task_device = data.get(
             "task_device"
@@ -1612,6 +1622,7 @@ def fail_task(request, username):
             "$set": {
                 "task_status": task_status,
                 "task_name": result,
+                "task_progress": task_progress,
                 "task_date_modified": datetime.now(),  # Update the modification date
             }
         },
@@ -1661,9 +1672,11 @@ def get_session(request, username):
     # Convert the cursor to a list of dictionaries and serialize ObjectId to string
     for session in sessions:
         all_sessions_data.append({
+            "task_id": session["_id"],
             "task_name": session["task_name"],
             "task_device": session["task_device"],
             "task_status": session["task_status"],
+            "task_progress": session["task_progress"],
             "task_date_added": session["task_date_added"],
             "task_date_modified": session["task_date_modified"],
         })
@@ -1725,8 +1738,10 @@ def get_recent_session(request, username):
         # If datetime modified is within the last 5 minutes
         if (datetime.now() - session["task_date_modified"]).total_seconds() < 300:
             all_sessions_data.append({
+                "task_id": session["_id"],
                 "task_name": session["task_name"],
                 "task_device": session["task_device"],
+                "task_progress": session["task_progress"],
                 "task_status": session["task_status"],
                 "task_date_added": session["task_date_added"],
                 "task_date_modified": session["task_date_modified"],

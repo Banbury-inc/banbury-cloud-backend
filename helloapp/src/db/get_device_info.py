@@ -64,4 +64,3 @@ def get_device_info(username):
 
 if __name__ == "__main__":
     device_info = get_device_info("mmills")
-    print(device_info)
