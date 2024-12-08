@@ -78,8 +78,7 @@ def pipeline(username):
                     proposed_device_ids=mapping['proposed_device_ids']
                 )
                 if 'error' in result:
-                    print(f"Error updating file {
-                          mapping['file_id']}: {result['error']}")
+                    print("Error updating file")
             except Exception as e:
                 print(f"Failed to update file {mapping['file_id']}: {e}")
 
