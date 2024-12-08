@@ -90,7 +90,12 @@ def pipeline(username):
         download_queue = get_download_queue(username, device['device_id'])
         print(download_queue)
 
-    return {"success": "Pipeline executed successfully"}
+    return {"success": "Pipeline executed successfully",
+            "results": results,
+            "allocated_devices": allocated_devices,
+            "file_device_mappings": file_device_mappings,
+            "download_queue": download_queue
+            }
 
 
 if __name__ == "__main__":
