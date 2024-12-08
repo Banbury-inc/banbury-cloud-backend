@@ -25,9 +25,8 @@ RUN pip install --trusted-host pypi.python.org -r requirements.txt
 # Copy the rest of the application code
 COPY . .
 
-# Expose the port for the application
-EXPOSE 8080
+# Expose the ports for the application
+EXPOSE 8080 8082
 
-# Start Redis and the Django app
-CMD redis-server --daemonize yes && daphne -b 0.0.0.0 -p 8080 helloproject.asgi:application
-
+# Start Redis and the Django app with WebSocket support
+CMD redis-server --daemonize yes && daphne -b 0.0.0.0 -p 8080 -e ssl:8082 helloproject.asgi:application
