@@ -303,7 +303,7 @@ class PredictionService:
 
     def train_model_with_data(self, X, y, time_steps, features):
         if len(X) < 2:  # If we have too few samples
-            print("Not enough data points for prediction")
+            print(f"Not enough data points for prediction. We currnently have {len(X)} samples, and need at least 2.")
             return None
             
         # Adjust test_size based on data size

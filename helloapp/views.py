@@ -1690,7 +1690,6 @@ def get_session(request, username):
 @require_http_methods(["GET"])
 def run_pipeline(request, username):
     result = pipeline(username)
-
     response_data = {
         "result": "success",
         "data": result,
@@ -1733,22 +1732,19 @@ def get_recent_session(request, username):
     })
 
     all_sessions_data = []
-    # Convert the cursor to a list of dictionaries and serialize ObjectId to string
     for session in sessions:
-        # If datetime modified is within the last 5 minutes
-        if (datetime.now() - session["task_date_modified"]).total_seconds() < 300:
-            all_sessions_data.append({
-                "task_id": session["_id"],
-                "task_name": session["task_name"],
-                "task_device": session["task_device"],
-                "task_progress": session["task_progress"],
-                "task_status": session["task_status"],
-                "task_date_added": session["task_date_added"],
-                "task_date_modified": session["task_date_modified"],
-            })
+        # Convert ObjectId to string before adding to response
+        all_sessions_data.append({
+            "task_id": str(session["_id"]),  # Convert ObjectId to string here
+            "task_name": session["task_name"],
+            "task_device": session["task_device"],
+            "task_progress": session["task_progress"],
+            "task_status": session["task_status"],
+            "task_date_added": session["task_date_added"],
+            "task_date_modified": session["task_date_modified"],
+        })
 
-    response_data = {"result": "success", "sessions": all_sessions_data}
-
+    response_data = {"sessions": all_sessions_data}
     return JsonResponse(response_data, status=200)
 
 
