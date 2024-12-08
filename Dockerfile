@@ -1,8 +1,16 @@
 # Python image to use.
 FROM python:3.11-alpine
 
-# Install dependencies for Redis
-RUN apk add --no-cache redis
+# Install system dependencies for Redis and build tools
+RUN apk add --no-cache \
+    redis \
+    build-base \
+    gcc \
+    musl-dev \
+    libffi-dev \
+    python3-dev \
+    py3-pip \
+    && pip install --upgrade pip
 
 # Set the working directory to /app
 WORKDIR /app
