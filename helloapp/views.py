@@ -28,6 +28,7 @@ from .src.db.get_file_sync import get_file_sync as db_get_file_sync
 from .src.db.update_file_priority import update_file_priority as db_update_file_priority
 from .src.db.update_sync_storage_capacity import update_sync_storage_capacity as db_update_sync_storage_capacity
 from .src.db.get_download_queue import get_download_queue as db_get_download_queue
+from .src.db.get_device_predictions import get_device_predictions as db_get_device_predictions
 import json
 import re
 
@@ -1697,6 +1698,17 @@ def run_pipeline(request, username):
     return JsonResponse(response_data)
 
 
+@csrf_exempt
+@require_http_methods(["GET"])
+def get_device_prediction_data(request, username):
+    result = db_get_device_predictions(username)
+    response_data = {   
+        "result": "success",
+        "data": result,
+    }
+    return JsonResponse(response_data)
+
+
 
 
 
@@ -1746,6 +1758,8 @@ def get_recent_session(request, username):
 
     response_data = {"sessions": all_sessions_data}
     return JsonResponse(response_data, status=200)
+
+
 
 
 # def registration_api(request, firstName, lastName, username, password):

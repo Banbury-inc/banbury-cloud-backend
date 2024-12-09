@@ -28,7 +28,7 @@ def get_device_predictions(username):
     predictions_data = []
     for prediction in device_predictions:
         predictions_data.append({
-            "device_id": prediction.get("_id"),  # Keep as ObjectId
+            "device_id": str(prediction.get("_id")),  # Convert ObjectId to string
             "device_name": prediction.get("device_name"),
             "sync_storage_capacity_gb": prediction.get("sync_storage_capacity_gb"),
             "predicted_upload_speed": prediction.get("predicted_upload_speed"),
@@ -39,6 +39,8 @@ def get_device_predictions(username):
             "score_timestamp": prediction.get("score_timestamp"),
             "timestamp": prediction.get("timestamp"),
             "score": prediction.get("score"),
+            "files_needed": prediction.get("files_needed"),
+            "files_available_for_download": prediction.get("files_available_for_download"),
         })
 
     response_data = {

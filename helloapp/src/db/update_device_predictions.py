@@ -40,6 +40,8 @@ def update_device_predictions(username, device_name, device_predictions):
         "predicted_gpu_usage": device_predictions['predicted_gpu_usage'],
         "predicted_cpu_usage": device_predictions['predicted_cpu_usage'],
         "predicted_ram_usage": device_predictions['predicted_ram_usage'],
+        "files_needed": device.get("files_needed", 0),
+        "files_available_for_download": device.get("files_available_for_download", 0),
         "timestamp": datetime.now()
     }
 

@@ -11,6 +11,7 @@ from .db.get_download_queue import get_download_queue
 from .scoring_service import ScoringService
 from .prediction_service import PredictionService
 from .allocation_service import AllocationService
+from .db.update_download_queue import update_download_queue
 
 
 def pipeline(username):
@@ -88,7 +89,25 @@ def pipeline(username):
     # for each device, get the download queue
     for device in allocated_devices:
         download_queue = get_download_queue(username, device['device_id'])
-        print(download_queue)
+
+        print(f"Download queue for {device['device_name']}: {download_queue}")
+        
+        # Check if download_queue is a dictionary
+        if isinstance(download_queue, dict):
+            try:
+                result = update_download_queue(
+                    username,
+                    device.get('device_name', ''),
+                    download_queue.get('files_needed', []),
+                    download_queue.get('files_available_for_download', [])
+                )
+                results.append(result)
+            except Exception as e:
+                print(f"Failed to update download queue: {result}")
+        else:
+            print(f"Error getting download queue: {download_queue}")
+
+
 
     return {"success": "Pipeline executed successfully",
             "results": results,

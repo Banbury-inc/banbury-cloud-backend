@@ -16,6 +16,17 @@ class AllocationService():
         # Extract the list of devices from the nested dictionary
         devices_list = fetched_device_predictions.get("device_predictions", [])
         
+        # Filter out devices with None storage capacity and set default values
+        devices_list = [
+            {
+                **device,
+                'sync_storage_capacity_gb': device.get('sync_storage_capacity_gb', 0) or 0,
+                'score': device.get('score', 0) or 0
+            }
+            for device in devices_list
+            if device.get('sync_storage_capacity_gb') is not None
+        ]
+        
         # Sort devices by score (descending)
         devices_list.sort(key=lambda x: x['score'], reverse=True)
 
@@ -23,7 +34,11 @@ class AllocationService():
 
         # Sort files by priority and size (descending)
         priority_map = {3: 3, 2: 2, 1: 1}
-        file_sync_info = sorted(file_sync_info[0]['files'], key=lambda x: (priority_map[x['file_priority']], -x['file_size']), reverse=True)
+        file_sync_info = sorted(
+            file_sync_info[0]['files'], 
+            key=lambda x: (priority_map.get(x.get('file_priority', 1), 1), -x.get('file_size', 0)), 
+            reverse=True
+        )
 
         # Allocate files to devices
         for device in devices_list:
@@ -31,17 +46,16 @@ class AllocationService():
             device['used_capacity'] = 0  # Initialize used capacity in gigabytes
 
         for file in file_sync_info:
-            file_size_gb = self.bytes_to_gigabytes(file['file_size'])  # Convert file size to gigabytes
+            file_size_gb = self.bytes_to_gigabytes(file.get('file_size', 0))  # Convert file size to gigabytes
             for device in devices_list:
                 if device['used_capacity'] + file_size_gb <= device['sync_storage_capacity_gb']:
                     # Store both file name and ID
                     device['files'].append({
                         'file_id': str(file['_id']),
-                        'file_name': file['file_name'],
+                        'file_name': file.get('file_name', ''),
                     })
                     device['used_capacity'] += file_size_gb
                 # Continue to the next device even if the file has been added
-
 
         return devices_list
     def devices_with_capacity_cap(self, fetched_device_predictions, file_sync_info, device_capacity_cap):
