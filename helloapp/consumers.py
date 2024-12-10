@@ -371,9 +371,6 @@ class Download_File_Request(AsyncWebsocketConsumer):
             self.file_name = file_name
             print(f"File name set in WebSocket scope: {self.scope['file_name']}")
 
-        print(message)
-        print(username)
-        print(file_name)
 
         # Send 'Searching for file...' message
         response = "Searching for file..."
@@ -406,7 +403,6 @@ class Download_File_Request(AsyncWebsocketConsumer):
                     print(f"Sending request to device {device_name} via Live_Data WebSocket... in connected devices if statement")
                     print(f"Device WS: {device_ws}")
                     file_name = self.scope.get("file_name")
-                    print(file_name)
 
                     # Send a request to each device WebSocket to check for the file
                     await device_ws.send(text_data=json.dumps({
