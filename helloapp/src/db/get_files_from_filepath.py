@@ -31,13 +31,16 @@ def get_files_from_filepath(username, filepath):
 
 
     if filepath == None or filepath == "" or filepath == "Core" or filepath == "Core/Devices":
-        query = {
-            "device_id": {"$in": device_ids}
-        }
-
-        pipeline = [
-            {"$match": query},
-            {"$limit": 100},
+        # First get one file from each device
+        first_files_pipeline = [
+            {"$match": {"device_id": {"$in": device_ids}}},
+            {"$sort": {"date_uploaded": -1}},  # Sort by most recent
+            {"$group": {
+                "_id": "$device_id",
+                "first_file": {"$first": "$$ROOT"}
+            }},
+            {"$replaceRoot": {"newRoot": "$first_file"}},
+            # ... rest of lookups and projections ...
             {"$lookup": {
                 "from": "devices",
                 "localField": "device_id",
@@ -57,7 +60,46 @@ def get_files_from_filepath(username, filepath):
             }}
         ]
 
-        files_data = list(file_collection.aggregate(pipeline))
+        # Then get remaining files up to limit
+        remaining_files_pipeline = [
+            {"$match": {"device_id": {"$in": device_ids}}},
+            {"$sort": {"date_uploaded": -1}},
+            {"$limit": 100},
+            # ... same lookups and projections ...
+            {"$lookup": {
+                "from": "devices",
+                "localField": "device_id",
+                "foreignField": "_id",
+                "as": "device"
+            }},
+            {"$project": {
+                "file_name": 1,
+                "file_type": 1,
+                "file_path": 1,
+                "file_size": 1,
+                "date_uploaded": 1,
+                "kind": 1,
+                "device_name": {"$arrayElemAt": ["$device.device_name", 0]},
+                "device_id": {"$toString": "$device_id"},
+                "_id": {"$toString": "$_id"}
+            }}
+        ]
+
+        # Combine results
+        files_data = list(file_collection.aggregate([
+            {"$facet": {
+                "first_files": first_files_pipeline,
+                "remaining_files": remaining_files_pipeline
+            }},
+            {"$project": {
+                "all_files": {
+                    "$setUnion": ["$first_files", "$remaining_files"]
+                }
+            }},
+            {"$unwind": "$all_files"},
+            {"$replaceRoot": {"newRoot": "$all_files"}},
+            {"$limit": 100}
+        ]))
 
         return {
             "result": "success",
