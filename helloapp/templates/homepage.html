@@ -10,28 +10,102 @@
 </head>
 
 <body>
-    <h1>Welcome to Banbury</h1>
-    <div class="menu">
-        <a href="/login/">Log In</a>
-        <a href="/register/">Register</a>
-    <h3>February 3, 2024 - Banbury Cloud Beta CLI 1.0.1 Released</h3>
-    <p>Recently, we have made a slight change in what we have been doing in terms of the file sharing. Initially, 
-      we had an idea that IPFS would really be the backbone of the decentralized file sharing. We came across 
-      a lot of complications, especially when it came to port forwarding. In other words, it was really easy 
-      to upload files from IPFS and download them again, but only within your own network. Ultimately, we decided
-      to drop the idea of IPFS, for now. Instead, we have decided to implement something called a relay server.
-      In other words, this provides a way for us to access files on another device, even if that device is on another
-      network. This is a really exciting new direction for us. </p>
-    <p>In recent developments, we have been working on a desktop application that would be running all of the logic
-      necessary in order to bring the device online. This can't really happen with a web app, and we apps are not able
-      to access things like the files on your computer, especially in the way that we want. Our next announcement
-      will hopefully be the release of the desktop app. We are also working hard to make the desktop app open source.</p>
-    <h3>February 3, 2024 - Banbury Cloud Beta CLI Tool Released</h3>
-    <p>There are some exciting new advancements in the realm of Banbury! We have recently released 
-    the very first Beta version of bcloud. bcloud is a CLI tool for Banbury Cloud. This acts as a 
-    prototype for what will eventually be Banbury Cloud.</p>
+    <h1>Welcome to the Banbury Backend Server</h1>
+
+    <h2>General</h2>
+    <ul>
+        <li><b>/ping/</b> - Ping the server</li>
+        <li><b>/</b> - Homepage</li>
+        <li><b>/about/</b> - About page</li>
+    </ul>
+
+    <h2>Authentication and Registration</h2>
+    <ul>
+        <li><b>/login/</b> - Login page</li>
+        <li><b>/login_api/</b> - Login via API</li>
+        <li><b>/register/&lt;username&gt;/&lt;password&gt;/&lt;e&gt;/&lt;lastName&gt;/</b> - Register a new user</li>
+        <li><b>/new_register/&lt;username&gt;/&lt;password&gt;/&lt;firstName&gt;/&lt;lastName&gt;/</b> - New user registration</li>
+    </ul>
+
+    <h2>Profile Management</h2>
+    <ul>
+        <li><b>/update_profile/&lt;username&gt;/</b> - Update user profile</li>
+        <li><b>/change_profile/&lt;username&gt;/&lt;password&gt;/&lt;first_name&gt;/&lt;last_name&gt;/&lt;email&gt;/</b> - Change user profile information</li>
+    </ul>
+
+    <h2>Dashboard and Session Management</h2>
+    <ul>
+        <li><b>/dashboard/&lt;username&gt;/</b> - User dashboard</li>
+        <li><b>/get_session/&lt;username&gt;/</b> - Get session info</li>
+        <li><b>/get_recent_session/&lt;username&gt;/</b> - Get recent session</li>
+    </ul>
+
+    <h2>User Information</h2>
+    <ul>
+        <li><b>/getuserinfo/&lt;username&gt;/</b> - Get user info</li>
+        <li><b>/getuserinfo2/&lt;username&gt;/</b> - Get additional user info</li>
+        <li><b>/get_small_user_info/&lt;username&gt;/</b> - Get small user info</li>
+        <li><b>/getuserinfo3/&lt;username&gt;/&lt;password&gt;/</b> - Get user info with password</li>
+        <li><b>/getuserinfo4/&lt;username&gt;/&lt;password&gt;/</b> - Another version of user info with password</li>
+    </ul>
+
+    <h2>NeuraNet and Visitor Info</h2>
+    <ul>
+        <li><b>/get_neuranet_info/</b> - Get NeuraNet information</li>
+        <li><b>/add_site_visitor_info/</b> - Add visitor information</li>
+    </ul>
+
+    <h2>Device and File Management</h2>
+    <ul>
+        <li><b>/add_device/&lt;username&gt;/&lt;device_name&gt;/</b> - Add a new device</li>
+        <li><b>/delete_device/&lt;username&gt;/</b> - Delete a device</li>
+        <li><b>/update_devices/&lt;username&gt;/</b> - Update devices</li>
+        <li><b>/getdeviceinfo/&lt;username&gt;/</b> - Get device information</li>
+        <li><b>/getonlinedevices/&lt;username&gt;/</b> - Get online devices</li>
+        <li><b>/declare_device_online/&lt;username&gt;/</b> - Declare a device as online</li>
+        <li><b>/declare_device_offline/&lt;username&gt;/</b> - Declare a device as offline</li>
+        <li><b>/add_file/&lt;username&gt;/</b> - Add a new file</li>
+        <li><b>/add_files/&lt;username&gt;/</b> - Add multiple files</li>
+        <li><b>/delete_files/&lt;username&gt;/</b> - Delete files</li>
+        <li><b>/update_files/&lt;username&gt;/</b> - Update files</li>
+        <li><b>/getfileinfo/&lt;username&gt;/</b> - Get file information</li>
+        <li><b>/get_files_from_filepath/&lt;username&gt;/</b> - Get files from filepath</li>
+        <li><b>/paginated_get_files_info/&lt;username&gt;/</b> - Paginated file information</li>
+        <li><b>/getpartialfileinfo/&lt;username&gt;/</b> - Get partial file information</li>
+        <li><b>/search_file/&lt;username&gt;/</b> - Search files</li>
+        <li><b>/add_scanned_folder/&lt;username&gt;/</b> - Add scanned folder</li>
+        <li><b>/remove_scanned_folder/&lt;username&gt;/</b> - Remove scanned folder</li>
+        <li><b>/get_scanned_folders/&lt;username&gt;/</b> - Get scanned folders</li>
+    </ul>
+
+    <h2>Prediction Service</h2>
+    <ul>
+        <li><b>/run_pipeline/&lt;username&gt;/</b> - Run prediction pipeline</li>
+        <li><b>/add_file_to_sync/&lt;username&gt;/</b> - Add file to sync</li>
+        <li><b>/get_files_to_sync/&lt;username&gt;/</b> - Get files to sync</li>
+        <li><b>/update_file_priority/&lt;username&gt;/</b> - Update file sync priority</li>
+        <li><b>/update_sync_storage_capacity/&lt;username&gt;/</b> - Update sync storage capacity</li>
+        <li><b>/get_download_queue/&lt;username&gt;/</b> - Get download queue</li>
+        <li><b>/get_device_prediction_data/&lt;username&gt;/</b> - Get device prediction data</li>
+    </ul>
+
+    <h2>Task Management</h2>
+    <ul>
+        <li><b>/add_task/&lt;username&gt;/</b> - Add a task</li>
+        <li><b>/update_task/&lt;username&gt;/</b> - Update a task</li>
+        <li><b>/fail_task/&lt;username&gt;/</b> - Fail a task</li>
+    </ul>
+
+    <h2>Settings and Package Downloads</h2>
+    <ul>
+        <li><b>/update_settings/&lt;username&gt;/</b> - Update user settings</li>
+        <!-- Uncomment if needed -->
+        <!-- <li><b>/download-deb/</b> - Download Debian package</li> -->
+    </ul>
+
+</body>
+</html>
 
 
-    </div>
 </body>
 </html>
