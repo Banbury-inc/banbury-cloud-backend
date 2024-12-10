@@ -34,11 +34,11 @@ on:
 
 env:
   AWS_REGION: us-east-1                   # set this to your preferred AWS region, e.g. us-west-1
-  ECR_REPOSITORY: ${{ github.ref == 'refs/heads/main' && 'banbury-cloud-backend-prod' || 'banbury-backend-dev' }}
+  ECR_REPOSITORY: ${{ github.ref == 'refs/heads/main' && 'banbury-cloud-backend-prod' || 'banbury-cloud-backend-dev' }}
   ECS_SERVICE: ${{ github.ref == 'refs/heads/main' && 'banbury-cloud-backend-prod' || 'banbury-backend-dev' }}
   ECS_CLUSTER: ${{ github.ref == 'refs/heads/main' && 'banbury' || 'banbury' }}
 # set this to your Amazon ECS cluster name
-  ECS_TASK_DEFINITION: ${{ github.ref == 'refs/heads/main' && '.aws/deploy-prod.json' || '.aws/deploy-dev.json' }} 
+  ECS_TASK_DEFINITION: ${{ github.ref == 'refs/heads/main' && '.aws/deploy-prod.json' || '.aws/deploy-banbury-dev.json' }} 
   #.aws/task-definition.json 
   # set this to the path to your Amazon ECS task definition
                                                # file, e.g. .aws/task-definition.json
