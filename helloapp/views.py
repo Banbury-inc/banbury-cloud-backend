@@ -1745,15 +1745,15 @@ def get_recent_session(request, username):
 
     all_sessions_data = []
     for session in sessions:
-        # Convert ObjectId to string before adding to response
+        # Use .get() with default values for all fields
         all_sessions_data.append({
-            "task_id": str(session["_id"]),  # Convert ObjectId to string here
-            "task_name": session["task_name"],
-            "task_device": session["task_device"],
-            "task_progress": session["task_progress"],
-            "task_status": session["task_status"],
-            "task_date_added": session["task_date_added"],
-            "task_date_modified": session["task_date_modified"],
+            "task_id": str(session["_id"]),
+            "task_name": session.get("task_name", ""),
+            "task_device": session.get("task_device", ""),
+            "task_progress": session.get("task_progress", 0),  # Default to 0
+            "task_status": session.get("task_status", "unknown"),  # Default to "unknown"
+            "task_date_added": session.get("task_date_added", None),
+            "task_date_modified": session.get("task_date_modified", None)
         })
 
     response_data = {"sessions": all_sessions_data}

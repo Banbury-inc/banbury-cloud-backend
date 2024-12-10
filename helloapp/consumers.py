@@ -31,6 +31,7 @@ class Live_Data(AsyncWebsocketConsumer):
         if device_name:
             connected_devices[device_name] = self
             print(f"Device {device_name} is now connected.")
+            await self.trigger_connect(username, device_name)
             self.start_device_info_loop(username, device_name)
             self.start_device_predictions_loop(username, device_name)
 
@@ -120,7 +121,7 @@ class Live_Data(AsyncWebsocketConsumer):
     async def trigger_connect(self, username, device_name):
         """Custom function to handle what happens after connect."""
         print(f"Performing actions after {device_name} connects.")
-        declare_device_online(username, device_name)
+        await declare_device_online(username, device_name)
         print(f"Device {device_name} is now online.")
 
         # Start device info loop
@@ -132,7 +133,7 @@ class Live_Data(AsyncWebsocketConsumer):
     async def trigger_post_disconnect(self, username, device_name):
         """Custom function to handle what happens after disconnect."""
         print(f"Performing actions after {device_name} disconnects.")
-        declare_device_offline(username, device_name)
+        await declare_device_offline(username, device_name)
         print(f"Device {device_name} is now offline.")
 
     async def receive(self, text_data=None, bytes_data=None):
