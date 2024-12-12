@@ -22,7 +22,7 @@ echo "Starting Django server on port $DJANGO_PORT"
 echo "Starting Daphne server on port $DAPHNE_PORT"
 
 # Run Django development server in the background
-python3 manage.py runserver 0.0.0.0:$DJANGO_PORT &
+python3 manage.py runserver 0.0.0.0:$DJANGO_PORT --noreload &
 DJANGO_PID=$!
 
 # Run Daphne WebSocket server

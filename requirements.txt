@@ -23,6 +23,7 @@ Django==4.2.7
 django-cors-headers==4.3.1
 djangorestframework==3.14.0
 dnspython==2.7.0
+drf-spectacular==0.28.0
 flatbuffers==24.3.25
 fonttools==4.54.1
 gast==0.6.0

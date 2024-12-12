@@ -10,6 +10,8 @@ from datetime import datetime
 import requests
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
 from .forms import UserForm
 import bcrypt
 from .forms import LoginForm
@@ -33,6 +35,7 @@ import json
 import re
 
 
+@api_view(["GET"])
 def ping(request):
     result = "pong"
 
@@ -43,6 +46,7 @@ def ping(request):
     return JsonResponse(response)
 
 
+@api_view(["GET"])
 def get_small_user_info(request, username):
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
@@ -68,6 +72,7 @@ def get_small_user_info(request, username):
             return JsonResponse(user_data)
 
 
+@api_view(["GET"])
 def getuserinfo2(request, username):
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
@@ -108,6 +113,7 @@ def getuserinfo2(request, username):
             return JsonResponse(user_data)
 
 
+@api_view(["GET"])
 def getuserinfo(request, username):
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
@@ -133,6 +139,7 @@ def getuserinfo(request, username):
             return JsonResponse(user_data)
 
 
+@api_view(["GET"])
 def getdeviceinfo(request, username):
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
@@ -188,6 +195,7 @@ def getdeviceinfo(request, username):
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
+@api_view(["POST"])
 def handle_get_online_devices(request, username):
     try:
         # Parse the JSON body
@@ -208,6 +216,7 @@ def handle_get_online_devices(request, username):
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
+@api_view(["POST"])
 def delete_device(request, username):
     try:
         data = json.loads(request.body)
@@ -228,6 +237,7 @@ def delete_device(request, username):
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
+@api_view(["POST"])
 def declare_device_online(request, username):
     try:
         data = json.loads(request.body)
@@ -276,6 +286,7 @@ def declare_device_online(request, username):
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
+@api_view(["POST"])
 def declare_device_offline(request, username):
     try:
         data = json.loads(request.body)
@@ -321,6 +332,7 @@ def declare_device_offline(request, username):
 
 @csrf_exempt
 @require_http_methods(["POST"])
+@api_view(["POST"])
 def add_scanned_folder(request, username):
     try:
         data = json.loads(request.body)
@@ -374,6 +386,7 @@ def add_scanned_folder(request, username):
 
 @csrf_exempt
 @require_http_methods(["POST"])
+@api_view(["POST"])
 def remove_scanned_folder(request, username):
     try:
         data = json.loads(request.body)
@@ -422,6 +435,7 @@ def remove_scanned_folder(request, username):
 
 @csrf_exempt
 @require_http_methods(["POST"])
+@api_view(["POST"])
 def get_scanned_folders(request, username):
     try:
         data = json.loads(request.body)
@@ -458,6 +472,7 @@ def get_scanned_folders(request, username):
 
 @csrf_exempt
 @require_http_methods(["POST"])
+@api_view(["POST"])
 def get_prediction_data(request, username):
     try:
         data = json.loads(request.body)
@@ -476,6 +491,7 @@ def get_prediction_data(request, username):
     })
 
 
+@api_view(["GET"])
 def getfileinfo(request, username):
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
@@ -524,6 +540,7 @@ def getfileinfo(request, username):
 
 @csrf_exempt
 @require_http_methods(["POST"])
+@api_view(["POST"])
 def get_files_from_filepath(request, username):
     try:
         data = json.loads(request.body)
@@ -542,6 +559,7 @@ def get_files_from_filepath(request, username):
 
 @csrf_exempt
 @require_http_methods(["POST"])
+@api_view(["POST"])
 def update_sync_storage_capacity(request, username):
     try:
         data = json.loads(request.body)
@@ -582,6 +600,7 @@ def get_download_queue(request, username):
 
 @csrf_exempt
 @require_http_methods(["POST"])
+@api_view(["POST"])
 def get_files_to_sync(request, username):
     try:
         # Parse request body
@@ -618,6 +637,7 @@ def get_files_to_sync(request, username):
 
 @csrf_exempt
 @require_http_methods(["POST"])
+@api_view(["POST"])
 def update_file_priority(request, username):
     try:
         data = json.loads(request.body)
@@ -643,6 +663,7 @@ def update_file_priority(request, username):
 
 @csrf_exempt
 @require_http_methods(["POST"])
+@api_view(["POST"])
 def paginated_get_files_info(request, username):
     try:
         data = json.loads(request.body)
@@ -656,6 +677,7 @@ def paginated_get_files_info(request, username):
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
+@api_view(["POST"])
 def update_settings(request, username):
     try:
         data = json.loads(request.body)
@@ -712,6 +734,7 @@ def update_settings(request, username):
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
+@api_view(["POST"])
 def get_partial_file_info(request, username):
     try:
         data = json.loads(request.body)
@@ -774,6 +797,7 @@ def get_partial_file_info(request, username):
     return JsonResponse(files_data)
 
 
+@api_view(["GET"])
 def getuserinfo3(request, username, password):
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
@@ -806,6 +830,7 @@ def getuserinfo3(request, username, password):
     return JsonResponse(user_data)
 
 
+@api_view(["GET"])
 def getuserinfo4(request, username, password):
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
@@ -847,6 +872,7 @@ def getuserinfo4(request, username, password):
     return JsonResponse(user_data)
 
 
+@api_view(["GET"])
 def get_neuranet_info(request):
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
@@ -869,6 +895,7 @@ def get_neuranet_info(request):
 
 
 @csrf_exempt
+@api_view(["GET"])
 def update_devices(request, username):
     if request.method == "POST":
         try:
@@ -910,6 +937,7 @@ def update_devices(request, username):
         return JsonResponse({"error": "Invalid method"}, status=405)
 
 
+@api_view(["GET"])
 def change_profile(request, username, password, first_name, last_name, email):
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
@@ -961,6 +989,7 @@ def change_profile(request, username, password, first_name, last_name, email):
     return JsonResponse(user_data)
 
 
+@api_view(["GET"])
 def register(request, username, password, firstName, lastName):
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
@@ -1006,6 +1035,7 @@ def register(request, username, password, firstName, lastName):
     return JsonResponse(user_data)
 
 
+@api_view(["GET"])
 def new_register(request, username, password, firstName, lastName):
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
@@ -1132,6 +1162,7 @@ def add_device(request, username, device_name):
 
 @csrf_exempt
 @require_http_methods(["POST"])
+@api_view(["POST"])
 def add_file_to_sync(request, username):
     data = json.loads(request.body)
     device_name = data.get("device_name")
@@ -1149,6 +1180,7 @@ def add_file_to_sync(request, username):
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
+@api_view(["POST"])
 def add_file(request, username):
     try:
         # Parse the JSON body
@@ -1224,6 +1256,7 @@ def add_file(request, username):
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
+@api_view(["POST"])
 def add_site_visitor_info(request):
     try:
         # Parse the JSON body
@@ -1364,6 +1397,7 @@ def add_files(request, username):
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
+@api_view(["POST"])
 def handle_delete_files(request, username):
     try:
         # Parse the JSON body
@@ -1394,6 +1428,7 @@ def handle_delete_files(request, username):
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
+@api_view(["POST"])
 def handle_update_files(request, username):
     try:
         # Parse the JSON body
@@ -1431,6 +1466,7 @@ def handle_update_files(request, username):
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
+@api_view(["POST"])
 def search_file(request, username):
     try:
         # Parse the JSON body
@@ -1495,6 +1531,7 @@ def search_file(request, username):
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
+@api_view(["POST"])
 def add_task(request, username):
     try:
         data = json.loads(request.body)
@@ -1551,6 +1588,7 @@ def add_task(request, username):
 
 @csrf_exempt
 @require_http_methods(["POST"])
+@api_view(["POST"])
 def update_task(request, username):
     try:
         data = json.loads(request.body)
@@ -1591,6 +1629,7 @@ def update_task(request, username):
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
+@api_view(["POST"])
 def fail_task(request, username):
     try:
         # Parse the JSON body
@@ -1640,6 +1679,7 @@ def fail_task(request, username):
 
 @csrf_exempt
 @require_http_methods(["POST"])
+@api_view(["POST"])
 def get_session(request, username):
     # Parse the JSON body
     data = json.loads(request.body)
@@ -1689,6 +1729,7 @@ def get_session(request, username):
 
 @csrf_exempt
 @require_http_methods(["GET"])
+@api_view(["GET"])
 def run_pipeline(request, username):
     result = pipeline(username)
     response_data = {
@@ -1700,6 +1741,7 @@ def run_pipeline(request, username):
 
 @csrf_exempt
 @require_http_methods(["GET"])
+@api_view(["GET"])
 def get_device_prediction_data(request, username):
     result = db_get_device_predictions(username)
     response_data = {   
@@ -1714,6 +1756,7 @@ def get_device_prediction_data(request, username):
 
 @csrf_exempt
 @require_http_methods(["POST"])
+@api_view(["GET"])
 def get_recent_session(request, username):
     # Parse the JSON body
     data = json.loads(request.body)
@@ -1809,6 +1852,7 @@ def get_recent_session(request, username):
 #         return JsonResponse(message)
 
 
+@api_view(["GET"])
 def homepage(request):
     service = os.environ.get("K_SERVICE", "Unknown service")
     revision = os.environ.get("K_REVISION", "Unknown revision")
@@ -1824,10 +1868,12 @@ def homepage(request):
     )
 
 
+@api_view(["GET"])
 def aboutpage(request):
     return render(request, "aboutpage.html", context={})
 
 
+@api_view(["GET"])
 def download_debian_package(request):
     file_path = os.path.join(
         settings.BASE_DIR, "helloapp/templates/bcloud_1.0.0_all.deb"
@@ -1846,6 +1892,7 @@ def download_debian_package(request):
     return response
 
 
+@api_view(["GET"])
 def addusernopassword(request):
     # MongoDB connection string
 
@@ -1874,6 +1921,7 @@ def addusernopassword(request):
     return render(request, "add_user.html", {"form": form})
 
 
+@api_view(["GET"])
 def adduser1(request):
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = pymongo.MongoClient(uri, server_api=ServerApi("1"))
@@ -1907,6 +1955,7 @@ def adduser1(request):
     return render(request, "add_user.html", {"form": form})
 
 
+@api_view(["GET"])
 def adduser(request):
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = pymongo.MongoClient(uri, server_api=ServerApi("1"))
@@ -1949,6 +1998,7 @@ def adduser(request):
     return render(request, "add_user.html", {"form": form})
 
 
+@api_view(["GET"])
 def login(request):
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = pymongo.MongoClient(uri, server_api=ServerApi("1"))
@@ -1981,6 +2031,7 @@ def login(request):
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
+@api_view(["GET"])
 def login_api(request):
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = pymongo.MongoClient(uri, server_api=ServerApi("1"))
@@ -2006,6 +2057,7 @@ def login_api(request):
         return JsonResponse({"error": "Invalid JSON"}, status=400)
 
 
+@api_view(["GET"])
 def dashboard(request, username):
     # Render the dashboard template with the username
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
@@ -2033,6 +2085,7 @@ def dashboard(request, username):
     )
 
 
+@api_view(["GET"])
 def update_user_profile(request, username):
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = pymongo.MongoClient(uri, server_api=ServerApi("1"))
@@ -2065,6 +2118,7 @@ def update_user_profile(request, username):
     return render(request, "update_profile.html", {"form": form, "username": username})
 
 
+@api_view(["GET"])
 def file_sync_view(request, username):
     response_data, status_code = get_file_sync(username)
     return JsonResponse(response_data, status=status_code)

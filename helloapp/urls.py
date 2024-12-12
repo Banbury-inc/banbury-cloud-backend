@@ -1,6 +1,7 @@
 from django.urls import path
 from helloapp import views
 from helloapp import consumers  # Make sure this matches the actual name
+from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
 
 urlpatterns = [
     # Ping
@@ -65,4 +66,16 @@ urlpatterns = [
     # Settings and Package Downloads
     path("update_settings/<str:username>/", views.update_settings, name="update_settings"),
     # path('download-deb/', views.download_debian_package, name='download_deb'),
+
+
+    # Schema generation endpoint
+    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
+    
+    # Swagger UI
+    path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+    
+    # Redoc UI
+    path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
+
+
 ]
