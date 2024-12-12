@@ -71,11 +71,17 @@ urlpatterns = [
     # Schema generation endpoint
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     
-    # Swagger UI
-    path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+    # Swagger UI with custom styling
+    path('api/docs/', SpectacularSwaggerView.as_view(
+        url_name='schema',
+        template_name='swagger-ui.html',  # Custom template
+    ), name='swagger-ui'),
     
-    # Redoc UI
-    path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
+    # Redoc UI with custom styling
+    path('api/redoc/', SpectacularRedocView.as_view(
+        url_name='schema',
+        template_name='redoc.html',  # Custom template
+    ), name='redoc'),
 
 
 ]

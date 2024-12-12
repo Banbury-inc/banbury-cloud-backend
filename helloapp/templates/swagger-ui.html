@@ -1,0 +1,134 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Banbury API</title>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" type="text/css" href="//unpkg.com/swagger-ui-dist@latest/swagger-ui.css" />
+    <style>
+        /* Custom Swagger UI Styles */
+        .swagger-ui {
+            color: #e0e0e0;
+            font-family: Arial, sans-serif;
+        }
+        
+        .swagger-ui .topbar {
+            background-color: #1a1a1a;
+        }
+
+        .swagger-ui .info .title {
+            color: #ffffff;
+        }
+
+        .swagger-ui .opblock.opblock-get {
+            background: #162834;
+            border-color: #1c3544;
+        }
+
+        .swagger-ui .btn.execute {
+            background-color: #2c5282;
+            border-color: #2a4365;
+        }
+
+        .swagger-ui .info h1,
+        .swagger-ui .info h2,
+        .swagger-ui .info h3,
+        .swagger-ui .info h4,
+        .swagger-ui .info h5,
+        .swagger-ui .info .title {
+            color: #ffffff;
+        }
+
+        .swagger-ui .info a {
+            color: #63b3ed;
+        }
+
+        .swagger-ui .info a:hover {
+            color: #90cdf4;
+        }
+
+        .swagger-ui .opblock-post {
+            background: #1c2a1c;
+            border-color: #2f462f;
+        }
+
+        .swagger-ui .opblock-put {
+            background: #2d2815;
+            border-color: #453c1c;
+        }
+
+        .swagger-ui .opblock-delete {
+            background: #2a1515;
+            border-color: #462c2c;
+        }
+
+        /* Additional dark theme elements */
+        .swagger-ui select {
+            background-color: #2d3748;
+            color: #e2e8f0;
+            border-color: #4a5568;
+        }
+
+        .swagger-ui input {
+            background-color: #2d3748;
+            color: #e2e8f0;
+            border-color: #4a5568;
+        }
+
+        .swagger-ui textarea {
+            background-color: #2d3748;
+            color: #e2e8f0;
+            border-color: #4a5568;
+        }
+
+        .swagger-ui .opblock-summary-description {
+            color: #a0aec0;
+        }
+
+        .swagger-ui table thead tr td,
+        .swagger-ui table thead tr th {
+            color: #e2e8f0;
+            border-bottom: 1px solid #4a5568;
+        }
+
+        .swagger-ui .parameter__name {
+            color: #e2e8f0;
+        }
+
+        .swagger-ui .parameter__type {
+            color: #a0aec0;
+        }
+
+        .swagger-ui .response-col_status {
+            color: #e2e8f0;
+        }
+
+        .swagger-ui .response-col_description {
+            color: #e2e8f0;
+        }
+    </style>
+  </head>
+  <body>
+    <div id="swagger-ui"></div>
+    <script src="//unpkg.com/swagger-ui-dist@latest/swagger-ui-bundle.js"></script>
+    <script src="//unpkg.com/swagger-ui-dist@latest/swagger-ui-standalone-preset.js"></script>
+    <script>
+    window.onload = function() {
+      const ui = SwaggerUIBundle({
+        url: "{% url 'schema' %}",
+        dom_id: '#swagger-ui',
+        presets: [
+          SwaggerUIBundle.presets.apis,
+          SwaggerUIStandalonePreset
+        ],
+        layout: "BaseLayout",
+        deepLinking: true,
+        showExtensions: true,
+        showCommonExtensions: true
+      })
+      window.ui = ui
+    }
+    </script>
+  </body>
+</html>

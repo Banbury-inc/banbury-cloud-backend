@@ -1,4 +1,3 @@
-
 """
 Django settings for helloproject project.
 
@@ -171,5 +170,104 @@ USE_TZ = True
 STATIC_URL = '/static/'
 
 CORS_ALLOW_ALL_ORIGINS = True
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Banbury API',
+    'DESCRIPTION': 'Banbury API',
+    'VERSION': '1.1.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    
+    # UI Settings
+    'SWAGGER_UI_SETTINGS': {
+        'displayOperationId': True,
+        'theme': 'dark',
+        'deepLinking': True,
+        'persistAuthorization': True,
+        'defaultModelsExpandDepth': 3,
+        'defaultModelExpandDepth': 3,
+        'defaultModelRendering': 'model',
+        'displayRequestDuration': True,
+        'docExpansion': 'list',
+        'filter': True,
+        'showExtensions': True,
+        'showCommonExtensions': True,
+        'tryItOutEnabled': True,
+        'syntaxHighlight': {
+            'theme': 'monokai'
+        },
+        'customCss': '''
+            /* Dark mode base colors */
+            body { background-color: #111827; }
+            .swagger-ui { background-color: #111827; color: #e5e7eb; }
+            
+            /* Header and navigation */
+            .swagger-ui .topbar { background-color: #1f2937; }
+            .swagger-ui .info .title { color: #60a5fa; }
+            .swagger-ui .info { color: #e5e7eb; }
+            .swagger-ui .scheme-container { background-color: #1f2937; box-shadow: none; }
+            
+            /* Operation blocks */
+            .swagger-ui .opblock-tag { color: #f3f4f6; background: #111827; }
+            .swagger-ui .opblock { background: #1f2937; border: 1px solid #374151; }
+            .swagger-ui .opblock .opblock-summary { border-bottom: 1px solid #374151; }
+            .swagger-ui .opblock .opblock-summary-method { background: #3b82f6; }
+            .swagger-ui .opblock .opblock-summary-path { color: #e5e7eb; }
+            .swagger-ui .opblock .opblock-summary-description { color: #9ca3af; }
+            
+            /* Models and Schemas */
+            .swagger-ui .model { color: #e5e7eb; }
+            .swagger-ui .model-title { color: #e5e7eb; }
+            .swagger-ui section.models { border: 1px solid #374151; background: #1f2937; }
+            .swagger-ui section.models.is-open h4 { border-bottom: 1px solid #374151; }
+            
+            /* Tables and Properties */
+            .swagger-ui .table-container { background-color: #1f2937; }
+            .swagger-ui table thead tr td, 
+            .swagger-ui table thead tr th { color: #e5e7eb; }
+            .swagger-ui .parameters-col_description { color: #e5e7eb; }
+            .swagger-ui .parameter__name { color: #60a5fa; }
+            .swagger-ui .parameter__type { color: #9ca3af; }
+            
+            /* Response section */
+            .swagger-ui .responses-inner { background: #1f2937; }
+            .swagger-ui .response-col_status { color: #60a5fa; }
+            .swagger-ui .response-col_description { color: #e5e7eb; }
+            
+            /* Inputs and Buttons */
+            .swagger-ui input[type=text], 
+            .swagger-ui input[type=password] { 
+                background-color: #374151; 
+                color: #e5e7eb; 
+                border: 1px solid #4b5563; 
+            }
+            .swagger-ui select {
+                background-color: #374151;
+                color: #e5e7eb;
+                border: 1px solid #4b5563;
+            }
+            .swagger-ui .btn { background-color: #3b82f6; color: #fff; }
+            
+            /* Authorization */
+            .swagger-ui .dialog-ux .modal-ux { background: #1f2937; }
+            .swagger-ui .dialog-ux .modal-ux-header { background: #111827; }
+            .swagger-ui .dialog-ux .modal-ux-content { background: #1f2937; }
+            
+            /* Code samples */
+            .swagger-ui .highlight-code { background-color: #111827; }
+        '''
+    },
+    
+    'REDOC_UI_SETTINGS': {
+        'hideDownloadButton': False,
+        'hideHostname': False,
+        'expandResponses': '200,201',
+        'jsonSampleExpandLevel': 3,
+        'hideLoading': False,
+        'nativeScrollbars': False,
+        'pathInMiddlePanel': False,
+        'requiredPropsFirst': True,
+        'sortPropsAlphabetically': True,
+    },
+}
 
 
