@@ -1775,7 +1775,7 @@ def update_device_configuration_preferences(request, username):
     device_name = data.get("device_name")
     device_configurations = {
         "use_predicted_cpu_usage": data.get("use_predicted_cpu_usage"),
-        "use_predicted_gpu_usage": data.get("use_predictied_gpu_usage"),
+        "use_predicted_gpu_usage": data.get("use_predicted_gpu_usage"),
         "use_predicted_ram_usage": data.get("use_predicted_ram_usage"),
         "use_predicted_download_speed": data.get("use_predicted_download_speed"),
         "use_predicted_upload_speed": data.get("use_predicted_upload_speed"),
