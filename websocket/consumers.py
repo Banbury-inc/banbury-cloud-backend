@@ -28,11 +28,30 @@ class Live_Data(AsyncWebsocketConsumer):
         await self.accept()
         device_name = self.scope.get('requesting_device_name')
         username = self.scope.get('username')
+
+        print("Device name: ", device_name)
+        print("Username: ", username)
+        print("self.device_name: ", self.device_name)
+        
+        if not device_name or not username:
+            print("[WebSocket] Waiting for device identification...")
+            return
+        
         if device_name:
             connected_devices[device_name] = self
-            await self.trigger_connect(username, device_name)
-            self.start_device_info_loop(username, device_name)
-            self.start_device_predictions_loop(username, device_name)
+            try:
+                # Call declare_device_online directly here for better control
+                result = declare_device_online(username, device_name)
+                print(f"[WebSocket] Device online declaration result: {result}")
+                
+                if isinstance(result, dict) and result.get('result') == 'success':
+                    await self.trigger_connect(username, device_name)
+                    self.start_device_info_loop(username, device_name)
+                    self.start_device_predictions_loop(username, device_name)
+                else:
+                    print(f"[WebSocket] Failed to set device online: {result}")
+            except Exception as e:
+                print(f"[WebSocket] Error during device connection: {str(e)}")
 
     async def disconnect(self, close_code):
         try:
@@ -113,11 +132,10 @@ class Live_Data(AsyncWebsocketConsumer):
 
     async def trigger_connect(self, username, device_name):
         """Custom function to handle what happens after connect."""
-        await declare_device_online(username, device_name)
 
-        # Start device info loop
-        self.device_info_task = asyncio.create_task(self.start_device_info_loop(username, device_name))
-        self.device_predictions_task = asyncio.create_task(self.start_device_predictions_loop(username, device_name))
+
+        result = declare_device_online(username, device_name)
+        print(f"Device online declaration result: {result}")
 
 
     async def trigger_post_disconnect(self, username, device_name):
@@ -178,6 +196,27 @@ class Live_Data(AsyncWebsocketConsumer):
     async def receive_text(self, text_data):
         try:
             text_data_json = json.loads(text_data)
+
+            # Move device identification logic to the beginning
+            if 'username' in text_data_json:
+                self.scope['username'] = text_data_json['username']
+
+            if 'requesting_device_name' in text_data_json:
+                device_name = text_data_json['requesting_device_name']
+                self.scope['requesting_device_name'] = device_name
+                self.device_name = device_name
+                username = self.scope.get('username')
+                
+                # If we now have both username and device_name, declare device online
+                if username and device_name:
+                    connected_devices[device_name] = self
+                    result = declare_device_online(username, device_name)
+                    print(f"[WebSocket] Device online declaration result: {result}")
+                    
+                    if isinstance(result, dict) and result.get('result') == 'success':
+                        await self.trigger_connect(username, device_name)
+                        await self.start_device_info_loop(username, device_name)
+                        await self.start_device_predictions_loop(username, device_name)
 
             # Handle device info response
             if text_data_json.get('message') == "device_info_response":

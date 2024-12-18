@@ -26,7 +26,7 @@ class PredictionService:
             Dense(1)
         ])
         model.compile(optimizer='adam', loss='mean_squared_error')
-        model.fit(X_train, y_train, epochs=20, batch_size=32, verbose=1)
+        model.fit(X_train, y_train, epochs=20, batch_size=32, verbose=0)
         return model
 
     def predict_future_speed(self, model, df, scaler, time_steps, data_type):
@@ -52,37 +52,31 @@ class PredictionService:
                 if 'upload_speed' in device:
                     upload_speeds = [float(speed) for speed in device['upload_speed'] 
                                    if speed is not None]
-                    print(f"Found {len(upload_speeds)} upload speeds")
                 
                 download_speeds = []
                 if 'download_speed' in device:
                     download_speeds = [float(speed) for speed in device['download_speed']
                                      if speed is not None] 
-                    print(f"Found {len(download_speeds)} download speeds")
 
                 cpu_usage = []
                 if 'cpu_usage' in device:
                     cpu_usage = [float(usage) for usage in device['cpu_usage']
                                 if usage is not None]
-                    print(f"Found {len(cpu_usage)} cpu usage values")
 
                 ram_usage = []
                 if 'ram_usage' in device:
                     ram_usage = [float(usage) for usage in device['ram_usage']
                                 if usage is not None]
-                    print(f"Found {len(ram_usage)} ram usage values")
 
 
                 gpu_usage = []
                 if 'gpu_usage' in device:
                     gpu_usage = [float(usage) for usage in device['gpu_usage']
                                 if usage is not None]
-                    print(f"Found {len(gpu_usage)} gpu usage values")
 
                 current_times = []
                 if 'current_time' in device:
                     current_times = [speed for speed in device['current_time']]
-                    print(f"Found {len(current_times)} timestamps")
                 else:
                     print("Warning: No data available for current times")
                 # Try both timestamp formats
@@ -161,11 +155,6 @@ class PredictionService:
                     })
                     df_gpu_usage.sort_values('timestamp', inplace=True) 
 
-                print(f"df_upload_speed: {df_upload_speed}")
-                print(f"df_download_speed: {df_download_speed}")
-                print(f"df_cpu_usage: {df_cpu_usage}")
-                print(f"df_ram_usage: {df_ram_usage}")
-                print(f"df_gpu_usage: {df_gpu_usage}")
 
                 # Scale the features
                 scaler = MinMaxScaler(feature_range=(0, 1))

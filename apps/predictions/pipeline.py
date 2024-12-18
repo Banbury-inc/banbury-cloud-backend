@@ -42,7 +42,6 @@ def pipeline(username):
             return {"error": f"Failed to update device predictions: {e}"}
     try:
         scored_devices = ScoringService().devices(device_predictions)
-        print(scored_devices)
     except Exception as e:
         return {"error": f"Failed to score devices: {e}"}
 
@@ -63,12 +62,10 @@ def pipeline(username):
     try:
         allocated_devices = AllocationService().devices(
             fetched_device_predictions, file_sync_info)
-        print("Allocated devices:", allocated_devices)
 
         # Generate file-to-device mappings
         file_device_mappings = AllocationService(
         ).generate_file_device_mappings(allocated_devices)
-        print("File device mappings:", file_device_mappings)
 
         # Update each file's proposed device IDs
         for mapping in file_device_mappings:
@@ -90,7 +87,6 @@ def pipeline(username):
     for device in allocated_devices:
         download_queue = get_download_queue(username, device['device_id'])
 
-        print(f"Download queue for {device['device_name']}: {download_queue}")
         
         # Check if download_queue is a dictionary
         if isinstance(download_queue, dict):

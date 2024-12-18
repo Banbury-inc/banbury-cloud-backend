@@ -30,7 +30,6 @@ class AllocationService():
         # Sort devices by score (descending)
         devices_list.sort(key=lambda x: x['score'], reverse=True)
 
-        print("file_sync_info: ", file_sync_info)
 
         # Sort files by priority and size (descending)
         priority_map = {3: 3, 2: 2, 1: 1}
