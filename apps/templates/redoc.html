@@ -1,0 +1,134 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Banbury API</title>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        background-color: #0d1117;
+      }
+
+      /* Target the main API content container */
+      .api-content {
+        background-color: #0d1117 !important;
+        color: #e6edf3 !important;
+      }
+
+      /* Style headings */
+      .api-content h1, 
+      .api-content h2,
+      .api-content h3,
+      .api-content h4,
+      .api-content h5,
+      .api-content h6 {
+        color: #e6edf3 !important;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif !important;
+      }
+
+      /* Style text content */
+      .api-content p,
+      .api-content span,
+      .api-content div,
+      .api-content li {
+        color: #e6edf3 !important;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif !important;
+      }
+
+      /* Style tables */
+      .api-content table {
+        background-color: #161b22 !important;
+        color: #e6edf3 !important;
+      }
+
+      /* Style table cells */
+      .api-content td,
+      .api-content th {
+        border-color: #30363d !important;
+      }
+
+      /* Updated theme styles */
+      :root {
+        --theme-color: #238636;
+        --redoc-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+      }
+
+      /* ReDoc element specific styles */
+      redoc {
+        display: block;
+      }
+
+      /* Ensure links are visible */
+      .api-content a {
+        color: #58a6ff !important;
+      }
+
+      /* Update code blocks for better visibility */
+      .api-content pre,
+      .api-content code {
+        background-color: #161b22 !important;
+        color: #e6edf3 !important;
+        border-radius: 6px !important;
+        font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace !important;
+      }
+
+      /* Ensure form inputs and buttons are visible */
+      .api-content input,
+      .api-content button {
+        color: #e6edf3 !important;
+        background-color: #161b22 !important;
+        border-color: #30363d !important;
+        border-radius: 6px !important;
+      }
+    </style>
+  </head>
+  <body>
+    <redoc 
+      spec-url="{% url 'schema' %}"
+      theme='{
+        "colors": {
+          "primary": { "main": "#238636" },
+          "text": { "primary": "#e6edf3" },
+          "gray": { "50": "#e6edf3" },
+          "success": { "main": "#161b22", "contrastText": "#e6edf3" }
+        },
+        "typography": {
+          "fontSize": "14px",
+          "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Noto Sans\", Helvetica, Arial, sans-serif",
+          "color": "#e6edf3"
+        },
+        "sidebar": {
+          "backgroundColor": "#161b22",
+          "textColor": "#e6edf3"
+        },
+        "rightPanel": {
+          "backgroundColor": "#161b22",
+          "textColor": "#e6edf3"
+        },
+        "schema": {
+          "nestedBackground": "#0d1117",
+          "typeNameColor": "#e6edf3",
+          "typeTitleColor": "#e6edf3"
+        },
+        "theme": {
+          "spacing": {
+            "unit": 4
+          },
+          "backgroundColor": "#161b22"
+        },
+        "codeBlock": {
+          "backgroundColor": "#161b22"
+        }
+      }'
+      {% if redoc_ui_settings %}
+        {% for key, value in redoc_ui_settings.items %}
+          {{ key }}="{{ value|safe }}"
+        {% endfor %}
+      {% endif %}
+    ></redoc>
+    <script src="https://cdn.jsdelivr.net/npm/redoc@latest/bundles/redoc.standalone.js"></script>
+  </body>
+</html>

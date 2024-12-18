@@ -26,7 +26,7 @@ python3 manage.py runserver 0.0.0.0:$DJANGO_PORT --noreload &
 DJANGO_PID=$!
 
 # Run Daphne WebSocket server
-daphne -p $DAPHNE_PORT -b 0.0.0.0 helloproject.asgi:application
+daphne -p $DAPHNE_PORT -b 0.0.0.0 core.asgi:application
 
 # When Daphne is stopped, also stop the Django server
 kill $DJANGO_PID 2>/dev/null
