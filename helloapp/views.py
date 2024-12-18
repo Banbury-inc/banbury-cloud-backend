@@ -1770,8 +1770,8 @@ def get_device_prediction_data(request, username):
 
 
 @csrf_exempt
-@require_http_methods(["POST"])
-@api_view(["GET"])
+@require_http_methods(["GET", "POST"])
+@api_view(["GET", "POST"])
 def get_recent_session(request, username):
     # Parse the JSON body
     data = json.loads(request.body)
