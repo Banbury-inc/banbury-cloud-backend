@@ -46,16 +46,24 @@ INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',  # Make sure this line is present
-    'django.contrib.sessions',
+    # 'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'channels',
-    'apps',
     'apps.authentication',
+    'apps.devices',
+    'apps.files',
+    'apps.predictions',
+    'apps.profiles',
+    'apps.sessions',
+    'apps.settings',
+    'apps.users',
+    'apps.tasks',
     'rest_framework',
     'corsheaders',
     'rest_framework.authtoken',
     'drf_spectacular',
+    'websocket',
 ]
 
 
