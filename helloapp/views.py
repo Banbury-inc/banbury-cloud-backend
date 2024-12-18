@@ -31,6 +31,7 @@ from .src.db.update_file_priority import update_file_priority as db_update_file_
 from .src.db.update_sync_storage_capacity import update_sync_storage_capacity as db_update_sync_storage_capacity
 from .src.db.get_download_queue import get_download_queue as db_get_download_queue
 from .src.db.get_device_predictions import get_device_predictions as db_get_device_predictions
+from .src.db.update_device_configuration_preferences import update_device_configuration_preferences as db_update_device_configuration_preferences
 import json
 import re
 
@@ -1766,6 +1767,27 @@ def get_device_prediction_data(request, username):
     return JsonResponse(response_data)
 
 
+@csrf_exempt
+@require_http_methods(["GET", "POST"])
+@api_view(["GET", "POST"])
+def update_device_configuration_preferences(request, username):
+    data = json.loads(request.body)
+    device_name = data.get("device_name")
+    device_configurations = {
+        "use_predicted_cpu_usage": data.get("use_predicted_cpu_usage"),
+        "use_predicted_gpu_usage": data.get("use_predictied_gpu_usage"),
+        "use_predicted_ram_usage": data.get("use_predicted_ram_usage"),
+        "use_predicted_download_speed": data.get("use_predicted_download_speed"),
+        "use_predicted_upload_speed": data.get("use_predicted_upload_speed"),
+        "use_files_needed": data.get("use_files_needed"),
+        "use_files_available_for_download": data.get("use_files_available_for_download"),
+    }
+    result = db_update_device_configuration_preferences(username, device_name, device_configurations)
+    response_data = {   
+        "result": "success",
+        "data": result,
+    }
+    return JsonResponse(response_data)
 
 
 

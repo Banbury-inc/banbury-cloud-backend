@@ -34,6 +34,9 @@ urlpatterns = [
     path("add_device/<str:username>/<str:device_name>/", views.add_device, name="add_device"),
     path("delete_device/<str:username>/", views.delete_device, name="delete_device"),
     path("update_devices/<str:username>/", views.update_devices, name="update_devices"),
+    path("update_device_configurations/<str:username>/", views.update_device_configuration_preferences, name="update_devices"),
+
+
     path("getdeviceinfo/<str:username>/", views.getdeviceinfo, name="getdeviceinfo"),
     path("getonlinedevices/<str:username>/",views.handle_get_online_devices,name="getdeviceinfo",),
     path("declare_device_online/<str:username>/", views.declare_device_online, name="getdeviceinfo",),
