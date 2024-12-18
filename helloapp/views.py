@@ -682,7 +682,11 @@ def update_settings(request, username):
     try:
         data = json.loads(request.body)
         sync_entire_device_checked = data.get("sync_entire_device_checked")
-        device_name = data.get("device_name")
+        predicted_upload_speed_weighting = data.get("predicted_upload_speed_weighting")
+        predicted_download_speed_weighting = data.get("predicted_download_speed_weighting")
+        predicted_cpu_usage_weighting = data.get("predicted_cpu_usage_weighting")
+        predicted_ram_usage_weighting = data.get("predicted_ram_usage_weighting")
+        predicted_gpu_usage_weighting = data.get("predicted_gpu_usage_weighting")
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
 
@@ -690,46 +694,57 @@ def update_settings(request, username):
     client = MongoClient(uri)
     db = client["NeuraNet"]
     user_collection = db["users"]
-    device_collection = db["devices"]
     settings_collection = db["settings"]
 
     # Find the user by username
     user = user_collection.find_one({"username": username})
-
     if not user:
         return JsonResponse({"error": "User not found."}, status=404)
 
-    # match the username to the user id
     user_id = user["_id"]
 
-    # Find all devices belonging to the user
-    devices = list(device_collection.find({"user_id": user["_id"]}))
-
-    device_id = None
-    # match the device name to the device id
-    for device in devices:
-        if device.get("device_name") == device_name:
-            device_id = device.get("_id")
+    # Check if settings already exist for this user
+    existing_settings = settings_collection.find_one({
+        "user_id": user_id
+    })
 
     settings_data = {
-        "user_id": user_id,
-        "device_id": device_id,
         "sync_entire_device_checked": sync_entire_device_checked,
+        "predicted_upload_speed_weighting": predicted_upload_speed_weighting,
+        "predicted_download_speed_weighting": predicted_download_speed_weighting,
+        "predicted_cpu_usage_weighting": predicted_cpu_usage_weighting,
+        "predicted_ram_usage_weighting": predicted_ram_usage_weighting,
+        "predicted_gpu_usage_weighting": predicted_gpu_usage_weighting,
     }
 
     try:
-        settings_collection.insert_one(settings_data)
+        if existing_settings:
+            # Update existing settings
+            settings_collection.update_one(
+                {"_id": existing_settings["_id"]},
+                {"$set": settings_data}
+            )
+            message = "Settings updated successfully"
+        else:
+            # Create new settings
+            settings_data.update({
+                "user_id": user_id
+            })
+            settings_collection.insert_one(settings_data)
+            message = "Settings created successfully"
+
+        return JsonResponse({
+            "result": "success",
+            "message": message,
+            "username": username
+        })
+
     except Exception as e:
-        print(f"Error sending to device: {e}")
-
-    result = "success"
-
-    user_data = {
-        "result": result,
-        "username": username,  # Return username if success, None if fail
-    }
-
-    return JsonResponse(user_data)
+        print(f"Error updating settings: {e}")
+        return JsonResponse({
+            "result": "error",
+            "message": str(e)
+        }, status=500)
 
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
