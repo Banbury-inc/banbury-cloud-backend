@@ -98,6 +98,7 @@ class Live_Data(AsyncWebsocketConsumer):
         while self.should_run:
             print(f"Making device predictions for {username}")
             await self.make_device_predictions(username, device_name)
+
             await asyncio.sleep(1800)  # Use asyncio.sleep instead of time.sleep
 
     async def request_device_info(self, username, device_name):
@@ -138,6 +139,7 @@ class Live_Data(AsyncWebsocketConsumer):
 
     async def receive(self, text_data=None, bytes_data=None):
         """Handle both text and binary data based on the type of the input."""
+
         
         # Check if the data is bytes (binary data)
         if bytes_data is not None and isinstance(bytes_data, (bytes, bytearray)):
