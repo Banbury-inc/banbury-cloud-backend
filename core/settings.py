@@ -145,7 +145,7 @@ LOGGING = {
 
 
 WSGI_APPLICATION = 'core.wsgi.application'
-ASGI_APPLICATION = 'core.asgi.application'
+ASGI_APPLICATION = 'core.urls.application'
 
 CHANNEL_LAYERS = {
     'default': {

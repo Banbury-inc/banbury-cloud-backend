@@ -1,4 +1,6 @@
 from django.urls import path, include
+from channels.routing import ProtocolTypeRouter, URLRouter
+from websocket.urls import websocket_urlpatterns
 
 urlpatterns = [
     path('', include('apps.urls')),
@@ -13,6 +15,12 @@ urlpatterns = [
     path('users/', include('apps.users.urls')),
 ]
 
-websocket_urlpatterns = [
-    path('ws/', include('websocket.urls')),
-]
+# Remove this as it's not needed for WebSocket routing
+# websocket_urlpatterns = [
+#     path('ws/', include('websocket.urls')),
+# ]
+
+# Instead, create an application routing configuration
+application = ProtocolTypeRouter({
+    "websocket": URLRouter(websocket_urlpatterns),
+})
