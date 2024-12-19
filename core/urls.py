@@ -14,5 +14,5 @@ urlpatterns = [
 ]
 
 websocket_urlpatterns = [
-    path('', include('websocket.urls')),
+    path('ws/', include('websocket.urls')),
 ]
