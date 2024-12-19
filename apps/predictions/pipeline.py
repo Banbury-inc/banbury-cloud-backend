@@ -76,9 +76,9 @@ def pipeline(username):
                     proposed_device_ids=mapping['proposed_device_ids']
                 )
                 if 'error' in result:
-                    print("Error updating file")
+                    print("Error updating file sync proposed device ids")
             except Exception as e:
-                print(f"Failed to update file {mapping['file_id']}: {e}")
+                print(f"Failed to update file sync proposed device ids: {e}")
 
     except Exception as e:
         return {"error": f"Failed in allocation pipeline: {e}"}
@@ -103,7 +103,7 @@ def pipeline(username):
         else:
             print(f"Error getting download queue: {download_queue}")
 
-
+    print(results)
 
     return {"success": "Pipeline executed successfully",
             "results": results,

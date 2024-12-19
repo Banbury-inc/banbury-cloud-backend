@@ -39,7 +39,7 @@ def update_download_queue(username, device_name, files_needed, files_available_f
     # Update the "files_needed" and "files_available_for_download" fields in the device_predictions collection
     try:
         result = device_predictions_collection.update_one(
-            {'device_id': device['_id']},  # Find the device by its ID
+            {'_id': device['_id']},  # Find the device by its ID
             {'$set': {
                 'files_needed': files_needed,
                 'files_available_for_download': files_available_for_download

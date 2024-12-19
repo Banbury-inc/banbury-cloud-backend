@@ -4,10 +4,10 @@ from datetime import datetime
 import json
 import asyncio
 
-def get_download_queue(username, device_name):
+def get_download_queue(username, device_id):
     try:
-        if not username or not device_name:
-            return "Missing username or device_name"
+        if not username or not device_id:
+            return "Missing username or device_id"
 
         # Connect to MongoDB
         uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
@@ -24,11 +24,6 @@ def get_download_queue(username, device_name):
             return "User not found."
         user_id = user.get("_id")
 
-        # Get device_id from device_name
-        device = device_predictions_collection.find_one({"device_name": device_name})
-        if not device:
-            return "Device not found."
-        device_id = device.get("_id")
 
         # Find files that have device_id in proposed_device_ids but not in device_ids array
         sync_files = list(file_sync_collection.find({
@@ -36,6 +31,7 @@ def get_download_queue(username, device_name):
             "proposed_device_ids": device_id,
             "device_ids": {"$not": {"$in": [device_id]}}
         }))
+
         files_available_for_download = []
         files = []
         # Remove MongoDB _id field for JSON serialization
