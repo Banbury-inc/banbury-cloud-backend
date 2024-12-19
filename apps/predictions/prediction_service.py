@@ -7,10 +7,13 @@ from sklearn.model_selection import train_test_split
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, LSTM
 import matplotlib.pyplot as plt
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 
 class PredictionService:
     def __init__(self):
-        pass
+        # Create a thread pool for CPU-intensive ML operations
+        self.executor = ThreadPoolExecutor(max_workers=3)
     
     def create_dataset(self, X, y, time_steps=1):
         Xs, ys = [], []
@@ -37,7 +40,19 @@ class PredictionService:
         predicted_speed = scaler.inverse_transform(predicted_speed_scaled)[0][0]
         return predicted_speed
 
-    def performance_data(self, devices, show_graph):
+    async def performance_data(self, devices, show_graph):
+        # Run the CPU-intensive predictions in a thread pool
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            self.executor, 
+            self._perform_predictions,
+            devices,
+            show_graph
+        )
+        # Ensure we return a list that can be iterated over
+        return result if isinstance(result, list) else [result]
+
+    def _perform_predictions(self, devices, show_graph):
         future_datetime = datetime.strptime('2024-04-30 12:00:00', '%Y-%m-%d %H:%M:%S')
         performance_data = []
 

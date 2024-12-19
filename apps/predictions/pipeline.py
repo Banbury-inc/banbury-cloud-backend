@@ -14,7 +14,7 @@ from apps.predictions.allocation_service import AllocationService
 from apps.predictions.update_download_queue import update_download_queue
 
 
-def pipeline(username):
+async def pipeline(username):
     try:
         device_info = get_device_info(username)
     except Exception as e:
@@ -25,10 +25,11 @@ def pipeline(username):
         return {"error": f"Failed to get files info: {e}"}
     try:
         prediction_service = PredictionService()
-        device_predictions = prediction_service.performance_data(
+        device_predictions = await prediction_service.performance_data(
             device_info, show_graph=False)
     except Exception as e:
         return {"error": f"Failed to predict devices: {e}"}
+    
     results = []
     for device_prediction in device_predictions:
         try:

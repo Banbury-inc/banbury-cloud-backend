@@ -122,12 +122,13 @@ class Live_Data(AsyncWebsocketConsumer):
 
     async def make_device_predictions(self, username, device_name):
         """Call pipeline"""
-        result = pipeline(username)
+        print(f"Making device predictions for {username}")
+        result = await pipeline(username)
         # Send a request to the device to start file sync
         await self.send(text_data=json.dumps({
             'message': "File sync request",
             'request_type': 'file_sync_request',
-            }))
+        }))
 
 
     async def trigger_connect(self, username, device_name):
