@@ -26,9 +26,8 @@ RUN pip install --trusted-host pypi.python.org -r requirements.txt
 COPY . .
 
 # Expose the ports for the application
-EXPOSE 8080 8082
+EXPOSE 8000
 
-# Start Redis and both servers
+# Start Redis and run Daphne
 CMD redis-server --daemonize yes && \
-    python3 manage.py runserver 0.0.0.0:8080 --noreload & \
-    daphne -b 0.0.0.0 -p 8082 core.asgi:application
+    daphne -b 0.0.0.0 -p 8000 core.asgi:application
