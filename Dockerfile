@@ -31,4 +31,4 @@ EXPOSE 8080 8082
 # Start Redis and both servers
 CMD redis-server --daemonize yes && \
     python3 manage.py runserver 0.0.0.0:8080 --noreload & \
-    daphne -b 0.0.0.0 -p 8082 helloproject.asgi:application
+    daphne -b 0.0.0.0 -p 8082 core.asgi:application

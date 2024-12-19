@@ -20,7 +20,7 @@ python3  manage.py runserver 0.0.0.0:8080 --noreload
 
 # Run Websocket server
 '''
-daphne -p 8082 helloproject.asgi:application
+daphne -p 8082 core.asgi:application
 '''
 
 # Websocket endpoints
