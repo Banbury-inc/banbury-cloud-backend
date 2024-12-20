@@ -320,10 +320,12 @@ class Live_Data(AsyncWebsocketConsumer):
 
                 file_info = search_for_file(username, self.file_name)
                 if not file_info or 'file_data' not in file_info:
-                    await self.send(text_data=json.dumps({
-                        'message': 'File not found',
-                        'file_name': self.file_name
-                    }))
+                    file_info = search_for_file(username, text_data_json.get('file_name'))
+                    if not file_info or 'file_data' not in file_info:
+                        await self.send(text_data=json.dumps({
+                            'message': 'File not found',
+                            'file_name': self.file_name
+                        }))
                     return
 
                 file_data = file_info['file_data']
