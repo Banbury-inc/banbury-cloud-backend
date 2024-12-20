@@ -226,6 +226,7 @@ class Live_Data(AsyncWebsocketConsumer):
         
         # Check if the data is bytes (binary data)
         if bytes_data is not None and isinstance(bytes_data, (bytes, bytearray)):
+            print("Received binary data")
             await self.receive_bytes(bytes_data)
         elif text_data is not None and isinstance(text_data, str):
             try:
@@ -445,6 +446,7 @@ class Live_Data(AsyncWebsocketConsumer):
             }))
 
     async def receive_bytes(self, bytes_data):
+        print("Received binary data")
         # Save the file chunks to the 'files' directory
         current_dir = os.path.dirname(os.path.abspath(__file__))
         file_dir = os.path.join(current_dir, 'files')
@@ -454,6 +456,8 @@ class Live_Data(AsyncWebsocketConsumer):
         # Write the binary data to the file
         with open(file_path, 'ab') as f:
             f.write(bytes_data)
+            print(bytes_data)
+
 
     async def finalize_file_transfer(self, file_name):
         """This function is called when file transfer is complete."""
