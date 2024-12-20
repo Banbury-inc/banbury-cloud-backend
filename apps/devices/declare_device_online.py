@@ -34,22 +34,16 @@ def declare_device_online(username, device_name):
     try:
         result = device_collection.update_one(
             {'_id': device['_id']},
-            {'$set': {'online': True}}
+            {'$set': {'online': True}},
+            upsert=True  # Create new document if not found
         )
         print(f"[declare_device_online] Update result - Modified: {result.modified_count}")
         
-        if result.modified_count > 0:
-            return {
-                "result": "success",
-                "username": username,
-                "modified_count": result.modified_count
-            }
-        else:
-            return {
-                "result": "error",
-                "message": "Update operation did not modify any documents",
-                "modified_count": result.modified_count
-            }
+        return {
+            "result": "success",
+            "username": username,
+            "device_id": str(device['_id'])
+        }
             
     except Exception as e:
         print(f"[declare_device_online] Error updating device status: {str(e)}")

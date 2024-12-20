@@ -8,14 +8,17 @@ def search_for_file(username, file_name):
     device_collection = db['devices']
     file_collection = db['files']
 
+
     # Find the user by username
     user = user_collection.find_one({'username': username})
+
     
     if not user:
         return "User not found"
 
     # Find all devices belonging to the user
     devices = list(device_collection.find({'user_id': user['_id']}))
+
 
     if not devices:
         return "No devices found for this user."
@@ -38,6 +41,8 @@ def search_for_file(username, file_name):
                 "kind": file.get('kind'),
                 "device_name": device.get('device_name'),  # Include device name for context
             }
-            return {"result": "File found", "file_data": file_data}
+            return file_data
+        
+
 
     return {"result": "File not found"}

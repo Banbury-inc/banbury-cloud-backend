@@ -12,7 +12,7 @@ from rest_framework.response import Response
 from .delete_files import delete_files
 from .get_files_from_filepath import get_files_from_filepath as db_get_files_from_filepath
 from .update_files import update_files
-from websocket.consumers import broadcast_new_file
+from websocket.utils import broadcast_new_file
 
 import pymongo
 import json
