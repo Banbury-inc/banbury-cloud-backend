@@ -148,8 +148,9 @@ def update_sync_storage_capacity(request, username):
 def get_download_queue(request, username):
     try:
         data = json.loads(request.body)
-        device_name = data.get("device_name")
-        response = db_get_download_queue(username, device_name)
+        device_id = data.get("device_id")
+        response = db_get_download_queue(username, device_id)
+        print("response: ", response)
         return JsonResponse({
             "result": "success",
             "download_queue": response,

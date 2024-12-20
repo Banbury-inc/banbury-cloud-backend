@@ -1,6 +1,7 @@
 import json
 import os
 import asyncio
+from datetime import datetime
 from channels.generic.websocket import AsyncWebsocketConsumer
 from apps.files.search_for_file import search_for_file
 from apps.devices.declare_device_offline import declare_device_offline
@@ -124,12 +125,36 @@ class Live_Data(AsyncWebsocketConsumer):
         """Call pipeline"""
         print(f"Making device predictions for {username}")
         result = await pipeline(username)
-        # Send a request to the device to start file sync
-        await self.send(text_data=json.dumps({
-            'message': "File sync request",
-            'request_type': 'file_sync_request',
-        }))
+        print("result: ", result)
 
+        def convert_datetime(obj):
+            """Recursively convert datetime objects to ISO format strings"""
+            if isinstance(obj, datetime):
+                return obj.isoformat()
+            elif isinstance(obj, dict):
+                return {key: convert_datetime(value) for key, value in obj.items()}
+            elif isinstance(obj, list):
+                return [convert_datetime(item) for item in list(obj)]
+            return obj
+
+        # Convert all datetime objects in the result
+        result = convert_datetime(result)
+
+        print("Sending file sync request with payload:", {
+            'message': "File sync request",
+            'download_queue': result,
+            'request_type': 'file_sync_request',
+        })
+
+        try:
+            await self.send(text_data=json.dumps({
+                'message': "File sync request",
+                'download_queue': result,
+                'request_type': 'file_sync_request',
+            }))
+            print("File sync request sent successfully")
+        except Exception as e:
+            print(f"Error sending file sync request: {str(e)}")
 
     async def trigger_connect(self, username, device_name):
         """Custom function to handle what happens after connect."""
