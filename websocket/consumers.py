@@ -456,7 +456,14 @@ class Live_Data(AsyncWebsocketConsumer):
         # Write the binary data to the file
         with open(file_path, 'ab') as f:
             f.write(bytes_data)
-            print(bytes_data)
+            print(len(bytes_data))
+            await self.send(bytes_data=bytes_data)
+
+            for device_name, device_ws in connected_devices.items():
+                print(f"device_name: {device_name}")
+                print(f"device_ws: {device_ws}")
+                await device_ws['websocket'].send(bytes_data=bytes_data)
+
 
 
     async def finalize_file_transfer(self, file_name):
@@ -605,6 +612,12 @@ class Download_File_Request(AsyncWebsocketConsumer):
         with open(file_path, 'ab') as f:
             f.write(data)
             print(f"Received {len(data)} bytes and written to {file_path}")
+            # send the byte data to the requesting device
+            # Get the requesting device's websocket connection
+            for device_name, device_ws in connected_devices.items():
+                print(f"device_name: {device_name}")
+                print(f"device_ws: {device_ws}")
+                await device_ws['websocket'].send(bytes_data=data)
 
         # After writing the last chunk
         await self.send(text_data=json.dumps({
