@@ -10,6 +10,7 @@ from pymongo.server_api import ServerApi
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 import pymongo
+from datetime import datetime
 import json
 import re
 
@@ -215,7 +216,8 @@ def add_site_visitor_info(request):
 
     # Fetch location data based on the IP address
     try:
-        geo_response = requests.get(f"https://ipapi.co/{ip_address}/json/")
+        api_key = "9ab07cc6f5a49eeb6ad0c6f5cc04e34d"
+        geo_response = requests.get(f"http://api.ipapi.com/api/{ip_address}?access_key={api_key}")
         if geo_response.status_code == 200:
             geo_data = geo_response.json()
             city = geo_data.get("city", "Unknown")
