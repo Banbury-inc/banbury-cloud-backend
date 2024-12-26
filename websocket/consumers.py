@@ -11,6 +11,7 @@ from apps.devices.process_device_info import process_device_info
 from apps.predictions.pipeline import pipeline
 from apps.predictions.get_download_queue import get_download_queue
 from .utils import announce_connection
+from .src.make_device_predictions import make_device_predictions
 import time
 
 
@@ -63,6 +64,7 @@ class Live_Data(AsyncWebsocketConsumer):
         
         # Store connection with unique ID
         websocket_connections[self.connection_id] = self
+
 
         print(f"websocket_connections: {websocket_connections}")
         
@@ -170,14 +172,18 @@ class Live_Data(AsyncWebsocketConsumer):
         while self.should_run:
             print(f"Requesting device info for {device_name}")
             await self.request_device_info(username, device_name)
-            await asyncio.sleep(600)  # Use asyncio.sleep instead of time.sleep
+            await asyncio.sleep(1800) #30 minutes 
 
 
     async def _device_predictions_loop(self, username, device_name):
         while self.should_run:
-            print(f"Making device predictions for {username}")
-            await self.make_device_predictions(username, device_name)
-            await asyncio.sleep(1800)  # Use asyncio.sleep instead of time.sleep
+            
+            try:
+                await self.make_device_predictions(username, device_name)
+            except Exception as e:
+                print(f"Error in predictions loop: {str(e)}")
+                # Still sleep even if there's an error
+                await asyncio.sleep(1800)
 
     async def request_device_info(self, username, device_name):
         """Request device information from the device."""
@@ -187,31 +193,26 @@ class Live_Data(AsyncWebsocketConsumer):
         }))
 
     async def make_device_predictions(self, username, device_name):
-        """Call pipeline"""
-        print(f"Making device predictions for {username}")
-        result = await pipeline(username)
-
-        def convert_datetime(obj):
-            """Recursively convert datetime objects to ISO format strings"""
-            if isinstance(obj, datetime):
-                return obj.isoformat()
-            elif isinstance(obj, dict):
-                return {key: convert_datetime(value) for key, value in obj.items()}
-            elif isinstance(obj, list):
-                return [convert_datetime(item) for item in list(obj)]
-            return obj
-
-        # Convert all datetime objects in the result
-        result = convert_datetime(result)
-
-
         try:
+
+            start_time = datetime.now()
+            print(f"[{start_time}] Starting predictions loop for {username}")
+            result = await make_device_predictions(username, device_name)
             await self.send(text_data=json.dumps({
                 'message': "File sync request",
                 'download_queue': result,
                 'request_type': 'file_sync_request',
             }))
             print("File sync request sent successfully")
+
+            end_time = datetime.now()
+            print(f"[{end_time}] Predictions complete. Execution took: {end_time - start_time}")
+            print(f"[{end_time}] Starting 30 minute sleep...")
+            
+            await asyncio.sleep(1800)  # 30 minutes
+            
+            wake_time = datetime.now()
+            print(f"[{wake_time}] Waking up from sleep")
         except Exception as e:
             print(f"Error sending file sync request: {str(e)}")
 
@@ -308,8 +309,21 @@ class Live_Data(AsyncWebsocketConsumer):
                 
                 if isinstance(result, dict) and result.get('result') == 'success':
                     await self.trigger_connect(username, device_name)
-                    await self.start_device_info_loop(username, device_name, self.run_device_info_loop)
-                    await self.start_device_predictions_loop(username, device_name, self.run_device_predictions_loop)
+                    # await self.start_device_info_loop(username, device_name, self.run_device_info_loop)
+                    # await self.start_device_predictions_loop(username, device_name, self.run_device_predictions_loop)
+
+            if text_data_json.get('message') == "Initiate live data connection":
+                print("Received live data connection initiation request")
+                run_device_info_loop = text_data_json.get('run_device_info_loop')
+                run_device_predictions_loop = text_data_json.get('run_device_predictions_loop')
+                device_name = text_data_json.get('requesting_device_name')
+                username = text_data_json.get('username')
+                print(f"run_device_info_loop: {run_device_info_loop}")
+                print(f"run_device_predictions_loop: {run_device_predictions_loop}")
+                self.run_device_info_loop = run_device_info_loop
+                self.run_device_predictions_loop = run_device_predictions_loop
+                if run_device_predictions_loop:
+                    await self.start_device_predictions_loop(username, device_name, run_device_predictions_loop)
 
             # Handle device info response
             if text_data_json.get('message') == "device_info_response":
@@ -355,7 +369,7 @@ class Live_Data(AsyncWebsocketConsumer):
                 username = self.scope.get('username')
                 if username:
                     await self.start_device_info_loop(username, self.device_name, self.run_device_info_loop)
-                    await self.start_device_predictions_loop(username, self.device_name, self.run_device_predictions_loop)
+                #     await self.start_device_predictions_loop(username, self.device_name, self.run_device_predictions_loop)
                 else:
                     print("Warning: Cannot start device info loop without username")
             
