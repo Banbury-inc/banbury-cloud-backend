@@ -430,6 +430,8 @@ class Live_Data(AsyncWebsocketConsumer):
                 # Use the device that has the file
                 device_info = connected_devices[sending_device_name]
                 sending_device_ws = device_info['websocket']
+
+                print(f"Sending file request to {sending_device_name}. File: {self.file_name} Path: {self.file_path} Requesting device: {self.device_name} sending_device_ws: {sending_device_ws}")
                 
                 # Send the request to the device that has the file
                 await sending_device_ws.send(text_data=json.dumps({

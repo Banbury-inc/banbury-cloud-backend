@@ -1,7 +1,7 @@
 from pymongo.mongo_client import MongoClient
 from bson import ObjectId
 
-def add_device_id_to_file_sync_file(username, device_name, file_name):
+def add_device_id_to_file_sync_file(username, file_name, device_name):
     try:
         # MongoDB connection
         uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
@@ -30,12 +30,6 @@ def add_device_id_to_file_sync_file(username, device_name, file_name):
                 {'$addToSet': {'device_ids': device_id['_id']}}
             )
 
-            if result.modified_count == 0:
-                return {
-                    "error": "File sync entry not found or no changes made",
-                    "username": username,
-                    "file_name": file_name
-                }
 
             return {
                 "result": "success",

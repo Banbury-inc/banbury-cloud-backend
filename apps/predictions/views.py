@@ -121,12 +121,13 @@ def update_file_priority(request, username):
 def add_device_id_to_file_sync_file(request, username):
     try:
         data = json.loads(request.body)
-        file_id = data.get("file_id")
-        priority = data.get("priority")
+        file_name = data.get("file_name")
+        device_name = data.get("device_name")
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
 
-    response = db_add_device_id_to_file_sync_file(username, file_id, priority)
+    response = db_add_device_id_to_file_sync_file(username, file_name, device_name)
+    print(response)
 
 
     files_data = {
