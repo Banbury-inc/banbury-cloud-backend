@@ -36,7 +36,7 @@ def get_download_queue(username, device_id):
         files = []
         # Remove MongoDB _id field for JSON serialization
         for file in sync_files:
-            print(f"Processing file {len(files_available_for_download) + 1} of {len(sync_files)}")
+            print(f"Processing file {len(files_available_for_download) + 1} of {len(sync_files)} for device {device_id}")
             file["_id"] = str(file["_id"])
             
             # Find online devices that have this file
@@ -73,7 +73,8 @@ def get_download_queue(username, device_id):
 
 def main():
     # Test getting download queue for a specific device
-    result = get_download_queue("mmills", "michael-ubuntu")
+    # result = get_download_queue("mmills", "michael-mills-ubuntu")
+    result = get_download_queue("mmills", "6756092e76ebec5a4ac8cd09")
     # result = get_download_queue("mmills", "Michaels-MacBook-Pro-3.local")
     print(result)
 if __name__ == "__main__":

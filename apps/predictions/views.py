@@ -11,6 +11,7 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from .get_device_predictions import get_device_predictions as db_get_device_predictions
 from .update_sync_storage_capacity import update_sync_storage_capacity as db_update_sync_storage_capacity
+from .add_device_id_to_file_sync_file import add_device_id_to_file_sync_file as db_add_device_id_to_file_sync_file
 from .get_download_queue import get_download_queue as db_get_download_queue
 from .db_add_file_to_sync import db_add_file_to_sync as db_add_file_to_sync
 from .pipeline import pipeline
@@ -110,10 +111,30 @@ def update_file_priority(request, username):
         "message": response.get("message"),
     }
 
-
-
     return JsonResponse(files_data)
 
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+@api_view(["POST"])
+def add_device_id_to_file_sync_file(request, username):
+    try:
+        data = json.loads(request.body)
+        file_id = data.get("file_id")
+        priority = data.get("priority")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+    response = db_add_device_id_to_file_sync_file(username, file_id, priority)
+
+
+    files_data = {
+        "result": response.get("result"),
+        "message": response.get("message"),
+    }
+
+    return JsonResponse(files_data)
 
 
 @csrf_exempt

@@ -1,49 +1,51 @@
 from pymongo.mongo_client import MongoClient
 from bson import ObjectId
 
-def update_file_sync_proposed_device_ids(username, file_id, proposed_device_ids):
+def add_device_id_to_file_sync_file(username, device_name, file_name):
     try:
         # MongoDB connection
         uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
         client = MongoClient(uri)
         db = client['NeuraNet']
         user_collection = db['users']
+        device_collection = db['devices']
         file_sync_collection = db['file_sync']
-
-        if not username:
-            return {"error": "Username not provided"}
-        if not file_id:
-            return {"error": "File ID not provided"}
-        if not proposed_device_ids:
-            return {"error": "Proposed device IDs not provided"}
 
         # Find the user by username
         user = user_collection.find_one({'username': username})
         if not user:
             return {"error": "User not found"}
 
-        print(f"Updating file sync proposed device IDs for user {username} and file ID {file_id}")
+        device_id = device_collection.find_one({'device_name': device_name}, {'_id': 1})
+        if not device_id:
+            return {"error": "Device not found"}
 
-
-        # Update the proposed_device_ids for the specific file sync entry
+        # Update the device_ids array for the specific file sync entry
         try:
             result = file_sync_collection.update_one(
                 {
                     'user_id': user['_id'],
-                    '_id': ObjectId(file_id)
+                    'file_name': file_name
                 },
-                {'$set': {'proposed_device_ids': proposed_device_ids}}
+                {'$addToSet': {'device_ids': device_id['_id']}}
             )
+
+            if result.modified_count == 0:
+                return {
+                    "error": "File sync entry not found or no changes made",
+                    "username": username,
+                    "file_name": file_name
+                }
 
             return {
                 "result": "success",
                 "username": username,
-                "file_id": file_id,
+                "file_name": file_name,
                 "modified_count": result.modified_count
             }
 
         except Exception as e:
-            print(f"Error updating file sync proposed device IDs: {e}")
+            print(f"Error updating file sync priority: {e}")
             return {"error": f"Error updating file sync: {str(e)}"}
 
     except Exception as e:
@@ -52,11 +54,12 @@ def update_file_sync_proposed_device_ids(username, file_id, proposed_device_ids)
 
 def main():
     # Example proposed device IDs array
-    proposed_device_ids = ["device_id_1", "device_id_2", "device_id_3"]
-    result = update_file_sync_proposed_device_ids(
+    result = add_device_id_to_file_sync_file(
         username="mmills",
-        file_id="67560b9076ebec5a4ac8ce31",
-        proposed_device_ids=proposed_device_ids
+        # device_name="michael-mills-ubuntu",
+        device_name="Michaels-MacBook-Pro-3.local",
+        file_name="windowsxp.jpeg",
+        
     )
     print(result)
 
