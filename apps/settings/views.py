@@ -9,9 +9,23 @@ from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
+from .get_settings import get_settings as db_get_settings
 import pymongo
 import json
 import re
+
+
+
+@csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
+@require_http_methods(["POST"])
+@api_view(["POST"])
+def get_settings(request, username):
+    try:
+        response = db_get_settings(username)
+        return JsonResponse(response)
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
 
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)

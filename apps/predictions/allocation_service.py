@@ -1,3 +1,4 @@
+
 # Example data
 devices = [
     {"device_name": "Device A", "score": 90, "sync_storage_capacity_gb": 500},
@@ -26,6 +27,9 @@ class AllocationService():
             for device in devices_list
             if device.get('sync_storage_capacity_gb') is not None
         ]
+
+        # Filter out devices where use_device_in_file_sync is false
+        devices_list = [device for device in devices_list if device.get('use_device_in_file_sync') is True]
         
         # Sort devices by score (descending)
         devices_list.sort(key=lambda x: x['score'], reverse=True)

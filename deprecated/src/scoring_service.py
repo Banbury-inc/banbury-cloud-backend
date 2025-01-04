@@ -1,7 +1,7 @@
 class ScoringService():
     def __init__(self):
         pass
-    def devices(self, performance_data):
+    def devices(self, performance_data, username):
         # Define the maximum and minimum for normalization from observed or expected ranges
         max_upload_speed = max(device['predicted_upload_speed'] for device in performance_data)
         min_upload_speed = min(device['predicted_upload_speed'] for device in performance_data)

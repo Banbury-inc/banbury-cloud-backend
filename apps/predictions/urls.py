@@ -10,4 +10,5 @@ urlpatterns = [
     path("get_download_queue/<str:username>/", views.get_download_queue, name="get_download_queue"),
     path("get_device_prediction_data/<str:username>/", views.get_device_prediction_data, name="get_device_prediction_data"),
     path("add_device_id_to_file_sync_file/<str:username>/", views.add_device_id_to_file_sync_file, name="get_device_prediction_data"),
+    path("remove_file_from_sync/<str:username>/", views.remove_file_from_sync, name="remove_file_from_sync"),
 ]

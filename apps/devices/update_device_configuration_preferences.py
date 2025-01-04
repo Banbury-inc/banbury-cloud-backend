@@ -41,6 +41,7 @@ def update_device_configuration_preferences(username, device_name, device_config
     
     # Add the new boolean flag fields
     boolean_fields = {
+        'use_device_in_file_sync': False,
         'use_predicted_upload_speed': False,
         'use_predicted_download_speed': False,
         'use_predicted_gpu_usage': False,
