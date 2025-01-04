@@ -139,6 +139,7 @@ def update_device_configuration_preferences(request, username):
     data = json.loads(request.body)
     device_name = data.get("device_name")
     device_configurations = {
+        "use_device_in_file_sync": data.get("use_device_in_file_sync"),
         "use_predicted_cpu_usage": data.get("use_predicted_cpu_usage"),
         "use_predicted_gpu_usage": data.get("use_predicted_gpu_usage"),
         "use_predicted_ram_usage": data.get("use_predicted_ram_usage"),

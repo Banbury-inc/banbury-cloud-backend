@@ -36,6 +36,7 @@ def get_device_predictions(username):
             "predicted_gpu_usage": prediction.get("predicted_gpu_usage"),
             "predicted_cpu_usage": prediction.get("predicted_cpu_usage"),
             "predicted_ram_usage": prediction.get("predicted_ram_usage"),
+            "use_device_in_file_sync": prediction.get("use_device_in_file_sync"),
             "use_predicted_upload_speed": prediction.get("use_predicted_upload_speed"),
             "use_predicted_download_speed": prediction.get("use_predicted_download_speed"),
             "use_predicted_gpu_usage": prediction.get("use_predicted_gpu_usage"),
