@@ -17,6 +17,7 @@ from .db_add_file_to_sync import db_add_file_to_sync as db_add_file_to_sync
 from .pipeline import pipeline
 from .get_file_sync import get_file_sync as db_get_file_sync
 from .update_file_priority import update_file_priority as db_update_file_priority
+from .db_remove_file_from_sync import db_remove_file_from_sync as db_remove_file_from_sync
 import pymongo
 import json
 import re
@@ -43,6 +44,23 @@ def add_file_to_sync(request, username):
     device_name = data.get("device_name")
     file_path = data.get("file_path")
     response = db_add_file_to_sync(username, device_name, file_path)
+
+    user_data = {
+        "result": response,
+        "username": username,  # Return username if success, None if fail
+    }
+
+    return JsonResponse(user_data)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+@api_view(["POST"])
+def remove_file_from_sync(request, username):
+    data = json.loads(request.body)
+    device_name = data.get("device_name")
+    file_path = data.get("file_path")
+    response = db_remove_file_from_sync(username, device_name, file_path)
 
     user_data = {
         "result": response,
