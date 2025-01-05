@@ -59,6 +59,12 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
+    - name: Create .env file
+      run: |
+        echo "GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}" >> .env
+        echo "GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}" >> .env
+        echo "REDIRECT_URI=${{ secrets.REDIRECT_URI }}" >> .env
+
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v1
       with:
