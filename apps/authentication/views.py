@@ -13,6 +13,11 @@ import pymongo
 from datetime import datetime
 import json
 import re
+from django.conf import settings
+from google_auth_oauthlib.flow import Flow
+from google.oauth2 import id_token
+from google.auth.transport import requests
+from core.config import GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, REDIRECT_URI
 
 
 @api_view(["GET"])
@@ -44,6 +49,94 @@ def login(request):
         form = LoginForm()
 
     return render(request, "login.html", {"form": form})
+
+
+
+# Configure Google OAuth2
+SCOPES = [
+    "https://www.googleapis.com/auth/userinfo.profile",
+    "https://www.googleapis.com/auth/userinfo.email",
+    "openid"
+]
+
+# Create the flow object
+flow = Flow.from_client_config(
+    {
+        "web": {
+            "client_id": GOOGLE_CLIENT_ID,
+            "client_secret": GOOGLE_CLIENT_SECRET,
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token",
+            "redirect_uris": [REDIRECT_URI],
+        }
+    },
+    scopes=SCOPES
+)
+
+def google(request):
+    """Initialize Google OAuth2 flow"""
+    flow.redirect_uri = REDIRECT_URI
+    
+    # Generate the authorization URL without state
+    authorization_url, _ = flow.authorization_url(
+        access_type='offline',
+        include_granted_scopes='true',
+        prompt='consent'
+    )
+    
+    return JsonResponse({
+        "authUrl": authorization_url
+    })
+
+def google_callback(request):
+    """Handle the OAuth2 callback"""
+    code = request.GET.get("code")
+    
+    if not code:
+        return JsonResponse({
+            "success": False,
+            "error": "No authorization code provided"
+        }, status=400)
+    
+    try:
+        # Reset the flow with the same scopes
+        flow.redirect_uri = REDIRECT_URI
+        
+        # Exchange the authorization code for credentials
+        flow.fetch_token(code=code)
+        
+        # Get the ID token from credentials
+        credentials = flow.credentials
+        
+        # Verify the ID token
+        id_info = id_token.verify_oauth2_token(
+            credentials.id_token, 
+            requests.Request(), 
+            GOOGLE_CLIENT_ID
+        )
+        
+        # Extract user information
+        user_info = {
+            "email": id_info.get("email"),
+            "name": id_info.get("name"),
+            "first_name": id_info.get("given_name"),
+            "last_name": id_info.get("family_name"),
+            "picture": id_info.get("picture")
+        }
+        
+        return JsonResponse({
+            "success": True,
+            "user": user_info,
+            "id_info": id_info,
+            "message": "Successfully authenticated with Google"
+        })
+        
+    except Exception as e:
+        print(f"Error in callback: {str(e)}")
+        return JsonResponse({
+            "success": False,
+            "error": str(e)
+        }, status=400)
 
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
