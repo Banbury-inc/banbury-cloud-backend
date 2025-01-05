@@ -344,3 +344,33 @@ def get_profile_picture(request, username):
                 print(f"Error decoding image: {e}")
                 return HttpResponse(status=400)
     return HttpResponse(status=404)
+
+
+@api_view(["GET"])
+def typeahead(request, search):
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client["NeuraNet"]
+    user_collection = db["users"]
+    
+    # Find users where username contains the search term (case insensitive)
+    users = user_collection.find(
+        {"username": {"$regex": search, "$options": "i"}},
+        {"username": 1, "first_name": 1, "last_name": 1, "_id": 0} # Only return these fields
+    ).limit(10) # Limit results
+    
+    # Convert cursor to list and format response
+    user_list = []
+    for user in users:
+        user_list.append({
+            "username": user.get("username"),
+            "first_name": user.get("first_name"),
+            "last_name": user.get("last_name")
+        })
+    
+    response = {
+        "result": "success",
+        "users": user_list,
+    }
+        
+    return JsonResponse(response)

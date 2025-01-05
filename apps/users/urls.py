@@ -10,4 +10,5 @@ urlpatterns = [
     path("update_profile/", views.update_user_profile, name="update_profile"),
     path("change_profile/<str:username>/<str:password>/<str:first_name>/<str:last_name>/<str:email>/",views.change_profile, name="change_profile"),
     path("get_profile_picture/<str:username>/", views.get_profile_picture, name="get_profile_picture"),
+    path("typeahead/<str:search>/", views.typeahead, name="typeahead"),
 ]
