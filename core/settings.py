@@ -54,7 +54,6 @@ INSTALLED_APPS = [
     'apps.devices',
     'apps.files',
     'apps.predictions',
-    'apps.profiles',
     'apps.sessions',
     'apps.settings',
     'apps.users',
