@@ -197,38 +197,79 @@ def getuserinfo4(request, username, password):
 
 
 
-@api_view(["GET"])
-def update_user_profile(request, username):
-    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
-    client = pymongo.MongoClient(uri, server_api=ServerApi("1"))
-    db = client["NeuraNet"]
-    user_collection = db["users"]
+@api_view(["POST"])
+def update_user_profile(request):
+    try:
+        uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+        client = pymongo.MongoClient(uri, server_api=ServerApi("1"))
+        db = client["NeuraNet"]
+        user_collection = db["users"]
 
-    user = user_collection.find_one({"username": username})
+        data = json.loads(request.body)
 
-    if request.method == "POST":
-        form = UserProfileForm(request.POST)
-        if form.is_valid():
-            user_collection.update_one(
-                {"username": username},
-                {
-                    "$set": {
-                        "first_name": form.cleaned_data["first_name"]
-                        or user["first_name"],
-                        "last_name": form.cleaned_data["last_name"]
-                        or user["last_name"],
-                        "phone_number": form.cleaned_data["phone_number"]
-                        or user["phone_number"],
-                        "email": form.cleaned_data["email"] or user["email"],
-                    }
-                },
-            )
-            return redirect("dashboard", username=username)
-    else:
-        form = UserProfileForm(initial=user)
 
-    return render(request, "update_profile.html", {"form": form, "username": username})
+        username = data.get("username")
+        password = data.get("password")
+        first_name = data.get("first_name")
+        last_name = data.get("last_name") 
+        phone_number = data.get("phone_number")
+        email = data.get("email")
+        picture = data.get("picture")
 
+        # Find the user
+        user = user_collection.find_one({"username": username})
+        if not user:
+            return JsonResponse({
+                "result": "fail",
+                "message": "User not found"
+            })
+
+        # Build update dictionary with only changed fields
+        update_fields = {}
+        if password and password != "undefined":
+            password_bytes = password.encode("utf-8")
+            update_fields["password"] = bcrypt.hashpw(password_bytes, bcrypt.gensalt())
+        if first_name:
+            update_fields["first_name"] = first_name
+        if last_name:
+            update_fields["last_name"] = last_name
+        if phone_number:
+            update_fields["phone_number"] = phone_number
+        if email:
+            update_fields["email"] = email
+        if picture:
+            # Check if picture size exceeds 2.5MB (2.5 * 1024 * 1024 bytes)
+            picture_size = len(picture.encode('utf-8'))
+            if picture_size > 2.5 * 1024 * 1024:
+                return JsonResponse({
+                    "result": "photo_too_large", 
+                    "message": "Profile picture is too large. Maximum size is 2.5MB"
+                })
+            update_fields["picture"] = picture
+
+        try:
+            # Only update if there are changes
+            if update_fields:
+                user_collection.update_one(
+                        {"username": username},
+                        {"$set": update_fields}
+                    )
+        except:
+            return JsonResponse({
+                "result": "fail",
+                "message": "An error occurred"
+            })
+
+        return JsonResponse({
+            "result": "success",
+            "message": "Profile updated successfully"
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            "result": "fail",
+            "message": f"An error occurred: {str(e)}"
+        }, status=500)
 
 
 
