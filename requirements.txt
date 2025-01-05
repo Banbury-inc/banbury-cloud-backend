@@ -29,6 +29,8 @@ flatbuffers==24.3.25
 fonttools==4.54.1
 gast==0.6.0
 google-pasta==0.2.0
+google-auth==2.37.0
+google-auth-oauthlib==1.2.1
 grpcio==1.67.1
 h5py==3.12.1
 hyperlink==21.0.0
@@ -61,6 +63,7 @@ pymongo==4.9.2
 pyOpenSSL==24.2.1
 pyparsing==3.2.0
 python-dateutil==2.9.0.post0
+python-dotenv==1.0.1
 motor==3.6.0
 pytz==2024.2
 redis==4.2.0
