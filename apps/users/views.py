@@ -374,3 +374,180 @@ def typeahead(request, search):
     }
         
     return JsonResponse(response)
+
+@api_view(["POST"])
+def send_friend_request(request):
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client["NeuraNet"]
+    user_collection = db["users"]
+
+    data = json.loads(request.body)
+    username = data.get("username")
+    friend_username = data.get("friend_username")
+    user_collection = db["users"]
+    user = user_collection.find_one({"username": username})
+    friend = user_collection.find_one({"username": friend_username})
+
+    if not user:
+        return JsonResponse({"result": "fail", "message": "User not found"})
+    if not friend:
+        return JsonResponse({"result": "fail", "message": "Friend not found"})
+
+    if str(friend["_id"]) in user.get("friends", []):
+        return JsonResponse({"result": "fail", "message": "Friend already added"})
+    if str(friend["_id"]) in user.get("friend_requests", []):
+        return JsonResponse({"result": "fail", "message": "Friend request already sent"})
+
+    user_collection.update_one(
+        {"username": friend_username},
+        {"$addToSet": {"friend_requests": str(user["_id"])}}
+    )
+
+    return JsonResponse({"result": "success", "message": "Friend request sent successfully"})
+
+
+@api_view(["POST"])
+def remove_friend(request):
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client["NeuraNet"]
+    user_collection = db["users"]
+
+    data = json.loads(request.body)
+    username = data.get("username")
+    friend_username = data.get("friend_username")
+
+    user = user_collection.find_one({"username": username})
+    friend = user_collection.find_one({"username": friend_username})
+
+    if not user:
+        return JsonResponse({"result": "fail", "message": "User not found"})
+    if not friend:
+        return JsonResponse({"result": "fail", "message": "Friend not found"})
+
+    if str(friend["_id"]) not in user.get("friends", []):
+        return JsonResponse({"result": "fail", "message": "Friend not found"})
+    
+    user_collection.update_one(
+        {"username": username},
+        {"$pull": {"friends": str(friend["_id"])}}
+    )
+    user_collection.update_one(
+        {"username": friend_username},
+        {"$pull": {"friends": str(user["_id"])}}
+    )
+    return JsonResponse({"result": "success", "message": "Friend removed successfully"})
+
+
+@api_view(["GET"])
+def get_friends(request, username):
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client["NeuraNet"]
+    user_collection = db["users"]
+
+    user = user_collection.find_one({"username": username})
+    if not user:
+        return JsonResponse({"result": "fail", "message": "User not found"})
+
+    friends = user.get("friends", [])
+    friend_list = []
+    for friend_id in friends:
+        friend = user_collection.find_one({"_id": friend_id})
+        if friend:
+            friend_list.append({"username": friend.get("username"), "first_name": friend.get("first_name"), "last_name": friend.get("last_name")})
+
+
+    return JsonResponse({"result": "success", "friends": friend_list})
+
+
+@api_view(["GET"])
+def get_friend_requests(request, username):
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client["NeuraNet"]
+    user_collection = db["users"]
+    user = user_collection.find_one({"username": username})
+    if not user:
+        return JsonResponse({"result": "fail", "message": "User not found"})
+
+    friend_requests = user.get("friend_requests", [])
+    friend_requests_list = []
+    for friend_id in friend_requests:
+        friend = user_collection.find_one({"_id": friend_id})
+        if friend:
+            friend_requests_list.append({"username": friend.get("username"), "first_name": friend.get("first_name"), "last_name": friend.get("last_name")})
+
+
+    return JsonResponse({"result": "success", "friend_requests": friend_requests_list})
+
+
+@api_view(["POST"])
+def accept_friend_request(request):
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client["NeuraNet"]
+    user_collection = db["users"]
+
+    data = json.loads(request.body)
+    username = data.get("username")
+    friend_username = data.get("friend_username")
+
+    user = user_collection.find_one({"username": username})
+    friend = user_collection.find_one({"username": friend_username})
+
+    user_collection.update_one(
+        {"username": username},
+        {"$pull": {"friend_requests": str(friend["_id"])}}
+    )
+
+    user_collection.update_one(
+        {"username": friend_username},
+        {"$addToSet": {"friends": str(user["_id"])}}
+    )
+
+    user_collection.update_one(
+        {"username": username},
+        {"$addToSet": {"friends": str(friend["_id"])}}
+    )
+
+    return JsonResponse({"result": "success", "message": "Friend request accepted successfully"})
+
+
+@api_view(["POST"])
+def reject_friend_request(request):
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client["NeuraNet"]
+    user_collection = db["users"]
+
+    data = json.loads(request.body)
+    username = data.get("username")
+    friend_username = data.get("friend_username")
+
+    user = user_collection.find_one({"username": username})
+    friend = user_collection.find_one({"username": friend_username})
+
+    if not user:
+        return JsonResponse({"result": "fail", "message": "User not found"})
+    if not friend:
+        return JsonResponse({"result": "fail", "message": "Friend not found"})
+
+    if str(friend["_id"]) not in user.get("friend_requests", []):
+        return JsonResponse({"result": "fail", "message": "Friend request not found"})
+
+    user_collection.update_one(
+        {"username": username},
+        {"$pull": {"friend_requests": str(friend["_id"])}}
+    )
+
+    user_collection.update_one(
+        {"username": friend_username},
+        {"$pull": {"friend_requests": str(user["_id"])}}
+    )
+
+    return JsonResponse({"result": "success", "message": "Friend request rejected successfully"})
+
+
+
