@@ -613,3 +613,50 @@ def get_scanned_folders(request, username):
         "result": "success",
         "scanned_folders": device.get("scanned_folders", [])
     })
+
+@csrf_exempt
+@require_http_methods(["POST"])
+@api_view(["POST"])
+def share_file(request):
+    try:
+        data = json.loads(request.body)
+        file_name = data.get("file_name")
+        username = data.get("username")
+        friend_username = data.get("friend_username")
+
+
+        # MongoDB connection
+        uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+        client = MongoClient(uri)
+        db = client["NeuraNet"]
+        user_collection = db["users"]
+        device_collection = db["devices"]
+        file_collection = db["files"]
+
+
+        # Find the user by username
+        user = user_collection.find_one({"username": username})
+
+        if not user:
+            return JsonResponse({"error": "User not found."}, status=404)
+
+        # Find the friend by username
+        friend = user_collection.find_one({"username": friend_username})
+        if not friend:
+            return JsonResponse({"error": "Friend not found."}, status=404)
+
+        # Find the file by file_name
+        file = file_collection.find_one({"file_name": file_name})
+        if not file:
+            return JsonResponse({"error": "File not found."}, status=404)
+        
+
+        file_collection.update_one(
+            {"file_name": file_name},
+            {"$addToSet": {"shared_with": friend["_id"]}}
+        )
+        return JsonResponse({"status": "success", "message": "File shared successfully"})
+
+
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
