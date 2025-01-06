@@ -425,17 +425,15 @@ def remove_friend(request):
         return JsonResponse({"result": "fail", "message": "User not found"})
     if not friend:
         return JsonResponse({"result": "fail", "message": "Friend not found"})
-
-    if str(friend["_id"]) not in user.get("friends", []):
-        return JsonResponse({"result": "fail", "message": "Friend not found"})
     
     user_collection.update_one(
         {"username": username},
-        {"$pull": {"friends": str(friend["_id"])}}
+        {"$pull": {"friends": friend["_id"]}}
     )
+
     user_collection.update_one(
         {"username": friend_username},
-        {"$pull": {"friends": str(user["_id"])}}
+        {"$pull": {"friends": user["_id"]}}
     )
     return JsonResponse({"result": "success", "message": "Friend removed successfully"})
 
