@@ -401,7 +401,7 @@ def send_friend_request(request):
 
     user_collection.update_one(
         {"username": friend_username},
-        {"$addToSet": {"friend_requests": str(user["_id"])}}
+        {"$addToSet": {"friend_requests": user["_id"]}}
     )
 
     return JsonResponse({"result": "success", "message": "Friend request sent successfully"})
@@ -499,17 +499,17 @@ def accept_friend_request(request):
 
     user_collection.update_one(
         {"username": username},
-        {"$pull": {"friend_requests": str(friend["_id"])}}
+        {"$pull": {"friend_requests": friend["_id"]}}
     )
 
     user_collection.update_one(
         {"username": friend_username},
-        {"$addToSet": {"friends": str(user["_id"])}}
+        {"$addToSet": {"friends": user["_id"]}}
     )
 
     user_collection.update_one(
         {"username": username},
-        {"$addToSet": {"friends": str(friend["_id"])}}
+        {"$addToSet": {"friends": friend["_id"]}}
     )
 
     return JsonResponse({"result": "success", "message": "Friend request accepted successfully"})
@@ -539,12 +539,12 @@ def reject_friend_request(request):
 
     user_collection.update_one(
         {"username": username},
-        {"$pull": {"friend_requests": str(friend["_id"])}}
+        {"$pull": {"friend_requests": friend["_id"]}}
     )
 
     user_collection.update_one(
         {"username": friend_username},
-        {"$pull": {"friend_requests": str(user["_id"])}}
+        {"$pull": {"friend_requests": user["_id"]}}
     )
 
     return JsonResponse({"result": "success", "message": "Friend request rejected successfully"})

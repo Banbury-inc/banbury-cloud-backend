@@ -13,8 +13,8 @@ urlpatterns = [
     path("typeahead/<str:search>/", views.typeahead, name="typeahead"),
     path("send_friend_request/", views.send_friend_request, name="send_friend_request"),
     path("remove_friend/", views.remove_friend, name="remove_friend"),
-    path("get_friends/", views.get_friends, name="get_friends"),
-    path("get_friend_requests/", views.get_friend_requests, name="get_friend_requests"),
+    path("get_friends/<str:username>/", views.get_friends, name="get_friends"),
+    path("get_friend_requests/<str:username>/", views.get_friend_requests, name="get_friend_requests"),
     path("accept_friend_request/", views.accept_friend_request, name="accept_friend_request"),
     path("reject_friend_request/", views.reject_friend_request, name="reject_friend_request"),
 ]
