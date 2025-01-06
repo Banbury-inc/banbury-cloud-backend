@@ -113,10 +113,12 @@ def add_files(request, username):
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
     db = client["NeuraNet"]
+    user_collection = db["users"]
     file_collection = db["files"]
     device_collection = db["devices"]
-    # Find the device_id based on device_name
-    device = device_collection.find_one({"device_name": device_name})
+    # Find the device_id based on device_name and matching user_id
+    user = user_collection.find_one({"username": username})
+    device = device_collection.find_one({"device_name": device_name, "user_id": user["_id"]})
     if not device:
         return JsonResponse({
             "result": "device_not_found",
@@ -158,6 +160,8 @@ def add_files(request, username):
             "file_parent": file_data.get("file_parent"),
             "original_device": file_data.get("original_device"),
             "kind": file_data.get("kind"),
+            "shared_with": file_data.get("shared_with"),
+            "is_public": file_data.get("is_public"),
         }
         new_files.append(new_file)
     # If no valid files to add, return early
