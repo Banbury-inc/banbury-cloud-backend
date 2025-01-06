@@ -532,9 +532,6 @@ def reject_friend_request(request):
     if not friend:
         return JsonResponse({"result": "fail", "message": "Friend not found"})
 
-    if str(friend["_id"]) not in user.get("friend_requests", []):
-        return JsonResponse({"result": "fail", "message": "Friend request not found"})
-
     user_collection.update_one(
         {"username": username},
         {"$pull": {"friend_requests": friend["_id"]}}
