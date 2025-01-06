@@ -660,3 +660,90 @@ def share_file(request):
 
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+@api_view(["POST"])
+def make_file_public(request):
+    try:
+        data = json.loads(request.body)
+        file_name = data.get("file_name")
+        username = data.get("username")
+
+
+        # MongoDB connection
+        uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+        client = MongoClient(uri)
+        db = client["NeuraNet"]
+        user_collection = db["users"]
+        device_collection = db["devices"]
+        file_collection = db["files"]
+
+
+        # Find the user by username
+        user = user_collection.find_one({"username": username})
+
+        if not user:
+            return JsonResponse({"error": "User not found."}, status=404)
+
+
+        # Find the file by file_name
+        file = file_collection.find_one({"file_name": file_name})
+        if not file:
+            return JsonResponse({"error": "File not found."}, status=404)
+        
+
+        file_collection.update_one(
+            {"file_name": file_name},
+            {"$set": {"is_public": True}}
+        )
+        return JsonResponse({"status": "success", "message": "File made public successfully"})
+
+
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+@api_view(["POST"])
+def make_file_private(request):
+    try:
+        data = json.loads(request.body)
+        file_name = data.get("file_name")
+        username = data.get("username")
+
+
+        # MongoDB connection
+        uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+        client = MongoClient(uri)
+        db = client["NeuraNet"]
+        user_collection = db["users"]
+        device_collection = db["devices"]
+        file_collection = db["files"]
+
+
+        # Find the user by username
+        user = user_collection.find_one({"username": username})
+
+        if not user:
+            return JsonResponse({"error": "User not found."}, status=404)
+
+
+        # Find the file by file_name
+        file = file_collection.find_one({"file_name": file_name})
+        if not file:
+            return JsonResponse({"error": "File not found."}, status=404)
+        
+
+        file_collection.update_one(
+            {"file_name": file_name},
+            {"$set": {"is_public": False}}
+        )
+        return JsonResponse({"status": "success", "message": "File made private successfully"})
+
+
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
