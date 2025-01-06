@@ -674,6 +674,7 @@ def make_file_public(request):
         data = json.loads(request.body)
         file_name = data.get("file_name")
         username = data.get("username")
+        device_name = data.get("device_name")
 
 
         # MongoDB connection
@@ -691,17 +692,26 @@ def make_file_public(request):
         if not user:
             return JsonResponse({"error": "User not found."}, status=404)
 
+        device = device_collection.find_one({"user_id": user["_id"], "device_name": device_name})
+
+        print(device)
+        print()
+
 
         # Find the file by file_name
         file = file_collection.find_one({"file_name": file_name})
         if not file:
             return JsonResponse({"error": "File not found."}, status=404)
+
+        print(file)
         
 
         file_collection.update_one(
-            {"file_name": file_name},
+            {"file_name": file_name, "device_id": device["_id"]},
             {"$set": {"is_public": True}}
         )
+
+
         return JsonResponse({"status": "success", "message": "File made public successfully"})
 
 
@@ -717,6 +727,7 @@ def make_file_private(request):
     try:
         data = json.loads(request.body)
         file_name = data.get("file_name")
+        device_name = data.get("device_name")
         username = data.get("username")
 
 
@@ -735,7 +746,7 @@ def make_file_private(request):
         if not user:
             return JsonResponse({"error": "User not found."}, status=404)
 
-
+        device = device_collection.find_one({"user_id": user["_id"], "device_name": device_name})
         # Find the file by file_name
         file = file_collection.find_one({"file_name": file_name})
         if not file:
@@ -743,7 +754,7 @@ def make_file_private(request):
         
 
         file_collection.update_one(
-            {"file_name": file_name},
+            {"file_name": file_name, "device_id": device["_id"]},
             {"$set": {"is_public": False}}
         )
         return JsonResponse({"status": "success", "message": "File made private successfully"})

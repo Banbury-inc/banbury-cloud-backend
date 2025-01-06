@@ -52,6 +52,12 @@ def get_files_from_filepath(username, filepath):
                 "file_type": 1,
                 "file_path": 1,
                 "file_size": 1,
+                "shared_with": {
+                    "$ifNull": ["$shared_with", "$$REMOVE"]
+                },
+                "is_public": {
+                    "$ifNull": ["$is_public", "$$REMOVE"]
+                },
                 "date_uploaded": 1,
                 "kind": 1,
                 "device_name": {"$arrayElemAt": ["$device.device_name", 0]},
@@ -77,6 +83,12 @@ def get_files_from_filepath(username, filepath):
                 "file_type": 1,
                 "file_path": 1,
                 "file_size": 1,
+                "shared_with": {
+                    "$ifNull": ["$shared_with", "$$REMOVE"]
+                },
+                "is_public": {
+                    "$ifNull": ["$is_public", "$$REMOVE"]
+                },
                 "date_uploaded": 1,
                 "kind": 1,
                 "device_name": {"$arrayElemAt": ["$device.device_name", 0]},
@@ -144,6 +156,12 @@ def get_files_from_filepath(username, filepath):
                 "file_type": 1,
                 "file_path": 1,
                 "file_size": 1,
+                "shared_with": {
+                    "$ifNull": ["$shared_with", "$$REMOVE"]
+                },
+                "is_public": {
+                    "$ifNull": ["$is_public", "$$REMOVE"]
+                },
                 "date_uploaded": 1,
                 "kind": 1,
                 "device_name": {"$arrayElemAt": ["$device.device_name", 0]},
