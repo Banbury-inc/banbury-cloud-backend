@@ -353,24 +353,42 @@ def typeahead(request, search):
     db = client["NeuraNet"]
     user_collection = db["users"]
     
-    # Find users where username contains the search term (case insensitive)
-    users = user_collection.find(
-        {"username": {"$regex": search, "$options": "i"}},
-        {"username": 1, "first_name": 1, "last_name": 1, "_id": 0} # Only return these fields
-    ).limit(10) # Limit results
+    # Create text index for faster searching (run this once)
+    # user_collection.create_index([
+    #     ("username", "text"),
+    #     ("first_name", "text"),
+    #     ("last_name", "text"),
+    #     ("email", "text")
+    # ])
     
-    # Convert cursor to list and format response
-    user_list = []
-    for user in users:
-        user_list.append({
-            "username": user.get("username"),
-            "first_name": user.get("first_name"),
-            "last_name": user.get("last_name")
-        })
+    # Build the query for multiple fields
+    search_query = {
+        "$or": [
+            {"username": {"$regex": f"^{search}", "$options": "i"}},  # Starts with search term
+            {"first_name": {"$regex": f"^{search}", "$options": "i"}},
+            {"last_name": {"$regex": f"^{search}", "$options": "i"}},
+            {"email": {"$regex": f"^{search}", "$options": "i"}}
+        ]
+    }
+    
+    # Project only needed fields and limit results
+    users = user_collection.find(
+        search_query,
+        {
+            "username": 1, 
+            "first_name": 1, 
+            "last_name": 1, 
+            "email": 1,
+            "_id": 0
+        }
+    ).limit(10)
+    
+    # Convert cursor to list
+    user_list = list(users)
     
     response = {
         "result": "success",
-        "users": user_list,
+        "users": user_list
     }
         
     return JsonResponse(response)
