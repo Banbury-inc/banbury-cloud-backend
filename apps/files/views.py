@@ -792,3 +792,14 @@ def get_shared_files_from_filepath(request):
         return JsonResponse({"status": "success", "shared_files": shared_files})
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+@api_view(["GET"])
+def download_file(request, username, file_id, is_file_sync):
+    try:
+        download_file(username, file_id, is_file_sync)
+        return JsonResponse({"status": "success", "message": "File downloaded successfully"})
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
