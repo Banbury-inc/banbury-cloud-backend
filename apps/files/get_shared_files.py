@@ -10,6 +10,7 @@ try:
     db = client["NeuraNet"]
     user_collection = db["users"]
     file_collection = db["files"]
+    device_collection = db["devices"]
 except Exception as e:
     print(f"Error connecting to MongoDB: {e}")
 
@@ -27,6 +28,16 @@ def get_shared_files(username):
 
     file_data = []
     for file in shared_files:
+        # Look up device availability
+        device_id = file.get("device_id")
+        device = device_collection.find_one({"_id": device_id, "user_id": user["_id"]})
+        device_available = device.get("available") if device else None
+
+        # Look up the owner's information
+        owner_id = device.get("user_id")
+        owner = user_collection.find_one({"_id": owner_id})
+        owner_username = owner.get("username") if owner else None
+
         file_data.append({
             "file_name": file.get("file_name"),
             "file_path": file.get("file_path"),
@@ -35,6 +46,11 @@ def get_shared_files(username):
             "is_public": file.get("is_public"),
             "device_name": file.get("device_name"),
             "device_id": str(file.get("device_id")),
+            "available": device_available,
+            "original_device": file.get("original_device"),
+            "date_uploaded": file.get("date_uploaded"),
+            "date_modified": file.get("date_modified"),
+            "owner": owner_username,
         })
 
     shared_files = {
