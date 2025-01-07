@@ -13,6 +13,9 @@ from .delete_files import delete_files
 from .get_files_from_filepath import get_files_from_filepath as db_get_files_from_filepath
 from .update_files import update_files
 from websocket.utils import broadcast_new_file
+from .get_shared_files import get_shared_files as db_get_shared_files
+
+
 
 import pymongo
 import json
@@ -760,5 +763,32 @@ def make_file_private(request):
         return JsonResponse({"status": "success", "message": "File made private successfully"})
 
 
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+@api_view(["POST"])
+def get_shared_files(request):
+    try:
+        data = json.loads(request.body)
+        username = data.get("username")
+        shared_files = db_get_shared_files(username)
+        return JsonResponse({"status": "success", "shared_files": shared_files})
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+@api_view(["POST"])
+def get_shared_files_from_filepath(request):
+    try:
+        data = json.loads(request.body)
+        username = data.get("username")
+        filepath = data.get("filepath")
+        shared_files = get_shared_files_from_filepath(username, filepath)
+        return JsonResponse({"status": "success", "shared_files": shared_files})
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)

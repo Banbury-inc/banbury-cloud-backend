@@ -17,5 +17,6 @@ urlpatterns = [
     path("share_file/", views.share_file, name="share_file"),
     path("make_file_public/", views.make_file_public, name="make_file_public"),
     path("make_file_private/", views.make_file_private, name="make_file_private"),
-    # path("get_shared_files/<str:username>/", views.get_shared_files, name="get_shared_files"),
+    path("get_shared_files/", views.get_shared_files, name="get_shared_files"),
+    path("get_shared_files_from_filepath/", views.get_shared_files_from_filepath, name="get_shared_files_from_filepath"),
 ]
