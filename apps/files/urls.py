@@ -19,6 +19,5 @@ urlpatterns = [
     path("make_file_private/", views.make_file_private, name="make_file_private"),
     path("get_shared_files/", views.get_shared_files, name="get_shared_files"),
     path("get_shared_files_from_filepath/", views.get_shared_files_from_filepath, name="get_shared_files_from_filepath"),
-    path("download_file/<str:username>/<str:file_id>/<bool:is_file_sync>/", views.download_file, name="download_file"),
-
+    path("get_file_info/<str:username>/<str:file_id>/", views.get_file_info, name="get_file_info"),
 ]

@@ -12,6 +12,7 @@ from rest_framework.response import Response
 from .delete_files import delete_files
 from .get_files_from_filepath import get_files_from_filepath as db_get_files_from_filepath
 from .update_files import update_files
+from .get_file_info import get_file_info as db_get_file_info
 from websocket.utils import broadcast_new_file
 from .get_shared_files import get_shared_files as db_get_shared_files
 
@@ -801,5 +802,17 @@ def download_file(request, username, file_id, is_file_sync):
     try:
         download_file(username, file_id, is_file_sync)
         return JsonResponse({"status": "success", "message": "File downloaded successfully"})
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+@api_view(["GET"])
+def get_file_info(request, username, file_id):
+    try:
+        file_info = db_get_file_info(username, file_id)
+        return JsonResponse({"status": "success", "file_info": file_info})
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
