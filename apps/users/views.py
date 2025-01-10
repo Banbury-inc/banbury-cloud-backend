@@ -15,7 +15,7 @@ import re
 from bson import json_util
 import base64
 from .forms import UserProfileForm
-
+from .src.getUserFriends import getUserFriends
 
 @api_view(["GET"])
 def getuserinfo2(request, username):
@@ -87,8 +87,11 @@ def getuserinfo(request, username):
         "email": user.get("email", None),
         "picture": picture_data,
         "devices": json.loads(json_util.dumps(user.get("devices", []))),  # Handle potential ObjectIds in devices
-        "status": "success"
+        "status": "success",
+        "friends": json.loads(json_util.dumps(user.get("friends", [])))  # Convert ObjectIds to strings
     }
+
+
 
     return JsonResponse(user_data, safe=False)
 
@@ -561,6 +564,16 @@ def reject_friend_request(request):
     )
 
     return JsonResponse({"result": "success", "message": "Friend request rejected successfully"})
+
+
+
+@api_view(["GET"])
+def get_user_friends(request, username):
+    friends = getUserFriends(username)
+    if friends: 
+        return JsonResponse({"result": "success", "friends": friends})
+    else:
+        return JsonResponse({"result": "fail", "message": "No friends found"})
 
 
 
