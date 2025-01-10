@@ -4,7 +4,7 @@ import bcrypt
 from django.shortcuts import render, redirect
 from django.http import HttpResponse, JsonResponse
 from ..forms import LoginForm
-import requests
+import requests as http_requests
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
 from rest_framework.decorators import api_view
@@ -16,9 +16,10 @@ import re
 from django.conf import settings
 from google_auth_oauthlib.flow import Flow
 from google.oauth2 import id_token
-from google.auth.transport import requests
+from google.auth.transport import requests as google_requests
 from dotenv import load_dotenv
 import os
+import base64
 
 load_dotenv()
 
@@ -119,7 +120,7 @@ def google_callback(request):
         # Verify the ID token
         id_info = id_token.verify_oauth2_token(
             credentials.id_token, 
-            requests.Request(), 
+            google_requests.Request(), 
             GOOGLE_CLIENT_ID
         )
         
@@ -176,50 +177,93 @@ def login_api(request):
 
 
 
-@api_view(["GET"])
-def register(request, username, password, firstName, lastName):
-    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
-    client = MongoClient(uri)
-    db = client["myDatabase"]
-    user_collection = db["users"]
-    user = user_collection.find_one({"username": username})
+@csrf_exempt
+@require_http_methods(["POST"])
+@api_view(["POST"])
+def register(request):
+    # WE ARE USING THIS ENDPOINT AGAIN IN 3.3
 
-    password_bytes = password.encode("utf-8")  # Encode the string to bytes
-    hashed_password = bcrypt.hashpw(password_bytes, bcrypt.gensalt())
-    if user:
-        user_data = {"result": "user_already_exists", "username": username}
-        return JsonResponse(user_data)
-
-    new_user = {
-        "username": username,
-        "password": hashed_password,
-        "first_name": firstName,
-        "last_name": lastName,
-        "phone_number": None,
-        "email": None,
-        "devices": [],
-        "number_of_devices": [],
-        "number_of_files": [],
-        "overall_date_added": [],
-        "total_average_download_speed": [],
-        "total_average_upload_speed": [],
-        "total_device_storage": [],
-        "total_average_cpu_usage": [],
-        "total_average_gpu_usage": [],
-        "total_average_ram_usage": [],
-    }
 
     try:
-        user_collection.insert_one(new_user)
-    except Exception as e:
-        print(f"Error sending to device: {e}")
-    result = "success"
+        data = json.loads(request.body)
+        username = data.get("username")
+        password = data.get("password")
+        first_name = data.get("first_name") 
+        last_name = data.get("last_name")
+        phone_number = data.get("phone_number")
+        email = data.get("email")
+        picture = data.get("picture")  # URL from Google OAuth
 
-    user_data = {
-        "result": result,
-        "username": username,  # Return username if success, None if fail
-    }
-    return JsonResponse(user_data)
+        uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+        client = MongoClient(uri)
+        db = client["NeuraNet"]
+        user_collection = db["users"]
+        user = user_collection.find_one({"username": username})
+
+
+        # Download and convert the image to base64 if picture_url exists
+        profile_picture = None
+        if picture:
+            try:
+                response = http_requests.get(picture, verify=True)
+                if response.status_code == 200:
+                    # Convert image to base64 for storage
+                    image_base64 = base64.b64encode(response.content).decode('utf-8')
+                    # Print length to verify we have complete data
+                    print(f"Base64 string length: {len(image_base64)}")
+                    
+                    profile_picture = {
+                        'data': image_base64,
+                        'content_type': response.headers.get('content-type', 'image/jpeg'),
+                        'source': 'google_oauth',
+                        'size': len(response.content),  # Add original size for verification
+                        'base64_length': len(image_base64)  # Add base64 length for verification
+                    }
+                    
+                    # Verify the data can be decoded back
+                    try:
+                        test_decode = base64.b64decode(image_base64)
+                        print(f"Successfully verified base64 data: {len(test_decode)} bytes")
+                    except Exception as decode_error:
+                        print(f"Base64 verification failed: {decode_error}")
+                        
+            except Exception as e:
+                print(f"Error downloading profile picture: {e}")
+                print(f"Response status: {response.status_code if 'response' in locals() else 'No response'}")
+                profile_picture = picture  # Store URL as fallback
+
+
+        password_bytes = password.encode("utf-8")
+        hashed_password = bcrypt.hashpw(password_bytes, bcrypt.gensalt())
+        if user:
+            user_data = {"result": "user_already_exists", "username": username}
+            return JsonResponse(user_data)
+
+        new_user = {
+            "username": username,
+            "password": hashed_password,
+            "first_name": first_name,
+            "last_name": last_name,
+            "phone_number": phone_number,
+            "email": email,
+            "picture": profile_picture,  # Store either the base64 image data or URL
+            "devices": [],
+        }
+
+        try:
+            user_collection.insert_one(new_user)
+        except Exception as e:
+            print(f"Error sending to device: {e}")
+        result = "success"
+
+        user_data = {
+            "result": result,
+            "username": username,  # Return username if success, None if fail
+        }
+        return JsonResponse(user_data)
+
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
 
 
 @api_view(["GET"])
@@ -318,7 +362,7 @@ def add_site_visitor_info(request):
     # Fetch location data based on the IP address
     try:
         api_key = "9ab07cc6f5a49eeb6ad0c6f5cc04e34d"
-        geo_response = requests.get(f"http://api.ipapi.com/api/{ip_address}?access_key={api_key}")
+        geo_response = http_requests.get(f"http://api.ipapi.com/api/{ip_address}?access_key={api_key}")
         if geo_response.status_code == 200:
             geo_data = geo_response.json()
             city = geo_data.get("city", "Unknown")
@@ -328,7 +372,7 @@ def add_site_visitor_info(request):
             city = "Unknown"
             region = "Unknown"
             country = "Unknown"
-    except requests.RequestException:
+    except http_requests.RequestException:
         city = "Unknown"
         region = "Unknown"
         country = "Unknown"

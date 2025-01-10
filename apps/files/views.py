@@ -12,7 +12,11 @@ from rest_framework.response import Response
 from .delete_files import delete_files
 from .get_files_from_filepath import get_files_from_filepath as db_get_files_from_filepath
 from .update_files import update_files
+from .get_file_info import get_file_info as db_get_file_info
 from websocket.utils import broadcast_new_file
+from .get_shared_files import get_shared_files as db_get_shared_files
+
+
 
 import pymongo
 import json
@@ -113,10 +117,12 @@ def add_files(request, username):
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
     db = client["NeuraNet"]
+    user_collection = db["users"]
     file_collection = db["files"]
     device_collection = db["devices"]
-    # Find the device_id based on device_name
-    device = device_collection.find_one({"device_name": device_name})
+    # Find the device_id based on device_name and matching user_id
+    user = user_collection.find_one({"username": username})
+    device = device_collection.find_one({"device_name": device_name, "user_id": user["_id"]})
     if not device:
         return JsonResponse({
             "result": "device_not_found",
@@ -158,6 +164,8 @@ def add_files(request, username):
             "file_parent": file_data.get("file_parent"),
             "original_device": file_data.get("original_device"),
             "kind": file_data.get("kind"),
+            "shared_with": file_data.get("shared_with"),
+            "is_public": file_data.get("is_public"),
         }
         new_files.append(new_file)
     # If no valid files to add, return early
@@ -613,3 +621,198 @@ def get_scanned_folders(request, username):
         "result": "success",
         "scanned_folders": device.get("scanned_folders", [])
     })
+
+@csrf_exempt
+@require_http_methods(["POST"])
+@api_view(["POST"])
+def share_file(request):
+    try:
+        data = json.loads(request.body)
+        file_name = data.get("file_name")
+        username = data.get("username")
+        friend_username = data.get("friend_username")
+
+
+        # MongoDB connection
+        uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+        client = MongoClient(uri)
+        db = client["NeuraNet"]
+        user_collection = db["users"]
+        device_collection = db["devices"]
+        file_collection = db["files"]
+
+
+        # Find the user by username
+        user = user_collection.find_one({"username": username})
+
+        if not user:
+            return JsonResponse({"error": "User not found."}, status=404)
+
+        # Find the friend by username
+        friend = user_collection.find_one({"username": friend_username})
+        if not friend:
+            return JsonResponse({"error": "Friend not found."}, status=404)
+
+        # Find the file by file_name
+        file = file_collection.find_one({"file_name": file_name})
+        if not file:
+            return JsonResponse({"error": "File not found."}, status=404)
+        
+
+        file_collection.update_one(
+            {"file_name": file_name},
+            {"$addToSet": {"shared_with": friend["_id"]}}
+        )
+        return JsonResponse({"status": "success", "message": "File shared successfully"})
+
+
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+@api_view(["POST"])
+def make_file_public(request):
+    try:
+        data = json.loads(request.body)
+        file_name = data.get("file_name")
+        username = data.get("username")
+        device_name = data.get("device_name")
+
+
+        # MongoDB connection
+        uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+        client = MongoClient(uri)
+        db = client["NeuraNet"]
+        user_collection = db["users"]
+        device_collection = db["devices"]
+        file_collection = db["files"]
+
+
+        # Find the user by username
+        user = user_collection.find_one({"username": username})
+
+        if not user:
+            return JsonResponse({"error": "User not found."}, status=404)
+
+        device = device_collection.find_one({"user_id": user["_id"], "device_name": device_name})
+
+        print(device)
+        print()
+
+
+        # Find the file by file_name
+        file = file_collection.find_one({"file_name": file_name})
+        if not file:
+            return JsonResponse({"error": "File not found."}, status=404)
+
+        print(file)
+        
+
+        file_collection.update_one(
+            {"file_name": file_name, "device_id": device["_id"]},
+            {"$set": {"is_public": True}}
+        )
+
+
+        return JsonResponse({"status": "success", "message": "File made public successfully"})
+
+
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+@api_view(["POST"])
+def make_file_private(request):
+    try:
+        data = json.loads(request.body)
+        file_name = data.get("file_name")
+        device_name = data.get("device_name")
+        username = data.get("username")
+
+
+        # MongoDB connection
+        uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+        client = MongoClient(uri)
+        db = client["NeuraNet"]
+        user_collection = db["users"]
+        device_collection = db["devices"]
+        file_collection = db["files"]
+
+
+        # Find the user by username
+        user = user_collection.find_one({"username": username})
+
+        if not user:
+            return JsonResponse({"error": "User not found."}, status=404)
+
+        device = device_collection.find_one({"user_id": user["_id"], "device_name": device_name})
+        # Find the file by file_name
+        file = file_collection.find_one({"file_name": file_name})
+        if not file:
+            return JsonResponse({"error": "File not found."}, status=404)
+        
+
+        file_collection.update_one(
+            {"file_name": file_name, "device_id": device["_id"]},
+            {"$set": {"is_public": False}}
+        )
+        return JsonResponse({"status": "success", "message": "File made private successfully"})
+
+
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+@api_view(["POST"])
+def get_shared_files(request):
+    try:
+        data = json.loads(request.body)
+        username = data.get("username")
+        shared_files = db_get_shared_files(username)
+        return JsonResponse({"status": "success", "shared_files": shared_files})
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+@api_view(["POST"])
+def get_shared_files_from_filepath(request):
+    try:
+        data = json.loads(request.body)
+        username = data.get("username")
+        filepath = data.get("filepath")
+        shared_files = get_shared_files_from_filepath(username, filepath)
+        return JsonResponse({"status": "success", "shared_files": shared_files})
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+@api_view(["GET"])
+def download_file(request, username, file_id, is_file_sync):
+    try:
+        download_file(username, file_id, is_file_sync)
+        return JsonResponse({"status": "success", "message": "File downloaded successfully"})
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+@api_view(["GET"])
+def get_file_info(request, username, file_id):
+    try:
+        file_info = db_get_file_info(username, file_id)
+        return JsonResponse({"status": "success", "file_info": file_info})
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)

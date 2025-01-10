@@ -12,7 +12,10 @@ from rest_framework.response import Response
 import pymongo
 import json
 import re
-
+from bson import json_util
+import base64
+from .forms import UserProfileForm
+from .src.getUserFriends import getUserFriends
 
 @api_view(["GET"])
 def getuserinfo2(request, username):
@@ -59,26 +62,38 @@ def getuserinfo2(request, username):
 def getuserinfo(request, username):
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
-    username = username
     db = client["NeuraNet"]
     user_collection = db["users"]
+    
+    # First check if user exists
     user = user_collection.find_one({"username": username})
     if not user:
-        print("Please login first.")
-    else:
-        if user["username"] == username:
-            first_name = user.get("first_name")
-            last_name = user.get("last_name")
-            phone_number = user.get("phone_number")
-            email = user.get("email")
+        return JsonResponse({
+            "error": "Please login first.",
+            "status": "fail"
+        })
 
-            user_data = {
-                "first_name": first_name,
-                "last_name": last_name,
-                "phone_number": phone_number,
-                "email": email,
-            }
-            return JsonResponse(user_data)
+    # Get the picture data and handle any ObjectId
+    picture_data = user.get("picture", None)
+    if picture_data and isinstance(picture_data, dict):
+        # Convert any ObjectId in the picture data to string
+        picture_data = json.loads(json_util.dumps(picture_data))
+
+    # Safely get all fields with default values
+    user_data = {
+        "first_name": user.get("first_name", None),
+        "last_name": user.get("last_name", None),
+        "phone_number": user.get("phone_number", None),
+        "email": user.get("email", None),
+        "picture": picture_data,
+        "devices": json.loads(json_util.dumps(user.get("devices", []))),  # Handle potential ObjectIds in devices
+        "status": "success",
+        "friends": json.loads(json_util.dumps(user.get("friends", [])))  # Convert ObjectIds to strings
+    }
+
+
+
+    return JsonResponse(user_data, safe=False)
 
 
 
@@ -87,7 +102,7 @@ def get_small_user_info(request, username):
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
     username = username
-    db = client["myDatabase"]
+    db = client["NeuraNet"]
     user_collection = db["users"]
     user = user_collection.find_one({"username": username})
     if not user:
@@ -113,7 +128,7 @@ def get_small_user_info(request, username):
 def getuserinfo3(request, username, password):
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
-    db = client["myDatabase"]
+    db = client["NeuraNet"]
     user_collection = db["users"]
     user = user_collection.find_one({"username": username})
 
@@ -182,3 +197,383 @@ def getuserinfo4(request, username, password):
         "username": username,  # Return username if success, None if fail
     }
     return JsonResponse(user_data)
+
+
+
+@api_view(["POST"])
+def update_user_profile(request):
+    try:
+        uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+        client = pymongo.MongoClient(uri, server_api=ServerApi("1"))
+        db = client["NeuraNet"]
+        user_collection = db["users"]
+
+        data = json.loads(request.body)
+
+
+        username = data.get("username")
+        password = data.get("password")
+        first_name = data.get("first_name")
+        last_name = data.get("last_name") 
+        phone_number = data.get("phone_number")
+        email = data.get("email")
+        picture = data.get("picture")
+
+        # Find the user
+        user = user_collection.find_one({"username": username})
+        if not user:
+            return JsonResponse({
+                "result": "fail",
+                "message": "User not found"
+            })
+
+        # Build update dictionary with only changed fields
+        update_fields = {}
+        if password and password != "undefined":
+            password_bytes = password.encode("utf-8")
+            update_fields["password"] = bcrypt.hashpw(password_bytes, bcrypt.gensalt())
+        if first_name:
+            update_fields["first_name"] = first_name
+        if last_name:
+            update_fields["last_name"] = last_name
+        if phone_number:
+            update_fields["phone_number"] = phone_number
+        if email:
+            update_fields["email"] = email
+        if picture:
+            # Check if picture size exceeds 2.5MB (2.5 * 1024 * 1024 bytes)
+            picture_size = len(picture.encode('utf-8'))
+            if picture_size > 2.5 * 1024 * 1024:
+                return JsonResponse({
+                    "result": "photo_too_large", 
+                    "message": "Profile picture is too large. Maximum size is 2.5MB"
+                })
+            update_fields["picture"] = picture
+
+        try:
+            # Only update if there are changes
+            if update_fields:
+                user_collection.update_one(
+                        {"username": username},
+                        {"$set": update_fields}
+                    )
+        except:
+            return JsonResponse({
+                "result": "fail",
+                "message": "An error occurred"
+            })
+
+        return JsonResponse({
+            "result": "success",
+            "message": "Profile updated successfully"
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            "result": "fail",
+            "message": f"An error occurred: {str(e)}"
+        }, status=500)
+
+
+
+@api_view(["GET"])
+def change_profile(request, username, password, first_name, last_name, email):
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client["NeuraNet"]
+    user_collection = db["users"]
+    user = user_collection.find_one({"username": username})
+
+    if not user:
+        return JsonResponse({
+            "result": "fail",
+            "message": "User not found. Please login first.",
+        })
+
+    if password == "undefined":
+        user_collection.update_one(
+            {"_id": user["_id"]},
+            {
+                "$set": {
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "username": username,
+                    "email": email,
+                }
+            },
+        )
+    else:
+        password_bytes = password.encode("utf-8")  # Encode the string to bytes
+        hashed_password = bcrypt.hashpw(password_bytes, bcrypt.gensalt())
+
+        user_collection.update_one(
+            {"_id": user["_id"]},
+            {
+                "$set": {
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "username": username,
+                    "email": email,
+                    "password": hashed_password,
+                }
+            },
+        )
+
+    result = "success"
+
+    user_data = {
+        "result": result,
+        "username": username,  # Return username if success, None if fail
+    }
+    return JsonResponse(user_data)
+
+@api_view(["GET"])
+def get_profile_picture(request, username):
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client["NeuraNet"]
+    user_collection = db["users"]
+    
+    user = user_collection.find_one({"username": username})
+    if user and 'picture' in user:
+        picture_data = user['picture']
+        if isinstance(picture_data, dict) and 'data' in picture_data:
+            try:
+                # Try to decode the base64 data
+                image_bytes = base64.b64decode(picture_data['data'])
+                content_type = picture_data.get('content_type', 'image/jpeg')
+                return HttpResponse(image_bytes, content_type=content_type)
+            except Exception as e:
+                print(f"Error decoding image: {e}")
+                return HttpResponse(status=400)
+    return HttpResponse(status=404)
+
+
+@api_view(["GET"])
+def typeahead(request, search):
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client["NeuraNet"]
+    user_collection = db["users"]
+    
+    # Create text index for faster searching (run this once)
+    # user_collection.create_index([
+    #     ("username", "text"),
+    #     ("first_name", "text"),
+    #     ("last_name", "text"),
+    #     ("email", "text")
+    # ])
+    
+    # Build the query for multiple fields
+    search_query = {
+        "$or": [
+            {"username": {"$regex": f"^{search}", "$options": "i"}},  # Starts with search term
+            {"first_name": {"$regex": f"^{search}", "$options": "i"}},
+            {"last_name": {"$regex": f"^{search}", "$options": "i"}},
+            {"email": {"$regex": f"^{search}", "$options": "i"}}
+        ]
+    }
+    
+    # Project only needed fields and limit results
+    users = user_collection.find(
+        search_query,
+        {
+            "username": 1, 
+            "first_name": 1, 
+            "last_name": 1, 
+            "email": 1,
+            "_id": 0
+        }
+    ).limit(10)
+    
+    # Convert cursor to list
+    user_list = list(users)
+    
+    response = {
+        "result": "success",
+        "users": user_list
+    }
+        
+    return JsonResponse(response)
+
+@api_view(["POST"])
+def send_friend_request(request):
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client["NeuraNet"]
+    user_collection = db["users"]
+
+    data = json.loads(request.body)
+    username = data.get("username")
+    friend_username = data.get("friend_username")
+    user_collection = db["users"]
+    user = user_collection.find_one({"username": username})
+    friend = user_collection.find_one({"username": friend_username})
+
+    if not user:
+        return JsonResponse({"result": "fail", "message": "User not found"})
+    if not friend:
+        return JsonResponse({"result": "fail", "message": "Friend not found"})
+
+    if str(friend["_id"]) in user.get("friends", []):
+        return JsonResponse({"result": "fail", "message": "Friend already added"})
+    if str(friend["_id"]) in user.get("friend_requests", []):
+        return JsonResponse({"result": "fail", "message": "Friend request already sent"})
+
+    user_collection.update_one(
+        {"username": friend_username},
+        {"$addToSet": {"friend_requests": user["_id"]}}
+    )
+
+    return JsonResponse({"result": "success", "message": "Friend request sent successfully"})
+
+
+@api_view(["POST"])
+def remove_friend(request):
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client["NeuraNet"]
+    user_collection = db["users"]
+
+    data = json.loads(request.body)
+    username = data.get("username")
+    friend_username = data.get("friend_username")
+
+    user = user_collection.find_one({"username": username})
+    friend = user_collection.find_one({"username": friend_username})
+
+    if not user:
+        return JsonResponse({"result": "fail", "message": "User not found"})
+    if not friend:
+        return JsonResponse({"result": "fail", "message": "Friend not found"})
+    
+    user_collection.update_one(
+        {"username": username},
+        {"$pull": {"friends": friend["_id"]}}
+    )
+
+    user_collection.update_one(
+        {"username": friend_username},
+        {"$pull": {"friends": user["_id"]}}
+    )
+    return JsonResponse({"result": "success", "message": "Friend removed successfully"})
+
+
+@api_view(["GET"])
+def get_friends(request, username):
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client["NeuraNet"]
+    user_collection = db["users"]
+
+    user = user_collection.find_one({"username": username})
+    if not user:
+        return JsonResponse({"result": "fail", "message": "User not found"})
+
+    friends = user.get("friends", [])
+    friend_list = []
+    for friend_id in friends:
+        friend = user_collection.find_one({"_id": friend_id})
+        if friend:
+            friend_list.append({"username": friend.get("username"), "first_name": friend.get("first_name"), "last_name": friend.get("last_name")})
+
+
+    return JsonResponse({"result": "success", "friends": friend_list})
+
+
+@api_view(["GET"])
+def get_friend_requests(request, username):
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client["NeuraNet"]
+    user_collection = db["users"]
+    user = user_collection.find_one({"username": username})
+    if not user:
+        return JsonResponse({"result": "fail", "message": "User not found"})
+
+    friend_requests = user.get("friend_requests", [])
+    friend_requests_list = []
+    for friend_id in friend_requests:
+        friend = user_collection.find_one({"_id": friend_id})
+        if friend:
+            friend_requests_list.append({"username": friend.get("username"), "first_name": friend.get("first_name"), "last_name": friend.get("last_name")})
+
+
+    return JsonResponse({"result": "success", "friend_requests": friend_requests_list})
+
+
+@api_view(["POST"])
+def accept_friend_request(request):
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client["NeuraNet"]
+    user_collection = db["users"]
+
+    data = json.loads(request.body)
+    username = data.get("username")
+    friend_username = data.get("friend_username")
+
+    user = user_collection.find_one({"username": username})
+    friend = user_collection.find_one({"username": friend_username})
+
+    user_collection.update_one(
+        {"username": username},
+        {"$pull": {"friend_requests": friend["_id"]}}
+    )
+
+    user_collection.update_one(
+        {"username": friend_username},
+        {"$addToSet": {"friends": user["_id"]}}
+    )
+
+    user_collection.update_one(
+        {"username": username},
+        {"$addToSet": {"friends": friend["_id"]}}
+    )
+
+    return JsonResponse({"result": "success", "message": "Friend request accepted successfully"})
+
+
+@api_view(["POST"])
+def reject_friend_request(request):
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client["NeuraNet"]
+    user_collection = db["users"]
+
+    data = json.loads(request.body)
+    username = data.get("username")
+    friend_username = data.get("friend_username")
+
+    user = user_collection.find_one({"username": username})
+    friend = user_collection.find_one({"username": friend_username})
+
+    if not user:
+        return JsonResponse({"result": "fail", "message": "User not found"})
+    if not friend:
+        return JsonResponse({"result": "fail", "message": "Friend not found"})
+
+    user_collection.update_one(
+        {"username": username},
+        {"$pull": {"friend_requests": friend["_id"]}}
+    )
+
+    user_collection.update_one(
+        {"username": friend_username},
+        {"$pull": {"friend_requests": user["_id"]}}
+    )
+
+    return JsonResponse({"result": "success", "message": "Friend request rejected successfully"})
+
+
+
+@api_view(["GET"])
+def get_user_friends(request, username):
+    friends = getUserFriends(username)
+    if friends: 
+        return JsonResponse({"result": "success", "friends": friends})
+    else:
+        return JsonResponse({"result": "fail", "message": "No friends found"})
+
+
+

@@ -17,7 +17,7 @@ file_collection = db["files"]
 file_collection.create_index([("device_id", 1)])
 file_collection.create_index([("file_parent", 1)])  # Add index for file_parent
 
-def get_files_from_filepath(username, filepath):
+def get_shared_files_from_filepath(username, filepath):
 
     # Find the user by username
     user = user_collection.find_one({"username": username})
@@ -177,12 +177,86 @@ def get_files_from_filepath(username, filepath):
             "files": files_data
         }
 
-async def get_files_from_filepath_async(username, filepath):
+def get_shared_files_from_filepath(username, filepath):
+    # Find the user by username
+    user = user_collection.find_one({"username": username})
+
+    if not user:
+        return {"error": "Please login first."}
+
+    if filepath == None or filepath == "" or filepath == "Core" or filepath == "Core/Shared":
+        # Get shared files
+        pipeline = [
+            {"$match": {"shared_with": user["_id"]}},
+            {"$sort": {"date_uploaded": -1}},
+            {"$limit": 100},
+            {"$lookup": {
+                "from": "devices",
+                "localField": "device_id",
+                "foreignField": "_id",
+                "as": "device"
+            }},
+            {"$project": {
+                "file_name": 1,
+                "file_type": 1,
+                "file_path": 1,
+                "file_size": 1,
+                "shared_with": 1,
+                "is_public": 1,
+                "date_uploaded": 1,
+                "kind": 1,
+                "device_name": {"$arrayElemAt": ["$device.device_name", 0]},
+                "device_id": {"$toString": "$device_id"},
+                "_id": {"$toString": "$_id"}
+            }}
+        ]
+        
+        files_data = list(file_collection.aggregate(pipeline))
+
+    else:
+        # Handle specific shared folder path
+        filepath = filepath.replace("Core/Shared/", "")
+        
+        pipeline = [
+            {"$match": {
+                "shared_with": user["_id"],
+                "file_parent": {"$regex": f".*{filepath}$"}
+            }},
+            {"$sort": {"date_uploaded": -1}},
+            {"$limit": 100},
+            {"$lookup": {
+                "from": "devices",
+                "localField": "device_id",
+                "foreignField": "_id",
+                "as": "device"
+            }},
+            {"$project": {
+                "file_name": 1,
+                "file_type": 1,
+                "file_path": 1,
+                "file_size": 1,
+                "shared_with": 1,
+                "is_public": 1,
+                "date_uploaded": 1,
+                "kind": 1,
+                "device_name": {"$arrayElemAt": ["$device.device_name", 0]},
+                "device_id": {"$toString": "$device_id"},
+                "_id": {"$toString": "$_id"}
+            }}
+        ]
+        
+        files_data = list(file_collection.aggregate(pipeline))
+
+    return {
+        "result": "success",
+        "files": files_data
+    }
+
+async def get_shared_files_from_filepath_async(username, filepath):
     # Convert your MongoDB client to async
     client = motor.motor_asyncio.AsyncIOMotorClient(uri)
     db = client["NeuraNet"]
     
     # Perform async queries
     user = await db.users.find_one({"username": username})
-    devices = await db.devices.find({"user_id": user["_id"]}).to_list(None)
-    
+    # ... implement async version similarly ...
