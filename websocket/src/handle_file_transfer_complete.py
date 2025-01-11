@@ -19,13 +19,29 @@ async def handle_file_transfer_complete(consumer, data):
     requesting_device_id = data.get("requesting_device_id")
     sending_device_id = data.get("sending_device_id")
 
+    # Send confirmation to both devices
+    message = {
+        "type": "file_transfer_complete",
+        "message": "File transfer complete",
+        "file_name": file_name,
+        "file_path": file_path,
+        "requesting_device_name": requesting_device_name,
+        "sending_device_name": sending_device_name,
+        "requesting_device_id": requesting_device_id,
+        "sending_device_id": sending_device_id
+    }
 
+    # Send to requesting device
+    await consumer.send(text_data=json.dumps(message))
+
+    # Send to sending device
     await consumer.channel_layer.group_send(
         device_group_name(sending_device_id),
         {
             "type": "dm_event",
             "message": "File transfer complete",
             "requesting_device_id": requesting_device_id,
-            "sending_device_id": sending_device_id
+            "sending_device_id": sending_device_id,
+            "file_name": file_name
         }
     )
