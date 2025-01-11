@@ -12,6 +12,8 @@ from rest_framework.response import Response
 from .remove_device import remove_device
 from .get_online_devices import get_online_devices
 from .update_device_configuration_preferences import update_device_configuration_preferences as db_update_device_configuration_preferences
+from .get_single_device_info import get_single_device_info as db_get_single_device_info
+from .get_single_device_info_with_device_name import get_single_device_info_with_device_name as db_get_single_device_info_with_device_name
 
 import pymongo
 import json
@@ -328,3 +330,16 @@ def declare_device_offline(request, username):
     user_data = {"result": "success", "username": username}
 
     return JsonResponse(user_data)
+
+
+@api_view(["GET"])
+def get_single_device_info(request, username, device_id):
+
+    device_info = db_get_single_device_info(username, device_id)
+
+    return JsonResponse(device_info)
+
+@api_view(["GET"])
+def get_single_device_info_with_device_name(request, username, device_name):
+    device_info = db_get_single_device_info_with_device_name(username, device_name)
+    return JsonResponse(device_info)

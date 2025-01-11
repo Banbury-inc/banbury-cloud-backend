@@ -9,4 +9,6 @@ urlpatterns = [
     path("getonlinedevices/<str:username>/",views.handle_get_online_devices,name="getdeviceinfo",),
     path("declare_device_online/<str:username>/", views.declare_device_online, name="getdeviceinfo",),
     path("declare_device_offline/<str:username>/", views.declare_device_offline, name="getdeviceinfo"),
+    path("get_single_device_info/<str:username>/<str:device_id>/", views.get_single_device_info, name="get_single_device_info"),
+    path("get_single_device_info_with_device_name/<str:username>/<str:device_name>/", views.get_single_device_info_with_device_name, name="get_single_device_info_with_device_name"),
 ]
