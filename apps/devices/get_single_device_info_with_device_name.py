@@ -25,6 +25,7 @@ def get_single_device_info_with_device_name(username, device_name):
     device = device_collection.find_one({"user_id": user["_id"], "device_name": device_name})
 
     device_data = {
+        "_id": str(device["_id"]),
         "device_name": device["device_name"],
         "device_type": device["device_type"],
         "storage_capacity_gb": device["storage_capacity_gb"],
@@ -60,5 +61,5 @@ def get_single_device_info_with_device_name(username, device_name):
     return device_data
 
 if __name__ == "__main__":
-    device_info = get_single_device_info_with_device_name("mmills", "Banbury-Cloud-Desktop")
+    device_info = get_single_device_info_with_device_name("mmills", "michael-mills-ubuntu")
     print(device_info)

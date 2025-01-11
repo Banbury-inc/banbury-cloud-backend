@@ -48,17 +48,17 @@ class Consumer(AsyncWebsocketConsumer):
     async def handle_text_data(self, data):
         print(f"Received text data: {data}")
         data = json.loads(data)
-        message_type = data.get("type")
+        message_type = data.get("message_type")
         print(f"Message type: {message_type}")
 
-        if message_type == "device_info_response":
+        if message_type == "initiate_live_data_connection":
+            await handle_initiate_live_data_connection(self, data)
+        elif message_type == "device_info_response":
             await handle_device_info_response(data)
         elif message_type == "download_request":
             await handle_download_request(data)
         elif message_type == "file_sent_successfully":
             await handle_file_sent_successfully(data)
-        elif message_type == "initiate_live_data_connection":
-            await handle_initiate_live_data_connection(data)
         elif message_type == "file_transfer_complete":
             await handle_file_transfer_complete(data)
         elif message_type == "file_transaction_complete":
