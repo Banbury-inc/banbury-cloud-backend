@@ -1,745 +1,298 @@
 import json
-import os
-import asyncio
-from datetime import datetime
+from bson.objectid import ObjectId
 from channels.generic.websocket import AsyncWebsocketConsumer
-from apps.files.search_for_file import search_for_file
-from apps.devices.declare_device_offline import declare_device_offline
-from apps.devices.declare_device_online import declare_device_online
-from apps.devices.get_online_devices import get_online_devices
-from apps.devices.process_device_info import process_device_info
-from apps.predictions.pipeline import pipeline
-from apps.predictions.get_download_queue import get_download_queue
-from .utils import announce_connection
-from .src.make_device_predictions import make_device_predictions
-import time
+from asgiref.sync import sync_to_async
+from .src.handle_device_info_response import handle_device_info_response
+from .src.handle_download_request import handle_download_request
+from .src.handle_file_sent_successfully import handle_file_sent_successfully
+from .src.handle_initiate_live_data_connection import handle_initiate_live_data_connection
+from .src.handle_file_transfer_complete import handle_file_transfer_complete
+from .src.handle_direct_message import handle_direct_message
+from apps.devices.declare_device_online_with_id import declare_device_online_with_id
+from apps.devices.declare_device_offline_with_id import declare_device_offline_with_id
+from apps.devices.get_single_device_info import get_single_device_info
+from apps.devices.declare_user_online import declare_user_online
+from apps.devices.declare_user_offline import declare_user_offline
+from apps.devices.get_user_info import get_user_info
+from apps.devices.get_device_info import get_device_info
+
+def device_group_name(device_id):
+    """Generate the group name for a particular device."""
+    return f"device_{device_id}"
 
 
-# Change the connected_devices global to store both connection ID and WebSocket
-connected_devices = {}  # Will store {device_name: {'connection_id': id, 'websocket': ws}}
-websocket_connections = {}
-
-
-class Live_Data(AsyncWebsocketConsumer):
-    def __init__(self, *args, **kwargs):
-        super().__init__(args, kwargs)
-        self.file_name = None
-        self.file_path = None
-        self.device_info_task = None
-        self.device_predictions_task = None
-        self.device_name = None
-        self.requesting_device_name = None
-        self.run_device_info_loop = None
-        self.run_device_predictions_loop = None
-        self.should_run = True
-        # Use a combination of timestamp and id for truly unique connections
-        self.connection_id = f"{time.time()}_{id(self)}"
-
+class Consumer(AsyncWebsocketConsumer):
     async def connect(self):
+        
+        # Get device_id from URL parameters
+        self.device_id = self.scope['url_route']['kwargs'].get('device_id')
+        if not self.device_id:
+            print("No device ID found")
+            await self.close()
+            return
+            
+        # Initialize active_groups set
+        self.active_groups = set([f"device_{self.device_id}"])
+        
+        await self.channel_layer.group_add(
+            f"device_{self.device_id}",
+            self.channel_name
+        )
         await self.accept()
-        device_name = self.scope.get('requesting_device_name')
-        username = self.scope.get('username')
+        print(f"Connected to device {self.device_id}")
 
-        print(f"New connection established:")
-        print(f"- Connection ID: {self.connection_id}")
-        print(f"- WebSocket: {self}")
-        print(f"- Device name: {device_name}")
-        print(f"- Username: {username}")
-        
-        # Check if this WebSocket object already exists in websocket_connections
-        existing_ws = None
-        for conn_id, device_info in connected_devices.items():
-            if device_info['websocket'] == self:
-                existing_ws = conn_id
-                break
-        
-        if existing_ws:
-            print(f"WebSocket object already exists with connection ID: {existing_ws}")
-            # Create new WebSocket instance
-            new_ws = AsyncWebsocketConsumer()
-            new_ws.connection_id = self.connection_id
-            new_ws.device_name = self.device_name
-            self = new_ws
-            print(f"Created new WebSocket instance with connection ID: {self.connection_id}")
-        
-        # Store connection with unique ID
-        websocket_connections[self.connection_id] = self
+        result = declare_device_online_with_id(self.device_id)
+        print(f"[WebSocket] Device online declaration result: {result}")
 
+        # Get device info
+        device_info = await sync_to_async(get_single_device_info)(self.device_id)
+        # Add user to their personal notification group
+        user_id = device_info.get('device_info', {}).get('user_id')
+        print(f"[WebSocket] User ID: {user_id}")
+        if user_id:
+            print(f"User ID: {user_id}")
+            # Add to user's personal notification group
+            user_group = f"user_{user_id}"
+            self.active_groups.add(user_group)
+            await self.channel_layer.group_add(
+                user_group,
+                self.channel_name
+            )
+            result = declare_user_online(user_id)
+            print(f"[WebSocket] User online declaration result: {result}")
+            print(f"Added to {user_group}")
 
-        print(f"websocket_connections: {websocket_connections}")
         
-        # Debug: Print all current connections
-        print("Current WebSocket connections:")
-        for conn_id, conn in websocket_connections.items():
-            print(f"- {conn_id}: {conn.device_name if hasattr(conn, 'device_name') else 'unnamed'}")
-
-            try:
-                result = declare_device_online(username, device_name)
-                print(f"[WebSocket] Device online declaration result: {result}")
-                
-                if isinstance(result, dict) and result.get('result') == 'success':
-                    await self.trigger_connect(username, device_name)
-                    if self.run_device_info_loop:
-                        await self.start_device_info_loop(username, device_name, self.run_device_info_loop)
-                    if self.run_device_predictions_loop:
-                        await self.start_device_predictions_loop(username, device_name, self.run_device_predictions_loop)
-                else:
-                    print(f"[WebSocket] Failed to set device online: {result}")
-            except Exception as e:
-                print(f"[WebSocket] Error during device connection: {str(e)}")
+        print(f"Active groups: {self.active_groups}")
 
     async def disconnect(self, close_code):
         try:
-            device_name = self.scope.get('requesting_device_name')
-            username = self.scope.get('username')
-            
-            self.should_run = False
-            
-            if self.device_info_task:
-                self.device_info_task.cancel()
-                try:
-                    await self.device_info_task
-                except asyncio.CancelledError:
-                    print(f"Device info loop for {device_name} has been cancelled.")
-            
-            # Remove from both connection dictionaries
-            if self.connection_id in connected_devices:
-                connected_devices.pop(self.connection_id)
-                print(f"Removed device connection for {device_name} with ID {self.connection_id}")
-            
-            if self.connection_id in websocket_connections:
-                websocket_connections.pop(self.connection_id)
-                print(f"Removed websocket connection with ID {self.connection_id}")
-
-            print("Remaining connections:")
-            print(f"- Connected devices: {list(connected_devices.keys())}")
-            print(f"- WebSocket connections: {list(websocket_connections.keys())}")
-
-            if device_name and username:
-                await self.trigger_post_disconnect(username, device_name)
-                
-        except Exception as e:
-            print(f"Error during disconnect: {e}")
-
-    async def announce_connection(self):
-        print(f"Announcing connection for {self.device_name}")
-        for connection_id, connection in websocket_connections.items():
-            await connection.send(text_data=json.dumps({
-                'message': f"Requesting file {file_name}",
-                'request_type': 'file_request',
-                'file_name': file_name,
-                'requesting_device_name': requesting_device_name  # Use self.device_name for the requesting device
-            }))
-
-    async def announce_download_request(self):
-        print(f"Announcing connection for {self.device_name}")
-        for connection_id, connection in websocket_connections.items():
-            await connection.send(text_data=json.dumps({
-                'message': f"Requesting file",
-                # 'request_type': 'file_request',
-                'device_name': self.device_name,
-                'connection_id': self.connection_id
-            }))
-
-    async def start_device_info_loop(self, username, device_name, run_device_info_loop):
-        print(f"Inside start device info loop function for {device_name}")
-        """Start a loop to periodically update device information."""
-        if run_device_info_loop:
-            try:
-                # Create a task that can be tracked and cancelled
-                self.device_info_task = asyncio.create_task(self._device_info_loop(username, device_name))
-                # Give the task a name for easier tracking
-                self.device_info_task.set_name(f"device_info_loop_{device_name}")
-                # Don't await the task here - let it run independently
-            except Exception as e:
-                print(f"Error creating device info loop for {device_name}: {e}")
-                self.should_run = False
-        
-    async def start_device_predictions_loop(self, username, device_name, run_device_predictions_loop):
-        """Start a loop to periodically take that information and make preditctions."""
-        if run_device_predictions_loop:
-            try:
-                # Create a task that can be tracked and cancelled
-                self.device_predictions_task = asyncio.create_task(self._device_predictions_loop(username, device_name))
-                # Give the task a name for easier tracking
-                self.device_predictions_task.set_name(f"device_predictions_loop_{username}")
-                # Don't await the task here - let it run independently
-            except Exception as e:
-                print(f"Error creating device predictions loop for {device_name}: {e}")
-                self.should_run = False
-
-    async def _device_info_loop(self, username, device_name):
-        while self.should_run:
-            print(f"Requesting device info for {device_name}")
-            await self.request_device_info(username, device_name)
-            await asyncio.sleep(1800) #30 minutes 
-
-
-    async def _device_predictions_loop(self, username, device_name):
-        while self.should_run:
-            
-            try:
-                await self.make_device_predictions(username, device_name)
-            except Exception as e:
-                print(f"Error in predictions loop: {str(e)}")
-                # Still sleep even if there's an error
-                await asyncio.sleep(1800)
-
-    async def request_device_info(self, username, device_name):
-        """Request device information from the device."""
-        await self.send(text_data=json.dumps({
-            'message': "Requesting device information",
-            'request_type': 'device_info'
-        }))
-
-    async def make_device_predictions(self, username, device_name):
-        try:
-
-            start_time = datetime.now()
-            print(f"[{start_time}] Starting predictions loop for {username}")
-            result = await make_device_predictions(username, device_name)
+            # Send disconnect message before closing
             await self.send(text_data=json.dumps({
-                'message': "File sync request",
-                'download_queue': result,
-                'request_type': 'file_sync_request',
+                "type": "disconnect",
+                "code": close_code,
+                "reason": self.get_close_reason(close_code),
+                "should_reconnect": self.should_attempt_reconnect(close_code)
             }))
-            print("File sync request sent successfully")
-
-            end_time = datetime.now()
-            print(f"[{end_time}] Predictions complete. Execution took: {end_time - start_time}")
-            print(f"[{end_time}] Starting 30 minute sleep...")
-            
-            await asyncio.sleep(1800)  # 30 minutes
-            
-            wake_time = datetime.now()
-            print(f"[{wake_time}] Waking up from sleep")
         except Exception as e:
-            print(f"Error sending file sync request: {str(e)}")
+            print(f"Error sending disconnect message: {e}")
 
-    async def trigger_connect(self, username, device_name):
-        """Custom function to handle what happens after connect."""
+        # Remove from all active groups
+        for group in self.active_groups:
+            await self.channel_layer.group_discard(
+                group,
+                self.channel_name
+            )
+        self.active_groups.clear()
+        print(f"Disconnected from device {self.device_id} with code {close_code}")
 
+        result = declare_device_offline_with_id(self.device_id)
+        print(f"[WebSocket] Device offline declaration result: {result}")
+        device_info = await sync_to_async(get_single_device_info)(self.device_id)
+        user_id = device_info.get('device_info', {}).get('user_id')
+        if user_id:
+            user_info = await sync_to_async(get_user_info)(user_id)
+            username = user_info.get('username')
+            devices_info = await sync_to_async(get_device_info)(username)
+            
+            # Initialize all_devices_offline flag
+            all_devices_offline = True
+            
+            # Check online status from devices
+            for device in devices_info.get('devices', []):
+                if device.get('online') == True:
+                    all_devices_offline = False
+                    break
+                
+            if all_devices_offline:
+                result = declare_user_offline(user_id)
+                print(f"[WebSocket] User offline declaration result: {result}")
 
-        result = declare_device_online(username, device_name)
-        print(f"Device online declaration result: {result}")
+    def get_close_reason(self, code):
+        """Map close codes to human-readable reasons"""
+        reasons = {
+            1000: "Normal closure",
+            1001: "Going away",
+            1006: "Abnormal closure",
+            1011: "Internal server error",
+            1012: "Service restart",
+            1013: "Try again later"
+        }
+        return reasons.get(code, "Unknown reason")
 
-
-    async def trigger_post_disconnect(self, username, device_name):
-        """Custom function to handle what happens after disconnect."""
-        await declare_device_offline(username, device_name)
+    def should_attempt_reconnect(self, code):
+        """Determine if client should attempt to reconnect based on close code"""
+        # Codes where reconnection should be attempted
+        reconnect_codes = {1001, 1006, 1012, 1013}
+        return code in reconnect_codes
 
     async def receive(self, text_data=None, bytes_data=None):
-        """Handle both text and binary data based on the type of the input."""
-
-        print(f"File name: {self.file_name}")
-        
-        # Check if the data is bytes (binary data)
-        if bytes_data is not None and isinstance(bytes_data, (bytes, bytearray)):
-            print("Received binary data")
-            await self.receive_bytes(bytes_data)
-
-        elif text_data is not None and isinstance(text_data, str):
-            try:
-                text_data_json = json.loads(text_data)
-                print(f"text_data_json 490: {text_data_json}")
-                # Handle device info response
-                if text_data_json.get('message') == "device_info_response":
-                    username = text_data_json.get('username')
-                    sending_device_name = text_data_json.get('sending_device_name')
-                    device_info = text_data_json.get('device_info')
-                    
-                    # Get requesting_device_name from scope if not in message
-                    requesting_device_name = (
-                        text_data_json.get('requesting_device_name') or 
-                        self.scope.get('requesting_device_name')
-                    )
-                    
-                    if all([username, sending_device_name, device_info]):
-                        result = process_device_info(
-                            username,
-                            sending_device_name,
-                            requesting_device_name,
-                            device_info
-                        )
-                        
-                        await self.send(text_data=json.dumps({
-                            'message': 'Device info processed',
-                            'status': result,
-                            'device_name': sending_device_name
-                        }))
-                    else:
-                        missing = []
-                        if not username: missing.append('username')
-                        if not sending_device_name: missing.append('sending_device_name')
-                        if not device_info: missing.append('device_info')
-                        await self.send(text_data=json.dumps({
-                            'message': 'Error processing device info',
-                            'error': f'Missing required fields: {", ".join(missing)}'
-                        }))
-                else:
-                    # Handle all other messages
-                    await self.receive_text(text_data)
-            except json.JSONDecodeError:
-                print("Error parsing JSON data.")
-                await self.send(text_data=json.dumps({'error': "Invalid JSON format"}))
-
-    async def receive_text(self, text_data):
-        try:
-            text_data_json = json.loads(text_data)
-
-            # Move device identification logic to the beginning
-            if 'username' in text_data_json:
-                self.scope['username'] = text_data_json['username']
-
-            if 'requesting_device_name' in text_data_json:
-                device_name = text_data_json['requesting_device_name']
-                self.scope['requesting_device_name'] = device_name
-                self.device_name = device_name
-                username = self.scope.get('username')
-                
-                # If we now have both username and device_name, declare device online
-                if username and device_name:
-                    if device_name not in connected_devices:
-                        connected_devices[device_name] = {
-                            'connection_id': self.connection_id,
-                            'websocket': self
-                        }
-                result = declare_device_online(username, device_name)
-                print(f"[WebSocket] Device online declaration result: {result}")
-                
-                if isinstance(result, dict) and result.get('result') == 'success':
-                    await self.trigger_connect(username, device_name)
-                    # await self.start_device_info_loop(username, device_name, self.run_device_info_loop)
-                    # await self.start_device_predictions_loop(username, device_name, self.run_device_predictions_loop)
-
-            if text_data_json.get('message') == "Initiate live data connection":
-                print("Received live data connection initiation request")
-                run_device_info_loop = text_data_json.get('run_device_info_loop')
-                run_device_predictions_loop = text_data_json.get('run_device_predictions_loop')
-                device_name = text_data_json.get('requesting_device_name')
-                username = text_data_json.get('username')
-                print(f"run_device_info_loop: {run_device_info_loop}")
-                print(f"run_device_predictions_loop: {run_device_predictions_loop}")
-                self.run_device_info_loop = run_device_info_loop
-                self.run_device_predictions_loop = run_device_predictions_loop
-                if run_device_predictions_loop:
-                    await self.start_device_predictions_loop(username, device_name, run_device_predictions_loop)
-
-            # Handle device info response
-            if text_data_json.get('message') == "device_info_response":
-                username = text_data_json.get('username')
-                sending_device_name = text_data_json.get('sending_device_name')
-                requesting_device_name = text_data_json.get('requesting_device_name')
-                device_info = text_data_json.get('device_info')
-                
-                if all([username, sending_device_name, device_info]):
-                    result = process_device_info(
-                        username,
-                        sending_device_name,
-                        requesting_device_name,
-                        device_info
-                    )
-                    
-                    await self.send(text_data=json.dumps({
-                        'message': 'Device info processed',
-                        'status': result
-                    }))
-                else:
-                    await self.send(text_data=json.dumps({
-                        'message': 'Error processing device info',
-                        'error': 'Missing required fields'
-                    }))
-                return  # Return after handling device info
-
-            # Validate required fields
-            if 'requesting_device_name' not in text_data_json:
-                await self.send(text_data=json.dumps({
-                    'message': 'Permission denied',
-                    'error': "'requesting_device_name' not found"
-                }))
-                return
-
-            # Add username to scope
-            if 'username' in text_data_json:
-                self.scope['username'] = text_data_json['username']
-
-            if 'requesting_device_name' in text_data_json:
-                self.scope['requesting_device_name'] = text_data_json['requesting_device_name']
-                self.device_name = text_data_json['requesting_device_name']
-                username = self.scope.get('username')
-                if username:
-                    await self.start_device_info_loop(username, self.device_name, self.run_device_info_loop)
-                #     await self.start_device_predictions_loop(username, self.device_name, self.run_device_predictions_loop)
-                else:
-                    print("Warning: Cannot start device info loop without username")
-            
-            username = self.scope.get('username')
-            device_name = self.scope.get('requesting_device_name')
-
-            if not username or not device_name:
-                await self.send(text_data=json.dumps({
-                    'message': 'Permission denied',
-                    'error': "Missing username or device name"
-                }))
-                return
-
-            if text_data_json.get('message') == "device_info_response":
-                await self.send(text_data=json.dumps({
-                    'message': 'Device info received',
-                    'requesting_device_name': device_name,
-                    'device_info': text_data_json.get('device_info')
-                }))
-
-            # Handle download request
-            if text_data_json.get('message') == "Download Request":
-                print("Download request received")
-                if 'file_name' not in text_data_json:
-                    await self.send(text_data=json.dumps({
-                        'message': 'Transfer failed',
-                        'error': "File name not provided"
-                    }))
-                    return
-
-                print(f"text_data_json: {text_data_json}")
-                
-                # Store file information in instance variables
-                self.file_name = text_data_json['file_name']
-                self.file_path = text_data_json.get('file_path', self.file_name)
-                username = text_data_json['username']
-                
-                print(f"Setting up file transfer:")
-                print(f"- File name: {self.file_name}")
-                print(f"- File path: {self.file_path}")
-                
-                response = search_for_file(username, self.file_name)
-                
-                # Get device name that has the file
-                sending_device_name = response.get('device_name')
-                file_path = response.get('file_path')
-                
-                if file_path:
-                    self.file_path = file_path
-
-                if sending_device_name not in connected_devices:
-                    await self.send(text_data=json.dumps({
-                        'message': 'Device offline',
-                        'sending_device_name': sending_device_name
-                    }))
-                    return
-                
-                # Use the device that has the file
-                device_info = connected_devices[sending_device_name]
-                sending_device_ws = device_info['websocket']
-
-                print(f"Sending file request to {sending_device_name}. File: {self.file_name} Path: {self.file_path} Requesting device: {self.device_name} sending_device_ws: {sending_device_ws}")
-                
-                # Send the request to the device that has the file
-                await sending_device_ws.send(text_data=json.dumps({
-                    'message': f"Requesting file {self.file_name}",
-                    'request_type': 'file_request',
-                    'file_name': self.file_name,
-                    'file_path': self.file_path,
-                    'requesting_device_name': self.device_name
-                }))
-
-            # Handle file transfer completion
-            elif text_data_json.get('message') == "File sent successfully":
-                file_name = text_data_json.get('file_name')
-                file_path = text_data_json.get('file_path')
-                print("File sent successfully 437")
-                try:
-                    print(f"connected_devices: {connected_devices} 439")
-                    for device_info in connected_devices.values():
-                        await device_info['websocket'].send(text_data=json.dumps({
-                            'message': 'File transfer complete',
-                            'file_name': file_name,
-                            'file_path': file_path,
-                            'requesting_device_name': text_data_json.get('requesting_device_name'),
-                            'sending_device_name': text_data_json.get('sending_device_name')
-                        }))
-                except Exception as e:
-                    await self.send(text_data=json.dumps({
-                        'message': 'Transfer failed',
-                        'error': str(e)
-                    }))
-
-
-
-            # Handle file transfer completion
-            elif text_data_json.get('message') == "File transfer complete":
-                print("File transfer complete")
-                print(f"self.file_name 439: {self.file_name}")
-                print(f"self.file_path 440: {self.file_path}")
-                file_name = text_data_json.get('file_name')
-                file_path = text_data_json.get('file_path')
-                print(f"file_name 443: {file_name}")
-                print(f"file_path 444: {file_path}")
-                try:
-                    # Send completion message to all connected devices
-                    for device_info in connected_devices.values():
-                        await device_info['websocket'].send(text_data=json.dumps({
-                            'message': 'File transfer complete',
-                            'file_name': file_name,
-                            'file_path': file_path,
-                            'requesting_device_name': text_data_json.get('requesting_device_name'),
-                            'sending_device_name': text_data_json.get('sending_device_name')
-                        }))
-                except Exception as e:
-                    # Send error to all connected devices
-                    for device_info in connected_devices.values():
-                        await device_info['websocket'].send(text_data=json.dumps({
-                            'message': 'Transfer failed',
-                            'error': str(e)
-                        }))
-
-            # Handle file transaction completion
-            elif text_data_json.get('message') == "File transaction complete":
-                print("File transaction complete")
-                print(f"self.file_name 458: {self.file_name}")
-                print(f"self.file_path 459: {self.file_path}")
-                file_name = text_data_json.get('file_name')
-                file_path = text_data_json.get('file_path')
-                print(f"file_name 487: {file_name}")
-                print(f"file_path 488: {file_path}")
-                try:
-                    # Send completion message to all connected devices
-                    for device_info in connected_devices.values():
-                        await device_info['websocket'].send(text_data=json.dumps({
-                            'message': 'File transfer complete',
-                            'file_name': file_name,
-                            'file_path': file_path,
-                            'requesting_device_name': text_data_json.get('requesting_device_name'),
-                            'sending_device_name': text_data_json.get('sending_device_name')
-                        }))
-                except Exception as e:
-                    # Send error to all connected devices
-                    for device_info in connected_devices.values():
-                        await device_info['websocket'].send(text_data=json.dumps({
-                            'message': 'Transaction failed', 
-                            'error': str(e)
-                        }))
-
-
-
-            else:
-                print(f"Received unrecognized message: {text_data_json.get('message')}")
-
-        except json.JSONDecodeError:
-            await self.send(text_data=json.dumps({
-                'message': 'Transfer failed',
-                'error': "Invalid JSON format"
-            }))
-        except Exception as e:
-            await self.send(text_data=json.dumps({
-                'message': 'Transfer failed',
-                'error': str(e)
-            }))
-
-    async def receive_bytes(self, bytes_data):
-        print("Received binary data")
-        print(f"Processing binary data for file: {self.file_name}")
-
-        for device_info in connected_devices.values():
-            print(f"sending bytes to device_info: {device_info} 523")
-            try:
-                await device_info['websocket'].send(bytes_data=bytes_data)
-                print(f"Forwarded {len(bytes_data)}")
-            except Exception as e:
-                print(f"Error forwarding data: {e}")
-
-
-        # After writing the last chunk
-        await self.send(text_data=json.dumps({
-            'message': f"File {self.file_name} transfer completed.",
-            'status': 'download_complete',
-            'file_name': self.file_name,
-            'file_path': self.file_path
-        }))
-
-
-    async def finalize_file_transfer(self, file_name):
-        """This function is called when file transfer is complete."""
-        await self.send(text_data=json.dumps({
-            'message': f"File {file_name} transfer completed."
-        }))
-        print(f"File {file_name} has been fully transferred.")
-
-async def broadcast_new_file(new_file):
-    for device_name, device_ws in connected_devices.items():
-        await device_ws['websocket'].send(text_data=json.dumps({
-            'message': f"New file {new_file} available for download."
-        }))
-
-    return "Broadcasted new file to all connected devices."
-    
-class Download_File_Request(AsyncWebsocketConsumer):
-    def __init__(self, *args, **kwargs):
-        super().__init__(args, kwargs)
-        self.file_name = None   
-        self.file_path = None
-    async def connect(self):
-        # Accept the WebSocket connection
-        await self.accept()
-
-    async def disconnect(self, close_code):
-        # Handle WebSocket disconnection
-        pass
-
-    async def receive(self, text_data):
-        # Receive data from WebSocket and process it
-        text_data_json = json.loads(text_data)
-        message = text_data_json['message']
-        username = text_data_json['username']
-        file_name = text_data_json['file_name']
-        file_path = text_data_json['file_path']
-        if file_name:
-            self.scope['file_name'] = file_name
-            if file_path:
-                self.scope['file_path'] = file_path
-                self.file_path = file_path
-            self.file_name = file_name
-
-
-        # Send 'Searching for file...' message
-        response = "Searching for file..."
-        await self.send(text_data=json.dumps({
-            'message': response
-        }))
-
-        # Search for the file and the device that has it
-        file_info = search_for_file(username, file_name)
-
-        if file_info and 'file_data' in file_info:
-            file_data = file_info['file_data']  # Extract the file_data dict
-
-            # Extract the necessary file and device information
-            file_name = file_data['file_name']
-            file_path = file_data['file_path']
-            print(f"file_path 530: {file_path}")
-            device_name = file_data['device_name']  # The device that contains the file
-
-            # Send 'Found file, requesting...' message
-            response = f"Found file on {device_name}, requesting..."
-            await self.send(text_data=json.dumps({
-                'message': response,
-                'request_type': 'update'
-            }))
-
-
-            # Look up the WebSocket connections for all connected devices
-            if connected_devices:
-                for device_name, device_ws in connected_devices.items():
-                    file_name = self.scope.get("file_name")
-                    file_path = self.scope.get("file_path")
-                    print(f"file_path 546: {file_path}")
-                    # Send a request to each device WebSocket to check for the file
-                    await device_ws['websocket'].send(text_data=json.dumps({
-                        'message': f"Requesting file {file_name} from {device_name}",
-                        'request_type': 'file_request',
-                        'file_name': file_name,
-                        'file_path': file_path
-                    }))
-            else:
-                # No devices are connected
-                response = "No devices are currently connected."
-                await self.send(text_data=json.dumps({
-                    'message': response
-                }))
-
-            # Look up the WebSocket connection for the device that contains the file
-            if device_name in connected_devices:
-                device_ws = connected_devices[device_name]
-                file_name = self.scope.get("file_name")
-                file_path = self.scope.get("file_path")
-                print(f"file_path 566: {file_path}")
-                # Send a request to the device WebSocket to send the file
-                await device_ws['websocket'].send(text_data=json.dumps({
-                    'message': f"Requesting file {file_name} from {device_name}",
-                    'request_type': 'file_request',
-                    'file_name': file_name,
-                    'file_path': file_path
-                }))
-
-                await device_ws['websocket'].send(text_data=json.dumps({
-                    'message': f"Requesting file {file_name} from {device_name}",
-                    'request_type': 'file_request',
-                    'file_name': file_name,
-                    'file_path': file_path
-                }))
-
-                # Notify the client that the request has been sent to the device
-                response = "Request sent to device to retrieve the file"
-                await self.send(text_data=json.dumps({
-                    'message': response,
-                    'request_type': 'update'
-                }))
-            else:
-                # The device is not connected
-                response = f"Device {device_name} is not connected."
-                await self.send(text_data=json.dumps({
-                    'message': response
-                }))
+        if text_data:
+            await self.handle_text_data(text_data)
+        elif bytes_data is not None and isinstance(bytes_data, (bytes, bytearray)):
+            print("Received bytes data")
+            await self.handle_bytes_data(bytes_data)
         else:
-            # If file not found
-            response = f"File not found. File info: {file_info}"
-            await self.send(text_data=json.dumps({
-                'message': response
-            }))
+            print("No data received")
 
-        # After file transfer is complete
+
+    async def handle_text_data(self, data):
+        print(f"Received text data: {data}")
+        data = json.loads(data)
+        message_type = data.get("message_type")
+        print(f"Message type: {message_type}")
+
+        if message_type == "join_transfer_room":
+            transfer_room = data.get("transfer_room")
+            if transfer_room:
+                print(f"Adding {self.channel_name} to transfer room: {transfer_room}")
+                await self.channel_layer.group_add(
+                    transfer_room,
+                    self.channel_name
+                )
+                # Add to our tracked groups
+                self.active_groups.add(transfer_room)
+                print(f"Successfully added to transfer room: {transfer_room}")
+                print(f"Current active groups: {self.active_groups}")
+                # Send confirmation back to client
+                await self.send(text_data=json.dumps({
+                    "type": "transfer_room_joined",
+                    "transfer_room": transfer_room,
+                    "success": True
+                }))
+        elif message_type == "start_file_transfer":
+            # Add handling for start_file_transfer message
+            transfer_room = data.get("transfer_room")
+            if transfer_room and transfer_room not in self.active_groups:
+                await self.channel_layer.group_add(
+                    transfer_room,
+                    self.channel_name
+                )
+                self.active_groups.add(transfer_room)
+                print(f"Added to transfer room during start_file_transfer: {transfer_room}")
+                print(f"Current active groups: {self.active_groups}")
+        elif message_type == "initiate_live_data_connection":
+            await handle_initiate_live_data_connection(self, data)
+        elif message_type == "device_info_response":
+            await handle_device_info_response(data)
+        elif message_type == "download_request":
+            await handle_download_request(self, data)
+        elif message_type == "file_sent_successfully":
+            transfer_room = data.get("transfer_room", f"transfer_{data['sending_device_id']}_{data['requesting_device_id']}")
+            # Make sure we're in the transfer room before sending
+            if transfer_room not in self.active_groups:
+                await self.channel_layer.group_add(
+                    transfer_room,
+                    self.channel_name
+                )
+                self.active_groups.add(transfer_room)
+            
+            await self.channel_layer.group_send(
+                transfer_room,
+                {
+                    "type": "file_transfer_complete",
+                    "message": "File transfer completed successfully",
+                    "file_name": data.get("file_name"),
+                    "requesting_device_id": data.get("requesting_device_id"),
+                    "sending_device_id": data.get("sending_device_id"),
+                    "sending_device_name": data.get("sending_device_name"),
+                    "file_path": data.get("file_path"),
+                    "transfer_room": transfer_room  # Include transfer room in response
+                }
+            )
+        elif message_type == "file_transfer_complete":
+            await handle_file_transfer_complete(self, data)
+        elif message_type == "file_transaction_complete":
+            await handle_file_transfer_complete(self, data)
+        elif message_type == "direct_message":
+            print("Received direct message")
+            await handle_direct_message(self, data)
+        elif message_type == "dm_event":
+            await handle_direct_message(self, data)
+        else:
+            print(f"Received unrecognized message: {message_type}")
+    
+    async def handle_bytes_data(self, data):
+        """Handle incoming bytes data"""
+        print(f"Received bytes data length: {len(data)}")
+        print(f"Active groups: {self.active_groups}")
+        print(f"Channel name: {self.channel_name}")
+        
+        # Use active_groups instead of self.groups
+        transfer_rooms = [group for group in self.active_groups if group.startswith("transfer_")]
+        print(f"Found transfer rooms: {transfer_rooms}")
+        
+        if transfer_rooms:
+            for room in transfer_rooms:
+                print(f"Broadcasting bytes to room: {room}")
+                try:
+                    await self.channel_layer.group_send(
+                        room,
+                        {
+                            "type": "bytes_transfer",
+                            "bytes_data": data,
+                            "sender": self.channel_name
+                        }
+                    )
+                    print(f"Successfully sent bytes to room {room}")
+                except Exception as e:
+                    print(f"Error sending bytes to room {room}: {str(e)}")
+        else:
+            print(f"No transfer rooms found in active_groups: {self.active_groups}")
+            await self.send(bytes_data=data)
+
+    async def dm_event(self, event):
+        """Handle incoming direct messages"""
+        print(f"Received direct message: {event}")
         await self.send(text_data=json.dumps({
-            'message': "File transfer complete",
-            'status': 'download_complete',
-            'file_name': file_name,
-            'file_path': file_path
+            "type": "direct_message",
+            "message": event["message"],
+            "requesting_device_id": event.get("requesting_device_id"),
+            "sending_device_id": event.get("sending_device_id"),
+            "file_name": event.get("file_name")
         }))
 
-    async def receive_bytes(self, data):
-        print("Received binary data")
-        """Handle incoming binary data (file chunks) from the device."""
-        file_name = self.file_name
-        file_path = self.file_path
-
-        # Get the current directory of the script
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-
-        print(f"current_dir 613: {current_dir}")
-
-        # Construct the path to the adjacent 'files' directory
-        file_dir = os.path.join(current_dir, 'files')
-        print(f"file_dir 617: {file_dir}")
-        # Ensure the 'files' directory exists, create it if it doesn't
-        os.makedirs(file_dir, exist_ok=True)
-
-        # Construct the full path for the file to be saved
-        file_path = os.path.join(file_dir, file_name)
-        print(f"file_path 623: {file_path}")
-
-        # Open the file in binary mode and append the incoming data
-        with open(file_path, 'ab') as f:
-            f.write(data)
-            print(f"Received {len(data)} bytes and written to {file_path}")
-            # send the byte data to the requesting device
-            # Get the requesting device's websocket connection
-            for device_name, device_ws in connected_devices.items():
-                print(f"device_name: {device_name}")
-                print(f"device_ws: {device_ws}")
-                await device_ws['websocket'].send(bytes_data=data)
-
-        # After writing the last chunk
+    async def file_request_event(self, event):
+        """Handle incoming file requests"""
+        # Add the sending device to the transfer room
+        if "transfer_room" in event:
+            await self.channel_layer.group_add(
+                event["transfer_room"],
+                self.channel_name
+            )
+            
         await self.send(text_data=json.dumps({
-            'message': f"File {self.file_name} transfer completed.",
-            'status': 'download_complete',
-            'file_name': self.file_name,
-            'file_path': self.file_path
+            "request_type": "file_request",
+            "message": "file_request",
+            "file_name": event["file_name"],
+            "file_path": event.get("file_path"),
+            "requesting_device_id": event["requesting_device_id"],
+            "transfer_room": event.get("transfer_room"),  # Include in response
+            "timestamp": event["timestamp"]
         }))
 
-    async def finalize_file_transfer(self, file_name):
-        """This function is called when file transfer is complete."""
-        # Notify the original client (or process as needed)
+    async def bytes_transfer(self, event):
+        """Handle incoming bytes transfer events"""
+        # Don't send back to the sender
+        if event.get('sender') != self.channel_name:
+            print(f"Sending bytes to channel {self.channel_name}")
+            await self.send(bytes_data=event["bytes_data"])
+        else:
+            print(f"Skipping bytes send to original sender {self.channel_name}")
+
+    async def file_transfer_complete(self, event):
+        """Handle file transfer complete notification"""
         await self.send(text_data=json.dumps({
-            'message': f"File {file_name} transfer completed."
+            "type": "file_sent_successfully",
+            "message": event["message"],
+            "file_name": event["file_name"],
+            "requesting_device_id": event["requesting_device_id"],
+            "sending_device_id": event["sending_device_id"],
+            "sending_device_name": event.get("sending_device_name"),
+            "file_path": event.get("file_path")
         }))
 
-
+    async def friend_request(self, event):
+        """Handle incoming friend requests"""
+        await self.send(text_data=json.dumps(event["message"]))
 

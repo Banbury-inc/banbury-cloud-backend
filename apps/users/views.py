@@ -16,6 +16,8 @@ from bson import json_util
 import base64
 from .forms import UserProfileForm
 from .src.getUserFriends import getUserFriends
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
 
 @api_view(["GET"])
 def getuserinfo2(request, username):
@@ -406,7 +408,6 @@ def send_friend_request(request):
     data = json.loads(request.body)
     username = data.get("username")
     friend_username = data.get("friend_username")
-    user_collection = db["users"]
     user = user_collection.find_one({"username": username})
     friend = user_collection.find_one({"username": friend_username})
 
@@ -420,10 +421,35 @@ def send_friend_request(request):
     if str(friend["_id"]) in user.get("friend_requests", []):
         return JsonResponse({"result": "fail", "message": "Friend request already sent"})
 
+    # Update the database
     user_collection.update_one(
         {"username": friend_username},
         {"$addToSet": {"friend_requests": user["_id"]}}
     )
+
+    # Create the message payload
+    message = {
+        "type": "friend_request",
+        "message": {
+            "request_type": "friend_request",
+            "from_username": username,
+            "from_first_name": user.get("first_name"),
+            "from_last_name": user.get("last_name")
+        }
+    }
+
+    # Get the channel layer and send the message synchronously
+    channel_layer = get_channel_layer()
+    try:
+        async_to_sync(channel_layer.group_send)(
+            f"user_{friend.get('_id')}", 
+            message
+        )
+        print(f"[send_friend_request] Successfully sent websocket notification to {friend.get('username')}")
+    except Exception as e:
+        print(f"[send_friend_request] Error sending websocket notification: {str(e)}")
+        # Continue execution even if websocket notification fails
+        pass
 
     return JsonResponse({"result": "success", "message": "Friend request sent successfully"})
 
@@ -456,6 +482,30 @@ def remove_friend(request):
         {"username": friend_username},
         {"$pull": {"friends": user["_id"]}}
     )
+
+    # Create the message payload
+    message = {
+        "type": "friend_request",
+        "message": {
+            "request_type": "friend_request",
+            "from_username": username,
+            "from_first_name": user.get("first_name"),
+            "from_last_name": user.get("last_name")
+        }
+    }
+
+    # Get the channel layer and send the message synchronously
+    channel_layer = get_channel_layer()
+    try:
+        async_to_sync(channel_layer.group_send)(
+            f"user_{friend.get('_id')}", 
+            message
+        )
+        print(f"[remove_friend] Successfully sent websocket notification to {friend.get('username')}")
+    except Exception as e:
+        print(f"[remove_friend] Error sending websocket notification: {str(e)}")
+        # Continue execution even if websocket notification fails
+        pass
     return JsonResponse({"result": "success", "message": "Friend removed successfully"})
 
 
@@ -475,7 +525,7 @@ def get_friends(request, username):
     for friend_id in friends:
         friend = user_collection.find_one({"_id": friend_id})
         if friend:
-            friend_list.append({"username": friend.get("username"), "first_name": friend.get("first_name"), "last_name": friend.get("last_name")})
+            friend_list.append({"username": friend.get("username"), "first_name": friend.get("first_name"), "last_name": friend.get("last_name"), "online": friend.get("online")})
 
 
     return JsonResponse({"result": "success", "friends": friend_list})
@@ -531,6 +581,30 @@ def accept_friend_request(request):
         {"$addToSet": {"friends": friend["_id"]}}
     )
 
+    # Create the message payload
+    message = {
+        "type": "friend_request",
+        "message": {
+            "request_type": "friend_request",
+            "from_username": username,
+            "from_first_name": user.get("first_name"),
+            "from_last_name": user.get("last_name")
+        }
+    }
+
+    # Get the channel layer and send the message synchronously
+    channel_layer = get_channel_layer()
+    try:
+        async_to_sync(channel_layer.group_send)(
+            f"user_{friend.get('_id')}", 
+            message
+        )
+        print(f"[accept_friend_request] Successfully sent websocket notification to {friend.get('username')}")
+    except Exception as e:
+        print(f"[accept_friend_request] Error sending websocket notification: {str(e)}")
+        # Continue execution even if websocket notification fails
+        pass
+
     return JsonResponse({"result": "success", "message": "Friend request accepted successfully"})
 
 
@@ -562,6 +636,30 @@ def reject_friend_request(request):
         {"username": friend_username},
         {"$pull": {"friend_requests": user["_id"]}}
     )
+
+    # Create the message payload
+    message = {
+        "type": "friend_request",
+        "message": {
+            "request_type": "friend_request",
+            "from_username": username,
+            "from_first_name": user.get("first_name"),
+            "from_last_name": user.get("last_name")
+        }
+    }
+
+    # Get the channel layer and send the message synchronously
+    channel_layer = get_channel_layer()
+    try:
+        async_to_sync(channel_layer.group_send)(
+            f"user_{friend.get('_id')}", 
+            message
+        )
+        print(f"[reject_friend_request] Successfully sent websocket notification to {friend.get('username')}")
+    except Exception as e:
+        print(f"[reject_friend_request] Error sending websocket notification: {str(e)}")
+        # Continue execution even if websocket notification fails
+        pass
 
     return JsonResponse({"result": "success", "message": "Friend request rejected successfully"})
 

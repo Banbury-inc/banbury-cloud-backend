@@ -36,6 +36,7 @@ def update_device(username, sending_device_name, requesting_device_name, device_
         "cpu_info_physical_cores": device_info['cpu_info_physical_cores'],
         "cpu_info_processors": device_info['cpu_info_processors'],
         "ip_address": device_info['ip_address'],
+        "mac_address": device_info['mac_address'],
         "battery_status": device_info['battery_status'],
         "battery_time_remaining": device_info['battery_time_remaining'],
         "bluetooth_status": device_info['bluetooth_status'],

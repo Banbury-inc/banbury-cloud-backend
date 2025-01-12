@@ -38,6 +38,7 @@ def search_for_file(username, file_name):
                 "date_uploaded": file.get('date_uploaded'),
                 "date_modified": file.get('date_modified'),
                 "date_accessed": file.get('date_accessed'),
+                "device_id": str(file.get('device_id')),
                 "kind": file.get('kind'),
                 "device_name": device.get('device_name'),  # Include device name for context
             }
