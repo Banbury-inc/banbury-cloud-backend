@@ -7,6 +7,9 @@ from .src.handle_file_sent_successfully import handle_file_sent_successfully
 from .src.handle_initiate_live_data_connection import handle_initiate_live_data_connection
 from .src.handle_file_transfer_complete import handle_file_transfer_complete
 from .src.handle_direct_message import handle_direct_message
+from apps.devices.declare_device_online_with_id import declare_device_online_with_id
+from apps.devices.declare_device_offline_with_id import declare_device_offline_with_id
+
 def device_group_name(device_id):
     """Generate the group name for a particular device."""
     return f"device_{device_id}"
@@ -32,6 +35,9 @@ class Consumer(AsyncWebsocketConsumer):
         await self.accept()
         print(f"Connected to device {self.device_id}")
 
+        result = declare_device_online_with_id(self.device_id)
+        print(f"[WebSocket] Device online declaration result: {result}")
+
     async def disconnect(self, close_code):
         try:
             # Send disconnect message before closing
@@ -52,6 +58,9 @@ class Consumer(AsyncWebsocketConsumer):
             )
         self.active_groups.clear()
         print(f"Disconnected from device {self.device_id} with code {close_code}")
+
+        result = declare_device_offline_with_id(self.device_id)
+        print(f"[WebSocket] Device offline declaration result: {result}")
 
     def get_close_reason(self, code):
         """Map close codes to human-readable reasons"""
