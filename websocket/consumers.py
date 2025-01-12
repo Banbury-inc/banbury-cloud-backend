@@ -33,6 +33,17 @@ class Consumer(AsyncWebsocketConsumer):
         print(f"Connected to device {self.device_id}")
 
     async def disconnect(self, close_code):
+        try:
+            # Send disconnect message before closing
+            await self.send(text_data=json.dumps({
+                "type": "disconnect",
+                "code": close_code,
+                "reason": self.get_close_reason(close_code),
+                "should_reconnect": self.should_attempt_reconnect(close_code)
+            }))
+        except Exception as e:
+            print(f"Error sending disconnect message: {e}")
+
         # Remove from all active groups
         for group in self.active_groups:
             await self.channel_layer.group_discard(
@@ -40,7 +51,25 @@ class Consumer(AsyncWebsocketConsumer):
                 self.channel_name
             )
         self.active_groups.clear()
-        print(f"Disconnected from device {self.device_id}")
+        print(f"Disconnected from device {self.device_id} with code {close_code}")
+
+    def get_close_reason(self, code):
+        """Map close codes to human-readable reasons"""
+        reasons = {
+            1000: "Normal closure",
+            1001: "Going away",
+            1006: "Abnormal closure",
+            1011: "Internal server error",
+            1012: "Service restart",
+            1013: "Try again later"
+        }
+        return reasons.get(code, "Unknown reason")
+
+    def should_attempt_reconnect(self, code):
+        """Determine if client should attempt to reconnect based on close code"""
+        # Codes where reconnection should be attempted
+        reconnect_codes = {1001, 1006, 1012, 1013}
+        return code in reconnect_codes
 
     async def receive(self, text_data=None, bytes_data=None):
         if text_data:
@@ -73,7 +102,8 @@ class Consumer(AsyncWebsocketConsumer):
                 # Send confirmation back to client
                 await self.send(text_data=json.dumps({
                     "type": "transfer_room_joined",
-                    "transfer_room": transfer_room
+                    "transfer_room": transfer_room,
+                    "success": True
                 }))
         elif message_type == "start_file_transfer":
             # Add handling for start_file_transfer message
@@ -93,8 +123,15 @@ class Consumer(AsyncWebsocketConsumer):
         elif message_type == "download_request":
             await handle_download_request(self, data)
         elif message_type == "file_sent_successfully":
-            # Send to the transfer room so both devices get the notification
             transfer_room = data.get("transfer_room", f"transfer_{data['sending_device_id']}_{data['requesting_device_id']}")
+            # Make sure we're in the transfer room before sending
+            if transfer_room not in self.active_groups:
+                await self.channel_layer.group_add(
+                    transfer_room,
+                    self.channel_name
+                )
+                self.active_groups.add(transfer_room)
+            
             await self.channel_layer.group_send(
                 transfer_room,
                 {
@@ -104,7 +141,8 @@ class Consumer(AsyncWebsocketConsumer):
                     "requesting_device_id": data.get("requesting_device_id"),
                     "sending_device_id": data.get("sending_device_id"),
                     "sending_device_name": data.get("sending_device_name"),
-                    "file_path": data.get("file_path")
+                    "file_path": data.get("file_path"),
+                    "transfer_room": transfer_room  # Include transfer room in response
                 }
             )
         elif message_type == "file_transfer_complete":
