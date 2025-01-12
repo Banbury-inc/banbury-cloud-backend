@@ -43,6 +43,7 @@ async def handle_download_request(consumer, data):
             f"device_{sending_device_id}",
             {
                 "type": "file_request_event",
+                "message": "file_request",
                 "file_name": file_name,
                 "file_path": file_path,
                 "requesting_device_id": requesting_device_id,

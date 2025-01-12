@@ -16,7 +16,7 @@ async def handle_direct_message(consumer, data):
 
     to_device_id = data.get("to_device_id")
     message = data.get("message", "")
-    from_device_id = consumer.device_id
+    from_device_id = consumer.device_id if consumer.device_id else "unknown"
 
     print(f"to_device_id: {to_device_id}, message: {message}, from_device_id: {from_device_id}")
 

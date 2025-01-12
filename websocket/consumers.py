@@ -58,7 +58,6 @@ class Consumer(AsyncWebsocketConsumer):
         message_type = data.get("message_type")
         print(f"Message type: {message_type}")
 
-        # Add handling for join_transfer_room message
         if message_type == "join_transfer_room":
             transfer_room = data.get("transfer_room")
             if transfer_room:
@@ -76,6 +75,17 @@ class Consumer(AsyncWebsocketConsumer):
                     "type": "transfer_room_joined",
                     "transfer_room": transfer_room
                 }))
+        elif message_type == "start_file_transfer":
+            # Add handling for start_file_transfer message
+            transfer_room = data.get("transfer_room")
+            if transfer_room and transfer_room not in self.active_groups:
+                await self.channel_layer.group_add(
+                    transfer_room,
+                    self.channel_name
+                )
+                self.active_groups.add(transfer_room)
+                print(f"Added to transfer room during start_file_transfer: {transfer_room}")
+                print(f"Current active groups: {self.active_groups}")
         elif message_type == "initiate_live_data_connection":
             await handle_initiate_live_data_connection(self, data)
         elif message_type == "device_info_response":
@@ -83,11 +93,24 @@ class Consumer(AsyncWebsocketConsumer):
         elif message_type == "download_request":
             await handle_download_request(self, data)
         elif message_type == "file_sent_successfully":
-            await handle_file_sent_successfully(data)
+            # Send to the transfer room so both devices get the notification
+            transfer_room = data.get("transfer_room", f"transfer_{data['sending_device_id']}_{data['requesting_device_id']}")
+            await self.channel_layer.group_send(
+                transfer_room,
+                {
+                    "type": "file_transfer_complete",
+                    "message": "File transfer completed successfully",
+                    "file_name": data.get("file_name"),
+                    "requesting_device_id": data.get("requesting_device_id"),
+                    "sending_device_id": data.get("sending_device_id"),
+                    "sending_device_name": data.get("sending_device_name"),
+                    "file_path": data.get("file_path")
+                }
+            )
         elif message_type == "file_transfer_complete":
-            await handle_file_transfer_complete(data)
+            await handle_file_transfer_complete(self, data)
         elif message_type == "file_transaction_complete":
-            await handle_file_transfer_complete(data)
+            await handle_file_transfer_complete(self, data)
         elif message_type == "direct_message":
             print("Received direct message")
             await handle_direct_message(self, data)
@@ -131,7 +154,9 @@ class Consumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps({
             "type": "direct_message",
             "message": event["message"],
-            "sender_id": event["sender_id"]
+            "requesting_device_id": event.get("requesting_device_id"),
+            "sending_device_id": event.get("sending_device_id"),
+            "file_name": event.get("file_name")
         }))
 
     async def file_request_event(self, event):
@@ -145,6 +170,7 @@ class Consumer(AsyncWebsocketConsumer):
             
         await self.send(text_data=json.dumps({
             "request_type": "file_request",
+            "message": "file_request",
             "file_name": event["file_name"],
             "file_path": event.get("file_path"),
             "requesting_device_id": event["requesting_device_id"],
@@ -160,4 +186,16 @@ class Consumer(AsyncWebsocketConsumer):
             await self.send(bytes_data=event["bytes_data"])
         else:
             print(f"Skipping bytes send to original sender {self.channel_name}")
+
+    async def file_transfer_complete(self, event):
+        """Handle file transfer complete notification"""
+        await self.send(text_data=json.dumps({
+            "type": "file_sent_successfully",
+            "message": event["message"],
+            "file_name": event["file_name"],
+            "requesting_device_id": event["requesting_device_id"],
+            "sending_device_id": event["sending_device_id"],
+            "sending_device_name": event.get("sending_device_name"),
+            "file_path": event.get("file_path")
+        }))
 
