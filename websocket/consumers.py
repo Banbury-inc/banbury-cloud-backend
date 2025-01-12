@@ -1,4 +1,5 @@
 import json
+from bson.objectid import ObjectId
 from channels.generic.websocket import AsyncWebsocketConsumer
 from asgiref.sync import sync_to_async
 from .src.handle_device_info_response import handle_device_info_response
@@ -9,6 +10,11 @@ from .src.handle_file_transfer_complete import handle_file_transfer_complete
 from .src.handle_direct_message import handle_direct_message
 from apps.devices.declare_device_online_with_id import declare_device_online_with_id
 from apps.devices.declare_device_offline_with_id import declare_device_offline_with_id
+from apps.devices.get_single_device_info import get_single_device_info
+from apps.devices.declare_user_online import declare_user_online
+from apps.devices.declare_user_offline import declare_user_offline
+from apps.devices.get_user_info import get_user_info
+from apps.devices.get_device_info import get_device_info
 
 def device_group_name(device_id):
     """Generate the group name for a particular device."""
@@ -38,6 +44,27 @@ class Consumer(AsyncWebsocketConsumer):
         result = declare_device_online_with_id(self.device_id)
         print(f"[WebSocket] Device online declaration result: {result}")
 
+        # Get device info
+        device_info = await sync_to_async(get_single_device_info)(self.device_id)
+        # Add user to their personal notification group
+        user_id = device_info.get('device_info', {}).get('user_id')
+        print(f"[WebSocket] User ID: {user_id}")
+        if user_id:
+            print(f"User ID: {user_id}")
+            # Add to user's personal notification group
+            user_group = f"user_{user_id}"
+            self.active_groups.add(user_group)
+            await self.channel_layer.group_add(
+                user_group,
+                self.channel_name
+            )
+            result = declare_user_online(user_id)
+            print(f"[WebSocket] User online declaration result: {result}")
+            print(f"Added to {user_group}")
+
+        
+        print(f"Active groups: {self.active_groups}")
+
     async def disconnect(self, close_code):
         try:
             # Send disconnect message before closing
@@ -61,6 +88,25 @@ class Consumer(AsyncWebsocketConsumer):
 
         result = declare_device_offline_with_id(self.device_id)
         print(f"[WebSocket] Device offline declaration result: {result}")
+        device_info = await sync_to_async(get_single_device_info)(self.device_id)
+        user_id = device_info.get('device_info', {}).get('user_id')
+        if user_id:
+            user_info = await sync_to_async(get_user_info)(user_id)
+            username = user_info.get('username')
+            devices_info = await sync_to_async(get_device_info)(username)
+            
+            # Initialize all_devices_offline flag
+            all_devices_offline = True
+            
+            # Check online status from devices
+            for device in devices_info.get('devices', []):
+                if device.get('online') == True:
+                    all_devices_offline = False
+                    break
+                
+            if all_devices_offline:
+                result = declare_user_offline(user_id)
+                print(f"[WebSocket] User offline declaration result: {result}")
 
     def get_close_reason(self, code):
         """Map close codes to human-readable reasons"""
@@ -245,4 +291,8 @@ class Consumer(AsyncWebsocketConsumer):
             "sending_device_name": event.get("sending_device_name"),
             "file_path": event.get("file_path")
         }))
+
+    async def friend_request(self, event):
+        """Handle incoming friend requests"""
+        await self.send(text_data=json.dumps(event["message"]))
 
