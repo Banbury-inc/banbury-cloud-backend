@@ -525,7 +525,7 @@ def get_friends(request, username):
     for friend_id in friends:
         friend = user_collection.find_one({"_id": friend_id})
         if friend:
-            friend_list.append({"username": friend.get("username"), "first_name": friend.get("first_name"), "last_name": friend.get("last_name")})
+            friend_list.append({"username": friend.get("username"), "first_name": friend.get("first_name"), "last_name": friend.get("last_name"), "online": friend.get("online")})
 
 
     return JsonResponse({"result": "success", "friends": friend_list})
