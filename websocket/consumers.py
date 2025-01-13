@@ -22,6 +22,9 @@ def device_group_name(device_id):
 
 
 class Consumer(AsyncWebsocketConsumer):
+    # Class-level dictionary to track all transfer rooms
+    active_transfer_rooms = set()
+
     async def connect(self):
         
         # Get device_id from URL parameters
@@ -108,6 +111,11 @@ class Consumer(AsyncWebsocketConsumer):
                 result = declare_user_offline(user_id)
                 print(f"[WebSocket] User offline declaration result: {result}")
 
+        # Remove from class-level tracking when disconnecting
+        for group in self.active_groups:
+            if group.startswith("transfer_"):
+                Consumer.active_transfer_rooms.discard(group)
+
     def get_close_reason(self, code):
         """Map close codes to human-readable reasons"""
         reasons = {
@@ -146,20 +154,20 @@ class Consumer(AsyncWebsocketConsumer):
             transfer_room = data.get("transfer_room")
             if transfer_room:
                 print(f"Adding {self.channel_name} to transfer room: {transfer_room}")
+                # Add to both instance and class-level tracking
+                self.active_groups.add(transfer_room)
+                Consumer.active_transfer_rooms.add(transfer_room)
                 await self.channel_layer.group_add(
                     transfer_room,
                     self.channel_name
                 )
-                # Add to our tracked groups
-                self.active_groups.add(transfer_room)
-                print(f"Successfully added to transfer room: {transfer_room}")
-                print(f"Current active groups: {self.active_groups}")
                 # Send confirmation back to client
                 await self.send(text_data=json.dumps({
                     "type": "transfer_room_joined",
                     "transfer_room": transfer_room,
                     "success": True
                 }))
+                print(f"Current active groups: {self.active_groups}")
         elif message_type == "start_file_transfer":
             # Add handling for start_file_transfer message
             transfer_room = data.get("transfer_room")
@@ -215,11 +223,9 @@ class Consumer(AsyncWebsocketConsumer):
     async def handle_bytes_data(self, data):
         """Handle incoming bytes data"""
         print(f"Received bytes data length: {len(data)}")
-        print(f"Active groups: {self.active_groups}")
-        print(f"Channel name: {self.channel_name}")
         
-        # Use active_groups instead of self.groups
-        transfer_rooms = [group for group in self.active_groups if group.startswith("transfer_")]
+        # Use class-level tracking of transfer rooms
+        transfer_rooms = [room for room in Consumer.active_transfer_rooms]
         print(f"Found transfer rooms: {transfer_rooms}")
         
         if transfer_rooms:
@@ -238,7 +244,7 @@ class Consumer(AsyncWebsocketConsumer):
                 except Exception as e:
                     print(f"Error sending bytes to room {room}: {str(e)}")
         else:
-            print(f"No transfer rooms found in active_groups: {self.active_groups}")
+            print(f"No transfer rooms found")
             await self.send(bytes_data=data)
 
     async def dm_event(self, event):
