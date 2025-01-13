@@ -138,7 +138,6 @@ class Consumer(AsyncWebsocketConsumer):
         if text_data:
             await self.handle_text_data(text_data)
         elif bytes_data is not None and isinstance(bytes_data, (bytes, bytearray)):
-            print("Received bytes data")
             await self.handle_bytes_data(bytes_data)
         else:
             print("No data received")
@@ -222,15 +221,12 @@ class Consumer(AsyncWebsocketConsumer):
     
     async def handle_bytes_data(self, data):
         """Handle incoming bytes data"""
-        print(f"Received bytes data length: {len(data)}")
         
         # Use class-level tracking of transfer rooms
         transfer_rooms = [room for room in Consumer.active_transfer_rooms]
-        print(f"Found transfer rooms: {transfer_rooms}")
         
         if transfer_rooms:
             for room in transfer_rooms:
-                print(f"Broadcasting bytes to room: {room}")
                 try:
                     await self.channel_layer.group_send(
                         room,
@@ -240,16 +236,13 @@ class Consumer(AsyncWebsocketConsumer):
                             "sender": self.channel_name
                         }
                     )
-                    print(f"Successfully sent bytes to room {room}")
                 except Exception as e:
                     print(f"Error sending bytes to room {room}: {str(e)}")
         else:
-            print(f"No transfer rooms found")
             await self.send(bytes_data=data)
 
     async def dm_event(self, event):
         """Handle incoming direct messages"""
-        print(f"Received direct message: {event}")
         await self.send(text_data=json.dumps({
             "type": "direct_message",
             "message": event["message"],
@@ -281,10 +274,8 @@ class Consumer(AsyncWebsocketConsumer):
         """Handle incoming bytes transfer events"""
         # Don't send back to the sender
         if event.get('sender') != self.channel_name:
-            print(f"Sending bytes to channel {self.channel_name}")
             await self.send(bytes_data=event["bytes_data"])
-        else:
-            print(f"Skipping bytes send to original sender {self.channel_name}")
+
 
     async def file_transfer_complete(self, event):
         """Handle file transfer complete notification"""
