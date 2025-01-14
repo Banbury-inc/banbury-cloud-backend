@@ -56,6 +56,7 @@ INSTALLED_APPS = [
     'apps.predictions',
     'apps.sessions',
     'apps.settings',
+    'apps.notifications',
     'apps.users',
     'apps.tasks',
     'rest_framework',
