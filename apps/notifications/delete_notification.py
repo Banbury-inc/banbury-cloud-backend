@@ -1,4 +1,7 @@
 from pymongo.mongo_client import MongoClient
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
+from bson.objectid import ObjectId
 
 # MongoDB connection
 uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
@@ -8,8 +11,6 @@ user_collection = db['users']
 notifications_collection = db['notifications']
 
 def delete_notification(username, notification_id):
-
-
     # Find the user by username
     user = user_collection.find_one({'username': username})
     if not user:
@@ -19,19 +20,44 @@ def delete_notification(username, notification_id):
     # Get user_id from username
     user_id = user['_id']
 
-    # Delete the notification
-    notifications_collection.delete_one({'user_id': user_id, 'notification_id': notification_id})
+    # Turn notification_id into ObjectId
+    notification_id = ObjectId(notification_id)
+
+    print(notification_id)
+
+    # Delete the notification - Fixed the delete operation
+    result = notifications_collection.delete_one({'_id': notification_id})
+
+    # Check if deletion was successful
+    if result.deleted_count == 0:
+        response = {
+            "result": "fail",
+            "message": "Notification not found"
+        }
+        return response
+
+    # After successfully deleting the notification
+    if user_id:
+        # Get the channel layer
+        channel_layer = get_channel_layer()
+        
+        # Send notification update to user's group
+        async_to_sync(channel_layer.group_send)(
+            f"user_{user_id}",
+            {
+                "type": "notification_update",
+            }
+        )
 
     # Return success response
     response = {
         "result": "success",
-        "username": username
     }
     return response
 
 
 def main():
-    result = delete_notification("mmills", "123")
+    result = delete_notification("mmills", "6786b7fd23b4a6e067f7f6c0")
     print(result)
 
 if __name__ == "__main__":

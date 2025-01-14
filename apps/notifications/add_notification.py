@@ -1,4 +1,7 @@
 from pymongo.mongo_client import MongoClient
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
+from bson import ObjectId
 
 
 # MongoDB connection
@@ -7,6 +10,16 @@ client = MongoClient(uri)
 db = client['NeuraNet']
 user_collection = db['users']
 notifications_collection = db['notifications']
+
+
+def convert_objectid(obj):
+    if isinstance(obj, ObjectId):
+        return str(obj)
+    if isinstance(obj, dict):
+        return {key: convert_objectid(value) for key, value in obj.items()}
+    if isinstance(obj, list):
+        return [convert_objectid(item) for item in obj]
+    return obj
 
 
 def add_notification(username, notification):
@@ -27,7 +40,7 @@ def add_notification(username, notification):
     read = notification['read']
 
     # Add notification to the user's notifications
-    notifications_collection.insert_one({
+    result = notifications_collection.insert_one({
         'user_id': user_id,
         'type': type,
         'title': title,
@@ -36,6 +49,23 @@ def add_notification(username, notification):
         'read': read
     })
 
+    if result.inserted_id:                  
+        # After successfully adding the notification
+        if user_id:
+                # Get the channel layer
+            channel_layer = get_channel_layer()
+            
+            # Convert ObjectId to string before sending
+            serializable_user_id = str(user_id)
+            
+            # Send notification update to user's group
+            async_to_sync(channel_layer.group_send)(
+                f"user_{serializable_user_id}",
+                {
+                    "type": "notification_update",
+                    "user_id": serializable_user_id
+                }
+            )
 
     # Return success response
     response = {

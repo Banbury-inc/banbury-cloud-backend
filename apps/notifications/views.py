@@ -12,6 +12,7 @@ from rest_framework.response import Response
 from .get_notifications import get_notifications as db_get_notifications
 from .add_notification import add_notification as db_add_notification
 from .delete_notification import delete_notification as db_delete_notification
+from .mark_notification_as_read import mark_notification_as_read as db_mark_notification_as_read
 import pymongo
 import json
 import re
@@ -59,6 +60,19 @@ def delete_notification(request, username):
         data = json.loads(request.body)
         notification_id = data.get("notification_id")
         response = db_delete_notification(username, notification_id)
+        return JsonResponse(response)
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+
+@csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
+@require_http_methods(["POST"])
+@api_view(["POST"])
+def mark_notification_as_read(request):
+    try:
+        data = json.loads(request.body)
+        notification_id = data.get("notification_id")
+        response = db_mark_notification_as_read(notification_id)
         return JsonResponse(response)
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)

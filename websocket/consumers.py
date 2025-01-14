@@ -15,6 +15,7 @@ from apps.devices.declare_user_online import declare_user_online
 from apps.devices.declare_user_offline import declare_user_offline
 from apps.devices.get_user_info import get_user_info
 from apps.devices.get_device_info import get_device_info
+from apps.notifications.get_notifications import get_notifications as db_get_notifications
 
 def device_group_name(device_id):
     """Generate the group name for a particular device."""
@@ -216,6 +217,17 @@ class Consumer(AsyncWebsocketConsumer):
             await handle_direct_message(self, data)
         elif message_type == "dm_event":
             await handle_direct_message(self, data)
+        elif message_type == "mark_notification_read":
+            # After marking notification as read, send update to user's group
+            user_id = data.get("user_id")
+            if user_id:
+                await self.channel_layer.group_send(
+                    f"user_{user_id}",
+                    {
+                        "type": "notification_update",
+                        "user_id": user_id
+                    }
+                )
         else:
             print(f"Received unrecognized message: {message_type}")
     
@@ -292,4 +304,13 @@ class Consumer(AsyncWebsocketConsumer):
     async def friend_request(self, event):
         """Handle incoming friend requests"""
         await self.send(text_data=json.dumps(event["message"]))
+
+    async def notification_update(self, event):
+        """Handle notification updates"""
+        # Get fresh notifications for the user
+        user_id = event.get("user_id")
+        if user_id:
+            await self.send(text_data=json.dumps({
+                "type": "notification_update",
+            }))
 
