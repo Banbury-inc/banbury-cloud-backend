@@ -49,13 +49,7 @@ def dashboard(request, username):
 def get_session(request, username):
     # Parse the JSON body
     data = json.loads(request.body)
-    task_device = data.get("task_device")
 
-    if not task_device:
-        return JsonResponse(
-            {"result": "no_device_provided", "message": "No device provided."},
-            status=400,
-        )
     if not username:
         return JsonResponse(
             {"result": "no_username_provided", "message": "No username provided."},
@@ -72,14 +66,14 @@ def get_session(request, username):
 
     sessions = session_collection.find({
         "username": username,
-        "task_device": task_device,
     })
 
     all_sessions_data = []
     # Convert the cursor to a list of dictionaries and serialize ObjectId to string
     for session in sessions:
         all_sessions_data.append({
-            "task_id": session["_id"],
+            "task_id": str(session["_id"]),
+            "device_id": str(session["device_id"]),
             "task_name": session["task_name"],
             "task_device": session["task_device"],
             "task_status": session["task_status"],
