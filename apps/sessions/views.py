@@ -75,6 +75,7 @@ def get_session(request, username):
             "task_id": str(session["_id"]),
             "device_id": str(session["device_id"]),
             "task_name": session["task_name"],
+            "task_type": session.get("task_type", ""),
             "task_device": session["task_device"],
             "task_status": session["task_status"],
             "task_progress": session["task_progress"],
@@ -126,6 +127,7 @@ def get_recent_session(request, username):
         all_sessions_data.append({
             "task_id": str(session["_id"]),
             "task_name": session.get("task_name", ""),
+            "task_type": session.get("task_type", ""),
             "task_device": session.get("task_device", ""),
             "task_progress": session.get("task_progress", 0),  # Default to 0
             "task_status": session.get("task_status", "unknown"),  # Default to "unknown"
