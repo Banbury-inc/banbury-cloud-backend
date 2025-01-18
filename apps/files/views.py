@@ -315,19 +315,49 @@ def getfileinfo(request, username):
 @api_view(["POST"])
 def get_files_from_filepath(request, username):
     try:
+        # Check if request body is empty
+        if not request.body:
+            return JsonResponse({
+                "result": "error",
+                "message": "Empty request body"
+            }, status=400)
+
         data = json.loads(request.body)
         filepath = data.get("global_file_path")
+        
+        # Handle case where filepath might be None
+        if filepath is None:
+            filepath = ""  # or "Core" depending on your default behavior
+        
         response = db_get_files_from_filepath(username, filepath)
-        if response.get('result') == "success":
-            files_data = {
-                "files": response.get("files"),
-            }
-            return JsonResponse(files_data)
+        
+        # Check if response is a JsonResponse object
+        if isinstance(response, JsonResponse):
+            return response
+            
+        # Handle the response data
+        if response and 'files' in response:
+            return JsonResponse({
+                "result": "success",
+                "files": response['files']
+            })
         else:
-            return JsonResponse({"error": "Failed to get files"}, status=400)
+            return JsonResponse({
+                "result": "error",
+                "message": "No files found or invalid response format"
+            }, status=404)
 
-    except json.JSONDecodeError:
-        return JsonResponse({"error": "Invalid JSON"}, status=400)
+    except json.JSONDecodeError as e:
+        return JsonResponse({
+            "result": "error",
+            "message": f"Invalid JSON format: {str(e)}"
+        }, status=400)
+    except Exception as e:
+        print(f"Error in get_files_from_filepath: {str(e)}")  # Log the error
+        return JsonResponse({
+            "result": "error",
+            "message": f"Server error: {str(e)}"
+        }, status=500)
 
 
 
