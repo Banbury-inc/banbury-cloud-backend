@@ -180,6 +180,7 @@ def getdeviceinfo(request, username):
     device_data = []
     for device in devices:
         device_data.append({
+            "_id": str(device.get("_id")),
             "device_name": device.get("device_name"),
             "device_type": device.get("device_type"),
             "storage_capacity_gb": device.get("storage_capacity_gb"),
