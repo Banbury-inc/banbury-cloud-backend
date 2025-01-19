@@ -1,10 +1,17 @@
 from pymongo.mongo_client import MongoClient
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
+from bson import ObjectId
+import json
 import os
 import motor.motor_asyncio
 from asgiref.sync import sync_to_async
 
+class JSONEncoder(json.JSONEncoder):
+    def default(self, o):
+        if isinstance(o, ObjectId):
+            return str(o)
+        return super().default(o)
 
 uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
 client = MongoClient(uri)
@@ -23,7 +30,7 @@ def get_files_from_filepath(username, filepath):
     user = user_collection.find_one({"username": username})
 
     if not user:
-        return {"error": "Please login first."}
+        return JsonResponse({"error": "Please login first."}, encoder=JSONEncoder)
 
     # Find all devices belonging to the user
     devices = list(device_collection.find({"user_id": user["_id"]}))
@@ -113,10 +120,10 @@ def get_files_from_filepath(username, filepath):
             {"$limit": 100}
         ]))
 
-        return {
+        return JsonResponse({
             "result": "success",
             "files": files_data
-        }
+        }, encoder=JSONEncoder)
 
     else:
 
@@ -126,10 +133,10 @@ def get_files_from_filepath(username, filepath):
         target_device = next((d for d in devices if d["device_name"] == device_name), None)
         
         if not target_device:
-            return {
+            return JsonResponse({
                 "result": "error",
                 "message": f"Device '{device_name}' not found"
-            }
+            }, encoder=JSONEncoder)
 
         # Simple query using device_id only
         query = {
@@ -172,10 +179,10 @@ def get_files_from_filepath(username, filepath):
         
         files_data = list(file_collection.aggregate(pipeline))
 
-        return {
+        return JsonResponse({
             "result": "success",
             "files": files_data
-        }
+        }, encoder=JSONEncoder)
 
 async def get_files_from_filepath_async(username, filepath):
     # Convert your MongoDB client to async

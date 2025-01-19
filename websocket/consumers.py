@@ -15,6 +15,7 @@ from apps.devices.declare_user_online import declare_user_online
 from apps.devices.declare_user_offline import declare_user_offline
 from apps.devices.get_user_info import get_user_info
 from apps.devices.get_device_info import get_device_info
+from apps.notifications.get_notifications import get_notifications as db_get_notifications
 
 def device_group_name(device_id):
     """Generate the group name for a particular device."""
@@ -138,7 +139,6 @@ class Consumer(AsyncWebsocketConsumer):
         if text_data:
             await self.handle_text_data(text_data)
         elif bytes_data is not None and isinstance(bytes_data, (bytes, bytearray)):
-            print("Received bytes data")
             await self.handle_bytes_data(bytes_data)
         else:
             print("No data received")
@@ -217,20 +217,28 @@ class Consumer(AsyncWebsocketConsumer):
             await handle_direct_message(self, data)
         elif message_type == "dm_event":
             await handle_direct_message(self, data)
+        elif message_type == "mark_notification_read":
+            # After marking notification as read, send update to user's group
+            user_id = data.get("user_id")
+            if user_id:
+                await self.channel_layer.group_send(
+                    f"user_{user_id}",
+                    {
+                        "type": "notification_update",
+                        "user_id": user_id
+                    }
+                )
         else:
             print(f"Received unrecognized message: {message_type}")
     
     async def handle_bytes_data(self, data):
         """Handle incoming bytes data"""
-        print(f"Received bytes data length: {len(data)}")
         
         # Use class-level tracking of transfer rooms
         transfer_rooms = [room for room in Consumer.active_transfer_rooms]
-        print(f"Found transfer rooms: {transfer_rooms}")
         
         if transfer_rooms:
             for room in transfer_rooms:
-                print(f"Broadcasting bytes to room: {room}")
                 try:
                     await self.channel_layer.group_send(
                         room,
@@ -240,16 +248,13 @@ class Consumer(AsyncWebsocketConsumer):
                             "sender": self.channel_name
                         }
                     )
-                    print(f"Successfully sent bytes to room {room}")
                 except Exception as e:
                     print(f"Error sending bytes to room {room}: {str(e)}")
         else:
-            print(f"No transfer rooms found")
             await self.send(bytes_data=data)
 
     async def dm_event(self, event):
         """Handle incoming direct messages"""
-        print(f"Received direct message: {event}")
         await self.send(text_data=json.dumps({
             "type": "direct_message",
             "message": event["message"],
@@ -281,10 +286,8 @@ class Consumer(AsyncWebsocketConsumer):
         """Handle incoming bytes transfer events"""
         # Don't send back to the sender
         if event.get('sender') != self.channel_name:
-            print(f"Sending bytes to channel {self.channel_name}")
             await self.send(bytes_data=event["bytes_data"])
-        else:
-            print(f"Skipping bytes send to original sender {self.channel_name}")
+
 
     async def file_transfer_complete(self, event):
         """Handle file transfer complete notification"""
@@ -301,4 +304,13 @@ class Consumer(AsyncWebsocketConsumer):
     async def friend_request(self, event):
         """Handle incoming friend requests"""
         await self.send(text_data=json.dumps(event["message"]))
+
+    async def notification_update(self, event):
+        """Handle notification updates"""
+        # Get fresh notifications for the user
+        user_id = event.get("user_id")
+        if user_id:
+            await self.send(text_data=json.dumps({
+                "type": "notification_update",
+            }))
 

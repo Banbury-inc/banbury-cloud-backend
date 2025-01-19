@@ -15,6 +15,11 @@ import re
 from datetime import datetime
 from bson.objectid import ObjectId
 
+uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+client = MongoClient(uri)
+db = client["NeuraNet"]
+session_collection = db["sessions"]
+device_collection = db["devices"]
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
@@ -23,17 +28,13 @@ def add_task(request, username):
     try:
         data = json.loads(request.body)
         task_name = data.get("task_name")
+        task_type = data.get("task_type")
         task_device = data.get("task_device")
         task_progress = data.get("task_progress")
         task_status = data.get("task_status")
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
 
-    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
-    client = MongoClient(uri)
-    db = client["NeuraNet"]
-    session_collection = db["sessions"]
-    device_collection = db["devices"]
 
     # Find the device_id based on device_name
     device = device_collection.find_one({"device_name": task_device})
@@ -55,6 +56,7 @@ def add_task(request, username):
         "device_id": device_id,
         "username": username,
         "task_name": task_name,
+        "task_type": task_type,
         "task_device": task_device,
         "task_status": task_status,
         "task_progress": task_progress,

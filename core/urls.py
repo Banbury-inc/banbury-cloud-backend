@@ -12,6 +12,8 @@ urlpatterns = [
     path('settings/', include('apps.settings.urls')),
     path('tasks/', include('apps.tasks.urls')),
     path('users/', include('apps.users.urls')),
+    path('notifications/', include('apps.notifications.urls')),
+    path('analytics/', include('apps.analytics.urls')),
 ]
 
 # Remove this as it's not needed for WebSocket routing
