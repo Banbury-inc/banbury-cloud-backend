@@ -18,6 +18,7 @@ from .forms import UserProfileForm
 from .src.getUserFriends import getUserFriends
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
+import os
 
 @api_view(["GET"])
 def getuserinfo2(request, username):
@@ -347,8 +348,9 @@ def get_profile_picture(request, username):
                 return HttpResponse(image_bytes, content_type=content_type)
             except Exception as e:
                 print(f"Error decoding image: {e}")
-                return HttpResponse(status=400)
-    return HttpResponse(status=404)
+                return JsonResponse({"message": "No picture available"}, status=400)
+    
+    return JsonResponse({"message": "No picture available"}, status=404)
 
 
 @api_view(["GET"])
