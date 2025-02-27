@@ -42,7 +42,7 @@ def pipeline(username):
             return {"error": f"Failed to update device predictions: {e}"}
     try:
         scored_devices = ScoringService().devices(device_predictions)
-        print(scored_devices)
+        print('scored devices', scored_devices)
     except Exception as e:
         return {"error": f"Failed to score devices: {e}"}
 

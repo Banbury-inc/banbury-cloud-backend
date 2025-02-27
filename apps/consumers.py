@@ -96,7 +96,7 @@ class Live_Data(AsyncWebsocketConsumer):
     async def _device_predictions_loop(self, username, device_name):
         print(f"Inside device predictions loop for {device_name}")
         while self.should_run:
-            print(f"Making device predictions for {username}")
+            print(f"Making device predictions for {username} in consumers.py in apps consumers.py")
             await self.make_device_predictions(username, device_name)
 
             await asyncio.sleep(1800)  # Use asyncio.sleep instead of time.sleep
@@ -110,8 +110,9 @@ class Live_Data(AsyncWebsocketConsumer):
 
     async def make_device_predictions(self, username, device_name):
         """Call pipeline"""
-        print(f"Making device predictions for {username}")
+        print(f"Making device predictions for {username} in apps.consumers.py 113")
         result = pipeline(username)
+        print('Pipeline result:', result)
         # Send a request to the device to start file sync
         await self.send(text_data=json.dumps({
             'message': "File sync request",

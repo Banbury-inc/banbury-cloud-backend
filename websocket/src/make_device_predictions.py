@@ -4,7 +4,7 @@ from apps.predictions.pipeline import pipeline
 
 async def make_device_predictions(username, device_name):
     """Call pipeline"""
-    print(f"Making device predictions for {username}")
+    print(f"Making device predictions for {username} in make_device_predictions.py")
     result = await pipeline(username)
 
     def convert_datetime(obj):

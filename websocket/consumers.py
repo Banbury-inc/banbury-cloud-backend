@@ -16,6 +16,7 @@ from apps.devices.declare_user_offline import declare_user_offline
 from apps.devices.get_user_info import get_user_info
 from apps.devices.get_device_info import get_device_info
 from apps.notifications.get_notifications import get_notifications as db_get_notifications
+import asyncio
 
 def device_group_name(device_id):
     """Generate the group name for a particular device."""
@@ -23,17 +24,37 @@ def device_group_name(device_id):
 
 
 class Consumer(AsyncWebsocketConsumer):
-    # Class-level dictionary to track all transfer rooms
+    # Class-level tracking
     active_transfer_rooms = set()
+    active_connections = {}  # device_id -> connection mapping
+    tasks = {}  # Store tasks by connection
+    TASK_SHUTDOWN_TIMEOUT = 300  # 5 minutes timeout for task shutdown
 
     async def connect(self):
-        
         # Get device_id from URL parameters
         self.device_id = self.scope['url_route']['kwargs'].get('device_id')
         if not self.device_id:
             print("No device ID found")
             await self.close()
             return
+
+        # Initialize tasks set for this connection
+        self.tasks[self.channel_name] = set()
+        
+        # Check for existing connection
+        existing_connection = self.active_connections.get(self.device_id)
+        if existing_connection and existing_connection != self:
+            print(f"Closing existing connection for device {self.device_id}")
+            try:
+                # Cancel all tasks for the existing connection with extended timeout
+                if existing_connection.channel_name in self.tasks:
+                    await self.cleanup_tasks(existing_connection.channel_name)
+                await existing_connection.close(code=1000)
+            except Exception as e:
+                print(f"Error closing existing connection: {e}")
+
+        # Store this connection
+        self.active_connections[self.device_id] = self
             
         # Initialize active_groups set
         self.active_groups = set([f"device_{self.device_id}"])
@@ -45,77 +66,133 @@ class Consumer(AsyncWebsocketConsumer):
         await self.accept()
         print(f"Connected to device {self.device_id}")
 
-        result = declare_device_online_with_id(self.device_id)
-        print(f"[WebSocket] Device online declaration result: {result}")
+        # Declare device online only if this is the active connection
+        if self.active_connections.get(self.device_id) == self:
+            result = declare_device_online_with_id(self.device_id)
+            print(f"[WebSocket] Device online declaration result: {result}")
 
-        # Get device info
-        device_info = await sync_to_async(get_single_device_info)(self.device_id)
-        # Add user to their personal notification group
-        user_id = device_info.get('device_info', {}).get('user_id')
-        print(f"[WebSocket] User ID: {user_id}")
-        if user_id:
-            print(f"User ID: {user_id}")
-            # Add to user's personal notification group
-            user_group = f"user_{user_id}"
-            self.active_groups.add(user_group)
-            await self.channel_layer.group_add(
-                user_group,
-                self.channel_name
-            )
-            result = declare_user_online(user_id)
-            print(f"[WebSocket] User online declaration result: {result}")
-            print(f"Added to {user_group}")
+            # Get device info
+            device_info = await sync_to_async(get_single_device_info)(self.device_id)
+            # Add user to their personal notification group
+            user_id = device_info.get('device_info', {}).get('user_id')
+            print(f"[WebSocket] User ID: {user_id}")
+            if user_id:
+                print(f"User ID: {user_id}")
+                # Add to user's personal notification group
+                user_group = f"user_{user_id}"
+                self.active_groups.add(user_group)
+                await self.channel_layer.group_add(
+                    user_group,
+                    self.channel_name
+                )
+                result = declare_user_online(user_id)
+                print(f"[WebSocket] User online declaration result: {result}")
+                print(f"Added to {user_group}")
 
-        
-        print(f"Active groups: {self.active_groups}")
+            print(f"Active groups: {self.active_groups}")
+
+    async def cleanup_tasks(self, channel_name: str):
+        """Clean up tasks with extended timeout"""
+        if channel_name in self.tasks:
+            try:
+                # Create a list of tasks to clean up
+                tasks_to_cleanup = list(self.tasks[channel_name])
+                
+                # Cancel all tasks
+                for task in tasks_to_cleanup:
+                    if not task.done():
+                        task.cancel()
+                
+                if tasks_to_cleanup:
+                    # Wait for all tasks to complete or timeout
+                    try:
+                        await asyncio.wait(
+                            tasks_to_cleanup,
+                            timeout=self.TASK_SHUTDOWN_TIMEOUT
+                        )
+                    except asyncio.TimeoutError:
+                        print(f"Timeout waiting for tasks to cleanup for channel {channel_name}")
+                    
+                # Clear and remove the tasks set
+                self.tasks[channel_name].clear()
+                del self.tasks[channel_name]
+                
+            except Exception as e:
+                print(f"Error during task cleanup: {e}")
 
     async def disconnect(self, close_code):
         try:
-            # Send disconnect message before closing
-            await self.send(text_data=json.dumps({
-                "type": "disconnect",
-                "code": close_code,
-                "reason": self.get_close_reason(close_code),
-                "should_reconnect": self.should_attempt_reconnect(close_code)
-            }))
+            # Cancel all tasks associated with this connection with extended timeout
+            await self.cleanup_tasks(self.channel_name)
+
+            # Only send disconnect message if this was the active connection
+            if self.active_connections.get(self.device_id) == self:
+                try:
+                    await asyncio.wait_for(
+                        self.send(text_data=json.dumps({
+                            "type": "disconnect",
+                            "code": close_code,
+                            "reason": self.get_close_reason(close_code),
+                            "should_reconnect": self.should_attempt_reconnect(close_code)
+                        })),
+                        timeout=5.0  # 5 second timeout for sending disconnect message
+                    )
+                except Exception as e:
+                    print(f"Error sending disconnect message: {e}")
+
+                # Remove from connection tracking
+                self.active_connections.pop(self.device_id, None)
+
+                # Remove from all active groups with extended timeout
+                group_removal_tasks = []
+                for group in self.active_groups:
+                    try:
+                        task = asyncio.create_task(
+                            self.channel_layer.group_discard(group, self.channel_name)
+                        )
+                        group_removal_tasks.append(task)
+                    except Exception as e:
+                        print(f"Error creating group removal task for {group}: {e}")
+
+                if group_removal_tasks:
+                    try:
+                        await asyncio.wait(
+                            group_removal_tasks,
+                            timeout=self.TASK_SHUTDOWN_TIMEOUT
+                        )
+                    except asyncio.TimeoutError:
+                        print("Timeout removing from groups")
+                    except Exception as e:
+                        print(f"Error during group removal: {e}")
+
+                self.active_groups.clear()
+
+                print(f"Disconnected from device {self.device_id} with code {close_code}")
+
+                # Only declare offline if this was the active connection
+                result = declare_device_offline_with_id(self.device_id)
+                print(f"[WebSocket] Device offline declaration result: {result}")
+
+                device_info = await sync_to_async(get_single_device_info)(self.device_id)
+                user_id = device_info.get('device_info', {}).get('user_id')
+                if user_id:
+                    user_info = await sync_to_async(get_user_info)(user_id)
+                    username = user_info.get('username')
+                    devices_info = await sync_to_async(get_device_info)(username)
+                    
+                    # Check if all devices are offline
+                    all_devices_offline = True
+                    for device in devices_info.get('devices', []):
+                        if device.get('online') == True and device.get('_id') != self.device_id:
+                            all_devices_offline = False
+                            break
+                            
+                    if all_devices_offline:
+                        result = declare_user_offline(user_id)
+                        print(f"[WebSocket] User offline declaration result: {result}")
+
         except Exception as e:
-            print(f"Error sending disconnect message: {e}")
-
-        # Remove from all active groups
-        for group in self.active_groups:
-            await self.channel_layer.group_discard(
-                group,
-                self.channel_name
-            )
-        self.active_groups.clear()
-        print(f"Disconnected from device {self.device_id} with code {close_code}")
-
-        result = declare_device_offline_with_id(self.device_id)
-        print(f"[WebSocket] Device offline declaration result: {result}")
-        device_info = await sync_to_async(get_single_device_info)(self.device_id)
-        user_id = device_info.get('device_info', {}).get('user_id')
-        if user_id:
-            user_info = await sync_to_async(get_user_info)(user_id)
-            username = user_info.get('username')
-            devices_info = await sync_to_async(get_device_info)(username)
-            
-            # Initialize all_devices_offline flag
-            all_devices_offline = True
-            
-            # Check online status from devices
-            for device in devices_info.get('devices', []):
-                if device.get('online') == True:
-                    all_devices_offline = False
-                    break
-                
-            if all_devices_offline:
-                result = declare_user_offline(user_id)
-                print(f"[WebSocket] User offline declaration result: {result}")
-
-        # Remove from class-level tracking when disconnecting
-        for group in self.active_groups:
-            if group.startswith("transfer_"):
-                Consumer.active_transfer_rooms.discard(group)
+            print(f"Error during disconnect: {e}")
 
     def get_close_reason(self, code):
         """Map close codes to human-readable reasons"""
@@ -131,24 +208,59 @@ class Consumer(AsyncWebsocketConsumer):
 
     def should_attempt_reconnect(self, code):
         """Determine if client should attempt to reconnect based on close code"""
-        # Codes where reconnection should be attempted
-        reconnect_codes = {1001, 1006, 1012, 1013}
+        # Only reconnect for abnormal closures and service restarts
+        reconnect_codes = {1006, 1012, 1013}
         return code in reconnect_codes
 
     async def receive(self, text_data=None, bytes_data=None):
-        if text_data:
-            await self.handle_text_data(text_data)
-        elif bytes_data is not None and isinstance(bytes_data, (bytes, bytearray)):
-            await self.handle_bytes_data(bytes_data)
-        else:
-            print("No data received")
-
+        try:
+            if text_data:
+                # Create a task for handling text data
+                task = asyncio.create_task(self.handle_text_data(text_data))
+                
+                # Only add to tasks if the channel still exists
+                if self.channel_name in self.tasks:
+                    self.tasks[self.channel_name].add(task)
+                    task.add_done_callback(
+                        lambda t: self.tasks.get(self.channel_name, set()).discard(t)
+                        if self.channel_name in self.tasks else None
+                    )
+                
+                await asyncio.wait_for(task, timeout=self.TASK_SHUTDOWN_TIMEOUT)
+                
+            elif bytes_data is not None and isinstance(bytes_data, (bytes, bytearray)):
+                # Create a task for handling bytes data
+                task = asyncio.create_task(self.handle_bytes_data(bytes_data))
+                
+                # Only add to tasks if the channel still exists
+                if self.channel_name in self.tasks:
+                    self.tasks[self.channel_name].add(task)
+                    task.add_done_callback(
+                        lambda t: self.tasks.get(self.channel_name, set()).discard(t)
+                        if self.channel_name in self.tasks else None
+                    )
+                
+                await asyncio.wait_for(task, timeout=self.TASK_SHUTDOWN_TIMEOUT)
+            else:
+                print("No data received")
+        except asyncio.TimeoutError:
+            print("Message handling timed out")
+        except Exception as e:
+            print(f"Error handling message: {e}")
 
     async def handle_text_data(self, data):
         print(f"Received text data: {data}")
         data = json.loads(data)
-        message_type = data.get("message_type")
+        message_type = data.get("type") or data.get("message_type")
         print(f"Message type: {message_type}")
+
+        if message_type == "ping":
+            # Respond to heartbeat
+            await self.send(text_data=json.dumps({
+                "type": "pong",
+                "timestamp": data.get("timestamp")
+            }))
+            return
 
         if message_type == "join_transfer_room":
             transfer_room = data.get("transfer_room")

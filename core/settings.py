@@ -152,14 +152,25 @@ ASGI_APPLICATION = 'core.urls.application'
 CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels_redis.core.RedisChannelLayer',
-        # 'BACKEND': 'channels_redis.core.InMemoryChannelLayer',
         'CONFIG': {
-            # "hosts": [('0.0.0.0', 8080)],
             "hosts": [('127.0.0.1', 6379)],
+            "capacity": 5000,  # Increased channel capacity
+            "expiry": 600,    # 10 minutes message expiry
         },
     },
 }
 
+# Increase application shutdown timeout (5 minutes)
+ASGI_APPLICATION_SHUTDOWN_TIMEOUT = 300  # seconds
+
+# WebSocket specific settings
+# WEBSOCKET_CONNECT_TIMEOUT = 30  # seconds
+# WEBSOCKET_READ_TIMEOUT = 300   # 5 minutes
+# WEBSOCKET_WRITE_TIMEOUT = 300  # 5 minutes
+
+WEBSOCKET_CONNECT_TIMEOUT = None # seconds
+WEBSOCKET_READ_TIMEOUT = None # 5 minutes
+WEBSOCKET_WRITE_TIMEOUT = None # 5 minutes
 
 # Internationalization
 # https://docs.djangoproject.com/en/3.0/topics/i18n/
