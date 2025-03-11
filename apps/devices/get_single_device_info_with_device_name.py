@@ -24,6 +24,9 @@ def get_single_device_info_with_device_name(username, device_name):
     # Find all devices belonging to the user
     device = device_collection.find_one({"user_id": user["_id"], "device_name": device_name})
 
+    if not device:
+        return {"error": f"Device '{device_name}' not found for user '{username}'"}
+
     device_data = {
         "_id": str(device["_id"]),
         "device_name": device["device_name"],

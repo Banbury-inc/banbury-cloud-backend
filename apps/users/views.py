@@ -337,19 +337,24 @@ def get_profile_picture(request, username):
     user_collection = db["users"]
     
     user = user_collection.find_one({"username": username})
-    if user and 'picture' in user:
-        picture_data = user['picture']
-        if isinstance(picture_data, dict) and 'data' in picture_data:
-            try:
-                # Try to decode the base64 data
-                image_bytes = base64.b64decode(picture_data['data'])
-                content_type = picture_data.get('content_type', 'image/jpeg')
-                return HttpResponse(image_bytes, content_type=content_type)
-            except Exception as e:
-                print(f"Error decoding image: {e}")
-                return HttpResponse(status=400)
-    return HttpResponse(status=404)
-
+    if not user:
+        return HttpResponse(status=400)  # User not found
+        
+    if 'picture' not in user:
+        return HttpResponse(status=400)  # No picture available
+        
+    picture_data = user['picture']
+    if not isinstance(picture_data, dict) or 'data' not in picture_data:
+        return HttpResponse(status=400)  # Invalid picture data format
+        
+    try:
+        # Try to decode the base64 data
+        image_bytes = base64.b64decode(picture_data['data'])
+        content_type = picture_data.get('content_type', 'image/jpeg')
+        return HttpResponse(image_bytes, content_type=content_type)
+    except Exception as e:
+        print(f"Error decoding image for user {username}: {e}")
+        return HttpResponse(status=404)  # Error decoding image
 
 @api_view(["GET"])
 def typeahead(request, search):

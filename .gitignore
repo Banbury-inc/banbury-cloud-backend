@@ -2,3 +2,11 @@ node_modules
 venv
 venv312
 .env
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
