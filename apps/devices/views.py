@@ -14,7 +14,7 @@ from .get_online_devices import get_online_devices
 from .update_device_configuration_preferences import update_device_configuration_preferences as db_update_device_configuration_preferences
 from .get_single_device_info import get_single_device_info as db_get_single_device_info
 from .get_single_device_info_with_device_name import get_single_device_info_with_device_name as db_get_single_device_info_with_device_name
-
+from .add_downloaded_model import add_downloaded_model as db_add_downloaded_model
 import pymongo
 import json
 import re
@@ -40,7 +40,7 @@ def add_device(request, username, device_name):
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
 
-    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority" 
     client = MongoClient(uri)
     db = client["NeuraNet"]
     device_collection = db["devices"]
@@ -106,6 +106,8 @@ def add_device(request, username, device_name):
         "username": username,  # Return username if success, None if fail
     }
     return JsonResponse(user_data)
+
+
 
 
 
@@ -205,11 +207,13 @@ def getdeviceinfo(request, username):
             "sync_status": device.get("sync_status"),
             "online": device.get("online"),
             "scanned_folders": device.get("scanned_folders"),
+            "downloaded_models": device.get("downloaded_models"),
         })
 
     device_data = {
         "devices": device_data,
     }
+    print(device_data)
 
     return JsonResponse(device_data)
 
@@ -344,3 +348,28 @@ def get_single_device_info(request, username, device_id):
 def get_single_device_info_with_device_name(request, username, device_name):
     device_info = db_get_single_device_info_with_device_name(username, device_name)
     return JsonResponse(device_info)
+
+
+
+@csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
+@require_http_methods(["POST"])
+@api_view(["POST"])
+def add_downloaded_model(request, username):
+    try:
+        data = json.loads(request.body)
+        device_name = data.get("device_name")
+        model_name = data.get("model_name")
+        response = add_downlaoded_model(username, device_name, model_name)
+        
+        if response == "success":
+            return JsonResponse({
+                "result": "success",
+                "message": "Device deleted successfully.",
+            })
+        else:
+            return JsonResponse({
+                "result": "fail",
+                "message": "Device not deleted.",
+            })
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
