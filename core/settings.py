@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'channels',
     'apps.authentication',
+    'apps.ai',
     'apps.devices',
     'apps.files',
     'apps.predictions',
