@@ -1,7 +1,7 @@
 import json
 from pymongo import MongoClient
 
-def add_downloaded_model(username, device_name, model_name):
+def remove_downloaded_model(username, device_name, model_name):
     # MongoDB connection
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
@@ -22,24 +22,19 @@ def add_downloaded_model(username, device_name, model_name):
     if not device:
         return {"error": "Device not found.", "status": 404}
 
-    # Ensure "downloaded_models" is an array, then add "name" to it
+    # Ensure "downloaded_models" exists and is an array
+    if not isinstance(device.get("downloaded_models"), list):
+        return {"error": "No downloaded models found.", "status": 404}
+
+    # Check if the model exists in the downloaded_models array
+    if model_name not in device["downloaded_models"]:
+        return {"error": "Model not found in downloaded models.", "status": 404}
+
     try:
-        # Check if "downloaded_models" is not an array, set it as an empty array
-        if not isinstance(device.get("downloaded_models"), list):
-            device_collection.update_one(
-                {"_id": device["_id"]},
-                {"$set": {"downloaded_models": []}}
-            )
-            device["downloaded_models"] = []
-
-        # Check if model_name already exists in downloaded_models
-        if model_name in device["downloaded_models"]:
-            return {"result": "success", "message": "Model already downloaded", "status": 200}
-
-        # Push "name" to the "downloaded_models" array
+        # Remove the model from the downloaded_models array
         device_collection.update_one(
             {"_id": device["_id"]},
-            {"$push": {"downloaded_models": model_name}}
+            {"$pull": {"downloaded_models": model_name}}
         )
     except Exception as e:
         print(f"Error updating device status: {e}")
@@ -55,7 +50,7 @@ def main():
     model_name = "model_1"
     
     print(f"Testing with username: {username}, device: {device_name}, model: {model_name}")
-    response = add_downloaded_model(username, device_name, model_name)
+    response = remove_downloaded_model(username, device_name, model_name)
     print(f"\nResponse:")
     print(json.dumps(response, indent=2))
 

@@ -40,8 +40,7 @@ def add_device(request, username, device_name):
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
 
-    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
-    client = MongoClient(uri)
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority" client = MongoClient(uri)
     db = client["NeuraNet"]
     device_collection = db["devices"]
     user_collection = db["users"]
@@ -207,6 +206,7 @@ def getdeviceinfo(request, username):
             "sync_status": device.get("sync_status"),
             "online": device.get("online"),
             "scanned_folders": device.get("scanned_folders"),
+            "downloaded_models": device.get("downloaded_models"),
         })
 
     device_data = {

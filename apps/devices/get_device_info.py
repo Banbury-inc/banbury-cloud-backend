@@ -55,6 +55,7 @@ def get_device_info(username):
             "sync_status": device.get("sync_status"),
             "online": device.get("online"),
             "scanned_folders": device.get("scanned_folders"),
+            "downloaded_models": device.get("downloaded_models"),
         })
 
     device_data = {
