@@ -5,7 +5,6 @@ from websocket.urls import websocket_urlpatterns
 urlpatterns = [
     path('', include('apps.urls')),
     path('authentication/', include('apps.authentication.urls')),
-    path('ai/', include('apps.ai.urls')),
     path('devices/', include('apps.devices.urls')),
     path('files/', include('apps.files.urls')),
     path('predictions/', include('apps.predictions.urls')),
