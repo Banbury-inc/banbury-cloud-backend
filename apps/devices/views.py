@@ -9,6 +9,7 @@ from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
+from bson import ObjectId
 from .remove_device import remove_device
 from .get_online_devices import get_online_devices
 from .update_device_configuration_preferences import update_device_configuration_preferences as db_update_device_configuration_preferences
@@ -350,25 +351,46 @@ def get_single_device_info_with_device_name(request, username, device_name):
 
 
 
-@csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
+@csrf_exempt
 @require_http_methods(["POST"])
 @api_view(["POST"])
 def add_downloaded_model(request, username):
     try:
         data = json.loads(request.body)
-        device_name = data.get("device_name")
+        device_id = data.get("device_id")
         model_name = data.get("model_name")
-        response = add_downlaoded_model(username, device_name, model_name)
         
-        if response == "success":
+        # Convert string device_id to ObjectId
+        if device_id == "":
+            return JsonResponse({
+                "result": "fail",
+                "message": "Device ID is required",
+            }, status=400)
+        try:
+            device_id_obj = ObjectId(device_id)
+        except:
+            return JsonResponse({
+                "result": "fail",
+                "message": "Invalid device ID format",
+            }, status=400)
+            
+        response = db_add_downloaded_model(username, device_id_obj, model_name)
+        
+        if response.get("status") == 200:
             return JsonResponse({
                 "result": "success",
-                "message": "Device deleted successfully.",
+                "message": response.get("message", "Model added successfully"),
             })
         else:
             return JsonResponse({
                 "result": "fail",
-                "message": "Device not deleted.",
-            })
+                "message": response.get("error", "Failed to add model"),
+            }, status=response.get("status", 500))
+            
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
+    except Exception as e:
+        return JsonResponse({
+            "result": "fail",
+            "message": str(e)
+        }, status=500)

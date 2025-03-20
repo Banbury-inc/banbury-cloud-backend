@@ -1,7 +1,8 @@
 import json
 from pymongo import MongoClient
+from bson import ObjectId
 
-def add_downloaded_model(username, device_name, model_name):
+def add_downloaded_model(username, device_id, model_name):
     # MongoDB connection
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
@@ -14,10 +15,10 @@ def add_downloaded_model(username, device_name, model_name):
     if not user:
         return {"error": "User not found.", "status": 404}
 
-    # Find the device belonging to the user by device_name
+    # Find the device belonging to the user by device_id
     device = device_collection.find_one({
         "user_id": user["_id"],
-        "device_name": device_name,
+        "_id": device_id,  # Using ObjectId directly
     })
     if not device:
         return {"error": "Device not found.", "status": 404}
@@ -46,16 +47,16 @@ def add_downloaded_model(username, device_name, model_name):
         return {"error": "Failed to update device status.", "status": 500}
 
     # Return success response
-    return {"result": "success", "username": username, "status": 200}
+    return {"result": "success", "message": "Model added successfully", "status": 200}
 
 def main():
     # Test the function
     username = "mmills"
-    device_name = "michael-mills-ubuntu"
+    device_id = "507f1f77bcf86cd799439011"  # This should be a valid ObjectId string
     model_name = "model_1"
     
-    print(f"Testing with username: {username}, device: {device_name}, model: {model_name}")
-    response = add_downloaded_model(username, device_name, model_name)
+    print(f"Testing with username: {username}, device: {device_id}, model: {model_name}")
+    response = add_downloaded_model(username, ObjectId(device_id), model_name)
     print(f"\nResponse:")
     print(json.dumps(response, indent=2))
 
