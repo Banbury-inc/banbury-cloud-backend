@@ -213,7 +213,6 @@ def getdeviceinfo(request, username):
     device_data = {
         "devices": device_data,
     }
-    print(device_data)
 
     return JsonResponse(device_data)
 
