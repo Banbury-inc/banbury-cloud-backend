@@ -121,12 +121,12 @@ LOGGING = {
     'disable_existing_loggers': False,
     'formatters': {
         'verbose': {
-            'format': '{levelname} {asctime} {message}',
+            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
             'style': '{',
         },
         'colored': {
             '()': 'colorlog.ColoredFormatter',
-            'format': '%(log_color)s%(levelname)s %(asctime)s %(message)s',
+            'format': '%(log_color)s%(levelname)s %(asctime)s %(module)s %(process)d %(thread)d %(message)s',
             'datefmt': '%Y-%m-%d %H:%M:%S',
         },
     },
@@ -138,6 +138,22 @@ LOGGING = {
     },
     'loggers': {
         'django': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+        },
+        'channels': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+        },
+        'channels.server': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+        },
+        'websocket': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+        },
+        'daphne': {
             'handlers': ['console'],
             'level': 'DEBUG',
         },

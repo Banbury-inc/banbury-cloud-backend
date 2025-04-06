@@ -17,6 +17,7 @@ from apps.devices.get_user_info import get_user_info
 from apps.devices.get_device_info import get_device_info
 from apps.notifications.get_notifications import get_notifications as db_get_notifications
 
+
 def device_group_name(device_id):
     """Generate the group name for a particular device."""
     return f"device_{device_id}"
@@ -27,17 +28,14 @@ class Consumer(AsyncWebsocketConsumer):
     active_transfer_rooms = set()
 
     async def connect(self):
-        
         # Get device_id from URL parameters
         self.device_id = self.scope['url_route']['kwargs'].get('device_id')
         if not self.device_id:
             print("No device ID found")
             await self.close()
             return
-            
         # Initialize active_groups set
         self.active_groups = set([f"device_{self.device_id}"])
-        
         await self.channel_layer.group_add(
             f"device_{self.device_id}",
             self.channel_name
@@ -66,7 +64,6 @@ class Consumer(AsyncWebsocketConsumer):
             print(f"[WebSocket] User online declaration result: {result}")
             print(f"Added to {user_group}")
 
-        
         print(f"Active groups: {self.active_groups}")
 
     async def disconnect(self, close_code):
@@ -88,7 +85,8 @@ class Consumer(AsyncWebsocketConsumer):
                 self.channel_name
             )
         self.active_groups.clear()
-        print(f"Disconnected from device {self.device_id} with code {close_code}")
+        print(f"Disconnected from device {
+              self.device_id} with code {close_code}")
 
         result = declare_device_offline_with_id(self.device_id)
         print(f"[WebSocket] Device offline declaration result: {result}")
@@ -98,16 +96,16 @@ class Consumer(AsyncWebsocketConsumer):
             user_info = await sync_to_async(get_user_info)(user_id)
             username = user_info.get('username')
             devices_info = await sync_to_async(get_device_info)(username)
-            
+
             # Initialize all_devices_offline flag
             all_devices_offline = True
-            
+
             # Check online status from devices
             for device in devices_info.get('devices', []):
                 if device.get('online') == True:
                     all_devices_offline = False
                     break
-                
+
             if all_devices_offline:
                 result = declare_user_offline(user_id)
                 print(f"[WebSocket] User offline declaration result: {result}")
@@ -143,7 +141,6 @@ class Consumer(AsyncWebsocketConsumer):
         else:
             print("No data received")
 
-
     async def handle_text_data(self, data):
         print(f"Received text data: {data}")
         data = json.loads(data)
@@ -153,7 +150,8 @@ class Consumer(AsyncWebsocketConsumer):
         if message_type == "join_transfer_room":
             transfer_room = data.get("transfer_room")
             if transfer_room:
-                print(f"Adding {self.channel_name} to transfer room: {transfer_room}")
+                print(f"Adding {self.channel_name} to transfer room: {
+                      transfer_room}")
                 # Add to both instance and class-level tracking
                 self.active_groups.add(transfer_room)
                 Consumer.active_transfer_rooms.add(transfer_room)
@@ -177,7 +175,8 @@ class Consumer(AsyncWebsocketConsumer):
                     self.channel_name
                 )
                 self.active_groups.add(transfer_room)
-                print(f"Added to transfer room during start_file_transfer: {transfer_room}")
+                print(f"Added to transfer room during start_file_transfer: {
+                      transfer_room}")
                 print(f"Current active groups: {self.active_groups}")
         elif message_type == "initiate_live_data_connection":
             await handle_initiate_live_data_connection(self, data)
@@ -186,7 +185,8 @@ class Consumer(AsyncWebsocketConsumer):
         elif message_type == "download_request":
             await handle_download_request(self, data)
         elif message_type == "file_sent_successfully":
-            transfer_room = data.get("transfer_room", f"transfer_{data['sending_device_id']}_{data['requesting_device_id']}")
+            transfer_room = data.get("transfer_room", f"transfer_{
+                                     data['sending_device_id']}_{data['requesting_device_id']}")
             # Make sure we're in the transfer room before sending
             if transfer_room not in self.active_groups:
                 await self.channel_layer.group_add(
@@ -194,7 +194,7 @@ class Consumer(AsyncWebsocketConsumer):
                     self.channel_name
                 )
                 self.active_groups.add(transfer_room)
-            
+
             await self.channel_layer.group_send(
                 transfer_room,
                 {
@@ -230,13 +230,13 @@ class Consumer(AsyncWebsocketConsumer):
                 )
         else:
             print(f"Received unrecognized message: {message_type}")
-    
+
     async def handle_bytes_data(self, data):
         """Handle incoming bytes data"""
-        
+
         # Use class-level tracking of transfer rooms
         transfer_rooms = [room for room in Consumer.active_transfer_rooms]
-        
+
         if transfer_rooms:
             for room in transfer_rooms:
                 try:
@@ -271,7 +271,7 @@ class Consumer(AsyncWebsocketConsumer):
                 event["transfer_room"],
                 self.channel_name
             )
-            
+
         await self.send(text_data=json.dumps({
             "request_type": "file_request",
             "message": "file_request",
@@ -287,7 +287,6 @@ class Consumer(AsyncWebsocketConsumer):
         # Don't send back to the sender
         if event.get('sender') != self.channel_name:
             await self.send(bytes_data=event["bytes_data"])
-
 
     async def file_transfer_complete(self, event):
         """Handle file transfer complete notification"""
@@ -313,4 +312,3 @@ class Consumer(AsyncWebsocketConsumer):
             await self.send(text_data=json.dumps({
                 "type": "notification_update",
             }))
-
