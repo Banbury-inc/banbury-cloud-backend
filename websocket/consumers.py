@@ -234,6 +234,8 @@ class Consumer(AsyncWebsocketConsumer):
     async def handle_bytes_data(self, data):
         """Handle incoming bytes data"""
 
+        print(f"Received bytes data: {len(data)} bytes")
+
         # Use class-level tracking of transfer rooms
         transfer_rooms = [room for room in Consumer.active_transfer_rooms]
 
@@ -247,7 +249,9 @@ class Consumer(AsyncWebsocketConsumer):
                             "bytes_data": data,
                             "sender": self.channel_name
                         }
-                    )
+                        )
+
+                    print(f"Sent bytes data to room {room}: {len(data)} bytes")
                 except Exception as e:
                     print(f"Error sending bytes to room {room}: {str(e)}")
         else:

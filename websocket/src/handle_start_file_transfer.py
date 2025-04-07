@@ -19,12 +19,29 @@ async def handle_start_file_transfer(consumer, data):
 
     print(f"Setting up transfer between sender {sending_device_id} and requester {requesting_device_id}")
 
-    # Add requesting device to transfer room
+    # Store transfer room information in consumer
+    if transfer_room:
+        consumer.transfer_room = transfer_room
+        
+        # Initialize active_transfer_rooms if needed
+        if not hasattr(consumer, 'active_transfer_rooms'):
+            consumer.active_transfer_rooms = set()
+        consumer.active_transfer_rooms.add(transfer_room)
+        
+        # Store in scope as well for redundancy
+        consumer.scope['transfer_room'] = transfer_room
+        if not consumer.scope.get('transfer_rooms'):
+            consumer.scope['transfer_rooms'] = set()
+        consumer.scope['transfer_rooms'].add(transfer_room)
+        
+        print(f"Stored transfer room {transfer_room} in consumer attributes for file transfer")
+
+    # Add sending device to transfer room
     await consumer.channel_layer.group_add(
         transfer_room,
         consumer.channel_name
     )
-    print(f"Added requesting device to transfer room: {transfer_room}")
+    print(f"Added sending device to transfer room: {transfer_room}")
 
     # Send confirmation back to client
     await consumer.send(text_data=json.dumps({

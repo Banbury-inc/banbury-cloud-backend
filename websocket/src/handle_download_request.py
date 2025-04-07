@@ -31,6 +31,24 @@ async def handle_download_request(consumer, data):
         transfer_room = f"transfer_{sending_device_id}_{requesting_device_id}"
         print(f"Creating transfer room: {transfer_room}")
         
+        # Store transfer room in consumer for future reference
+        consumer.transfer_room = transfer_room
+        
+        # Initialize active_transfer_rooms if it doesn't exist
+        if not hasattr(consumer, 'active_transfer_rooms'):
+            consumer.active_transfer_rooms = set()
+        
+        # Add transfer room to active rooms
+        consumer.active_transfer_rooms.add(transfer_room)
+        
+        # Store in consumer.scope as well for redundancy
+        if not consumer.scope.get('transfer_rooms'):
+            consumer.scope['transfer_rooms'] = set()
+        consumer.scope['transfer_rooms'].add(transfer_room)
+        consumer.scope['transfer_room'] = transfer_room
+        
+        print(f"Stored transfer room {transfer_room} in consumer attributes")
+        
         # Add requesting device to transfer room
         await consumer.channel_layer.group_add(
             transfer_room,
