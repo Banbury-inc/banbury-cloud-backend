@@ -32,7 +32,7 @@ COPY nginx.conf /etc/nginx/sites-enabled/default
 # Create startup script
 RUN echo '#!/bin/bash\n\
 redis-server --daemonize yes\n\
-daphne -b 127.0.0.1 -p 8082 core.asgi:application &\n\
+daphne -b 0.0.0.0 -p 8082 core.asgi:application &\n\
 sleep 2\n\
 exec nginx -g "daemon off;"' > /app/startup.sh
 RUN chmod +x /app/startup.sh

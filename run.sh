@@ -1,7 +1,6 @@
 #!/bin/bash
 
-DJANGO_PORT=8080
-DAPHNE_PORT=8082
+APP_PORT=8080
 CONTAINER_NAME="banbury-backend"
 IMAGE_NAME="banbury-backend-image"
 
@@ -172,27 +171,13 @@ check_host_ports() {
     local conflict_ports=""
     local conflict_ports_array=()
 
-    # Check Django port
-    if ! is_port_available $DJANGO_PORT; then
+    # Check App port
+    if ! is_port_available $APP_PORT; then
         # Verify port is actually in use before reporting a conflict
-        if verify_port_in_use $DJANGO_PORT; then
+        if verify_port_in_use $APP_PORT; then
             has_conflicts=true
-            conflict_ports="$DJANGO_PORT"
-            conflict_ports_array+=($DJANGO_PORT)
-        fi
-    fi
-
-    # Check Daphne port
-    if ! is_port_available $DAPHNE_PORT; then
-        # Verify port is actually in use before reporting a conflict
-        if verify_port_in_use $DAPHNE_PORT; then
-            has_conflicts=true
-            if [ -z "$conflict_ports" ]; then
-                conflict_ports="$DAPHNE_PORT"
-            else
-                conflict_ports="$conflict_ports, $DAPHNE_PORT"
-            fi
-            conflict_ports_array+=($DAPHNE_PORT)
+            conflict_ports="$APP_PORT"
+            conflict_ports_array+=($APP_PORT)
         fi
     fi
 
@@ -200,8 +185,8 @@ check_host_ports() {
         echo "Error: Port(s) $conflict_ports already in use on the host system."
         echo "Options:"
         echo "  1. Stop the processes using these ports"
-        echo "  2. Edit run.sh to use different ports"
-        echo "  3. Run 'lsof -i:$DJANGO_PORT' and 'lsof -i:$DAPHNE_PORT' to identify processes"
+        echo "  2. Edit run.sh to use different ports (APP_PORT=$APP_PORT)"
+        echo "  3. Run 'lsof -i:$APP_PORT' to identify processes"
         echo "  4. Quit"
         
         # Interactive prompt
@@ -246,7 +231,7 @@ check_host_ports() {
                 for port in "${conflict_ports_array[@]}"; do
                     echo "Processes using port $port:"
                     if command -v sudo &> /dev/null; then
-                        sudo lsof -i:$port || echo "No process found using port $port"
+                        sudo lsof -i:$port || echo "No process found using port $port (maybe free or needs sudo)"
                     else
                         lsof -i:$port || echo "No process found using port $port"
                     fi
@@ -282,14 +267,14 @@ start_container() {
     fi
     
     echo "Starting container $CONTAINER_NAME..."
-    if ! docker run --name $CONTAINER_NAME -p $DJANGO_PORT:8080 -p $DAPHNE_PORT:8082 -d $IMAGE_NAME; then
+    if ! docker run --name $CONTAINER_NAME -p $APP_PORT:80 -d $IMAGE_NAME; then
         echo "Failed to start Docker container."
         return 1
     fi
     
     echo "Container started successfully."
-    echo "Django available at http://localhost:$DJANGO_PORT"
-    echo "Daphne available at ws://localhost:$DAPHNE_PORT"
+    echo "Application available at http://localhost:$APP_PORT"
+    echo "Websocket available at ws://localhost:$APP_PORT/ws/..."
     return 0
 }
 
@@ -361,31 +346,21 @@ if [ "$USE_DOCKER" = true ]; then
             ;;
     esac
 else
-    # Direct execution path
+    # Direct execution path (Simplified - only uses Daphne)
     case "$ACTION" in
         "start"|"restart")
-            # Kill processes on desired ports
-            kill_process_on_port $DJANGO_PORT
-            kill_process_on_port $DAPHNE_PORT
+            # Kill process on the app port
+            kill_process_on_port $APP_PORT
 
-            echo "Starting Django server on port $DJANGO_PORT"
-            echo "Starting Daphne server on port $DAPHNE_PORT"
+            echo "Starting Daphne server on port $APP_PORT (handles HTTP and WebSocket)"
+            # Run Daphne directly on the APP_PORT
+            daphne -p $APP_PORT -b 0.0.0.0 core.asgi:application
 
-            # Run Django development server in the background
-            python3 manage.py runserver 0.0.0.0:$DJANGO_PORT --noreload &
-            DJANGO_PID=$!
-
-            # Run Daphne WebSocket server
-            daphne -p $DAPHNE_PORT -b 0.0.0.0 core.asgi:application
-
-            # When Daphne is stopped, also stop the Django server
-            kill $DJANGO_PID 2>/dev/null
-            echo "Servers stopped."
+            echo "Server stopped."
             ;;
         "stop")
-            kill_process_on_port $DJANGO_PORT
-            kill_process_on_port $DAPHNE_PORT
-            echo "Servers stopped."
+            kill_process_on_port $APP_PORT
+            echo "Server stopped."
             ;;
         "logs"|"stream-logs")
             echo "Logs are not available when running directly."
