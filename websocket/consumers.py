@@ -85,8 +85,7 @@ class Consumer(AsyncWebsocketConsumer):
                 self.channel_name
             )
         self.active_groups.clear()
-        print(f"Disconnected from device {
-              self.device_id} with code {close_code}")
+        print(f"Disconnected from device {self.device_id} with code {close_code}")
 
         result = declare_device_offline_with_id(self.device_id)
         print(f"[WebSocket] Device offline declaration result: {result}")
@@ -150,8 +149,7 @@ class Consumer(AsyncWebsocketConsumer):
         if message_type == "join_transfer_room":
             transfer_room = data.get("transfer_room")
             if transfer_room:
-                print(f"Adding {self.channel_name} to transfer room: {
-                      transfer_room}")
+                print(f"Adding {self.channel_name} to transfer room: {transfer_room}")
                 # Add to both instance and class-level tracking
                 self.active_groups.add(transfer_room)
                 Consumer.active_transfer_rooms.add(transfer_room)
@@ -175,8 +173,7 @@ class Consumer(AsyncWebsocketConsumer):
                     self.channel_name
                 )
                 self.active_groups.add(transfer_room)
-                print(f"Added to transfer room during start_file_transfer: {
-                      transfer_room}")
+                print(f"Added to transfer room during start_file_transfer: {transfer_room}")
                 print(f"Current active groups: {self.active_groups}")
         elif message_type == "initiate_live_data_connection":
             await handle_initiate_live_data_connection(self, data)
@@ -185,8 +182,7 @@ class Consumer(AsyncWebsocketConsumer):
         elif message_type == "download_request":
             await handle_download_request(self, data)
         elif message_type == "file_sent_successfully":
-            transfer_room = data.get("transfer_room", f"transfer_{
-                                     data['sending_device_id']}_{data['requesting_device_id']}")
+            transfer_room = data.get("transfer_room", f"transfer_{data['sending_device_id']}_{data['requesting_device_id']}")
             # Make sure we're in the transfer room before sending
             if transfer_room not in self.active_groups:
                 await self.channel_layer.group_add(

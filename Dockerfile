@@ -22,12 +22,13 @@ COPY requirements.txt .
 # Install Python dependencies
 RUN pip install --trusted-host pypi.python.org -r requirements.txt
 
-# Copy the rest of the application code
+# Create startup script
 COPY . .
+RUN echo '#!/bin/bash\nredis-server --daemonize yes\nexec daphne -b 0.0.0.0 -p 8080 core.asgi:application' > /app/startup.sh
+RUN chmod +x /app/startup.sh
 
 # Expose the ports for the application
 EXPOSE 8080 8082
 
-# Start Redis and run Daphne
-CMD redis-server --daemonize yes && \
-    daphne -b 0.0.0.0 -p 8080 core.asgi:application
+# Start services using JSON array format
+CMD ["bash", "/app/startup.sh"]
