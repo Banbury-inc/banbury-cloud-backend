@@ -24,7 +24,10 @@ RUN pip install --trusted-host pypi.python.org -r requirements.txt
 
 # Create startup script
 COPY . .
-RUN echo '#!/bin/bash\nredis-server --daemonize yes\nexec daphne -b 0.0.0.0 -p 8080 core.asgi:application' > /app/startup.sh
+RUN echo '#!/bin/bash\n\
+redis-server --daemonize yes\n\
+python3 manage.py runserver 0.0.0.0:8080 --noreload &\n\
+exec daphne -b 0.0.0.0 -p 8082 core.asgi:application' > /app/startup.sh
 RUN chmod +x /app/startup.sh
 
 # Expose the ports for the application
