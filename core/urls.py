@@ -5,6 +5,7 @@ urlpatterns = [
     path('', include('apps.urls')),
     path('authentication/', include('apps.authentication.urls')),
     path('devices/', include('apps.devices.urls')),
+    path('docs/', include('apps.docs.urls')),
     path('files/', include('apps.files.urls')),
     path('predictions/', include('apps.predictions.urls')),
     path('sessions/', include('apps.sessions.urls')),
