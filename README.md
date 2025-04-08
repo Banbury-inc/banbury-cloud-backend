@@ -13,15 +13,59 @@ select cloud build option instead of local
 
 test
 
-# Run server in dev environemnt
-'''
-python3  manage.py runserver 0.0.0.0:8080 --noreload
-'''
+# Development Environment
+
+## Running the Server
+
+The project includes a `run.sh` script that provides two ways to run the application:
+
+### 1. Direct Mode (default)
+
+Run services directly on your machine:
+
+```bash
+# Start Django and Daphne servers
+./run.sh start
+
+# Stop running servers
+./run.sh stop
+
+# Restart servers
+./run.sh restart
+```
+
+### 2. Docker Mode
+
+Run services in a Docker container:
+
+```bash
+# Build and start container
+./run.sh --docker start
+
+# Stop and remove container
+./run.sh --docker stop
+
+# Rebuild and restart container
+./run.sh --docker restart
+
+# View container logs (past logs only)
+./run.sh --docker logs
+
+# Stream container logs in real-time (continuous monitoring)
+./run.sh --docker stream-logs
+```
+
+### Legacy Commands
+
+These commands can still be used directly if needed:
+
+```bash
+# Run Django server
+python3 manage.py runserver 0.0.0.0:8080 --noreload
 
 # Run Websocket server
-'''
-daphne -p 8082 core.asgi:application
-'''
+daphne -p 8082 -b 0.0.0.0 core.asgi:application
+```
 
 # Websocket endpoints
 
