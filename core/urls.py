@@ -1,4 +1,5 @@
 from django.urls import path, include
+from websocket.urls import websocket_urlpatterns
 
 urlpatterns = [
     path('', include('apps.urls')),
@@ -12,4 +13,5 @@ urlpatterns = [
     path('users/', include('apps.users.urls')),
     path('notifications/', include('apps.notifications.urls')),
     path('analytics/', include('apps.analytics.urls')),
+    path('ws/', include(websocket_urlpatterns)),
 ]
