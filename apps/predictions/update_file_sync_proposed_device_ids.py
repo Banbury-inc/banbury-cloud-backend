@@ -2,6 +2,22 @@ from pymongo.mongo_client import MongoClient
 from bson import ObjectId
 
 def update_file_sync_proposed_device_ids(username, file_id, proposed_device_ids):
+    """Updates the list of proposed device IDs for a specific file sync entry.
+
+    Finds the file sync entry by user ID and file ID and sets the
+    'proposed_device_ids' field to the provided list.
+
+    Args:
+        username (str): The username of the user.
+        file_id (str): The string representation of the ObjectId of the file sync entry.
+        proposed_device_ids (list): A list of device ObjectIds (or strings to be
+                                    interpreted as such by the allocation service)
+                                    proposed to hold this file.
+
+    Returns:
+        dict: A dictionary indicating success (with username, file_id, modified_count)
+              or failure (with an error message).
+    """
     try:
         # MongoDB connection
         uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"

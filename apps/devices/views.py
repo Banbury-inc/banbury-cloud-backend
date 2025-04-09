@@ -24,6 +24,21 @@ import re
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
 def add_device(request, username, device_name):
+    """
+    Adds a new device associated with a specific user.
+
+    Retrieves device details from the POST request body and associates
+    the new device with the user identified by the username in the URL.
+
+    Args:
+        request: The Django HttpRequest object.
+        username (str): The username of the owner of the device.
+        device_name (str): The name of the device (passed in URL but overridden by POST body).
+
+    Returns:
+        JsonResponse: A JSON response indicating success or failure.
+                      On success, includes the username.
+    """
     try:
         data = json.loads(request.body)
         device_name = data.get("device_name")
@@ -116,6 +131,19 @@ def add_device(request, username, device_name):
 @require_http_methods(["POST"])
 @api_view(["POST"])
 def delete_device(request, username):
+    """
+    Deletes a device associated with a specific user.
+
+    Retrieves the device name from the POST request body and removes the
+    corresponding device entry for the user identified by the username in the URL.
+
+    Args:
+        request: The Django HttpRequest object.
+        username (str): The username of the owner of the device.
+
+    Returns:
+        JsonResponse: A JSON response indicating success or failure.
+    """
     try:
         data = json.loads(request.body)
         device_name = data.get("device_name")
@@ -141,6 +169,19 @@ def delete_device(request, username):
 @require_http_methods(["GET", "POST"])
 @api_view(["GET", "POST"])
 def update_device_configuration_preferences(request, username):
+    """
+    Updates the configuration preferences for a specific device.
+
+    Retrieves the device name and configuration settings from the request body
+    and updates the corresponding device for the user identified by the username.
+
+    Args:
+        request: The Django HttpRequest object.
+        username (str): The username of the owner of the device.
+
+    Returns:
+        JsonResponse: A JSON response indicating success and returning the updated data.
+    """
     data = json.loads(request.body)
     device_name = data.get("device_name")
     device_configurations = {
@@ -164,6 +205,20 @@ def update_device_configuration_preferences(request, username):
 
 @api_view(["GET"])
 def getdeviceinfo(request, username):
+    """
+    Retrieves information for all devices associated with a specific user.
+
+    Fetches device details from the database for the user identified
+    by the username in the URL.
+
+    Args:
+        request: The Django HttpRequest object.
+        username (str): The username of the user whose devices are to be retrieved.
+
+    Returns:
+        JsonResponse: A JSON response containing a list of device details
+                      or an error message if the user is not found.
+    """
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
     db = client["NeuraNet"]
@@ -222,6 +277,21 @@ def getdeviceinfo(request, username):
 @require_http_methods(["POST"])
 @api_view(["POST"])
 def handle_get_online_devices(request, username):
+    """
+    Retrieves a list of online devices for a specific user.
+
+    Calls the get_online_devices function to fetch the status of devices
+    for the user identified by the username.
+
+    Args:
+        request: The Django HttpRequest object.
+        username (str): The username of the user.
+
+    Returns:
+        JsonResponse: A JSON response indicating success or failure.
+                      On success, the message indicates successful deletion (which seems incorrect based on function name).
+                      TODO: Review the response message for accuracy.
+    """
     try:
         # Parse the JSON body
         data = json.loads(request.body)
@@ -245,6 +315,19 @@ def handle_get_online_devices(request, username):
 @require_http_methods(["POST"])
 @api_view(["POST"])
 def declare_device_online(request, username):
+    """
+    Marks a specific device as online in the database.
+
+    Retrieves the device name from the POST request body and sets the 'online'
+    status to True for the corresponding device of the specified user.
+
+    Args:
+        request: The Django HttpRequest object.
+        username (str): The username of the owner of the device.
+
+    Returns:
+        JsonResponse: A JSON response indicating success or failure.
+    """
     try:
         data = json.loads(request.body)
         device_name = data.get("device_name")
@@ -295,6 +378,19 @@ def declare_device_online(request, username):
 @require_http_methods(["POST"])
 @api_view(["POST"])
 def declare_device_offline(request, username):
+    """
+    Marks a specific device as offline in the database.
+
+    Retrieves the device name from the POST request body and sets the 'online'
+    status to False for the corresponding device of the specified user.
+
+    Args:
+        request: The Django HttpRequest object.
+        username (str): The username of the owner of the device.
+
+    Returns:
+        JsonResponse: A JSON response indicating success or failure.
+    """
     try:
         data = json.loads(request.body)
         device_name = data.get("device_name")
@@ -339,6 +435,19 @@ def declare_device_offline(request, username):
 
 @api_view(["GET"])
 def get_single_device_info(request, username, device_id):
+    """
+    Retrieves detailed information for a single device using its database ID.
+
+    Calls the db_get_single_device_info function to fetch details.
+
+    Args:
+        request: The Django HttpRequest object.
+        username (str): The username of the owner of the device.
+        device_id (str): The MongoDB ObjectId of the device as a string.
+
+    Returns:
+        JsonResponse: A JSON response containing the device information.
+    """
 
     device_info = db_get_single_device_info(username, device_id)
 
@@ -346,6 +455,19 @@ def get_single_device_info(request, username, device_id):
 
 @api_view(["GET"])
 def get_single_device_info_with_device_name(request, username, device_name):
+    """
+    Retrieves detailed information for a single device using its name.
+
+    Calls the db_get_single_device_info_with_device_name function to fetch details.
+
+    Args:
+        request: The Django HttpRequest object.
+        username (str): The username of the owner of the device.
+        device_name (str): The name of the device.
+
+    Returns:
+        JsonResponse: A JSON response containing the device information.
+    """
     device_info = db_get_single_device_info_with_device_name(username, device_name)
     return JsonResponse(device_info)
 
@@ -355,6 +477,20 @@ def get_single_device_info_with_device_name(request, username, device_name):
 @require_http_methods(["POST"])
 @api_view(["POST"])
 def add_downloaded_model(request, username):
+    """
+    Adds a record indicating a model has been downloaded to a specific device.
+
+    Retrieves the device ID (as string) and model name from the POST request body.
+    Updates the device record for the specified user.
+
+    Args:
+        request: The Django HttpRequest object.
+        username (str): The username of the owner of the device.
+
+    Returns:
+        JsonResponse: A JSON response indicating success or failure, including
+                      appropriate status codes and messages.
+    """
     try:
         data = json.loads(request.body)
         device_id = data.get("device_id")

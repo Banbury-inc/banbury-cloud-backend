@@ -4,6 +4,21 @@ from django.views.decorators.csrf import csrf_exempt
 from bson import ObjectId
 
 def get_device_predictions(username):
+    """Retrieves device prediction data for a specific user.
+
+    Fetches all prediction documents associated with the user's ID from the
+    'device_predictions' collection.
+
+    Args:
+        username (str): The username of the user whose predictions are to be retrieved.
+
+    Returns:
+        dict: A dictionary containing a list of device predictions under the key
+              "device_predictions". Each prediction includes details like device ID,
+              name, capacity, predicted speeds/usage, sync status, scores, and timestamps.
+              Returns an error dictionary if the user is not found or a database
+              connection error occurs.
+    """
     try:
         # MongoDB connection
         uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"

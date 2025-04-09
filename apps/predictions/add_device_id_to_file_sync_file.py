@@ -2,6 +2,18 @@ from pymongo.mongo_client import MongoClient
 from bson import ObjectId
 
 def add_device_id_to_file_sync_file(username, file_name, device_name):
+    """Adds a device ID to the device_ids array of a specific file sync entry.
+
+    Args:
+        username (str): The username of the user.
+        file_name (str): The name of the file sync entry to update.
+        device_name (str): The name of the device whose ID should be added.
+
+    Returns:
+        dict: A dictionary indicating the success or failure of the operation,
+              including details like username, file_name, and modified count,
+              or an error message.
+    """
     try:
         # MongoDB connection
         uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"

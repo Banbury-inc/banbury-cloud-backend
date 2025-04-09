@@ -16,6 +16,7 @@ import re
 
 @api_view(["GET"])
 def dashboard(request, username):
+    """Renders the dashboard page for a given user."""
     # Render the dashboard template with the username
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = pymongo.MongoClient(uri, server_api=ServerApi("1"))
@@ -47,6 +48,7 @@ def dashboard(request, username):
 @require_http_methods(["POST"])
 @api_view(["POST"])
 def get_session(request, username):
+    """Retrieves all sessions associated with a given username."""
     # Parse the JSON body
     data = json.loads(request.body)
 
@@ -93,6 +95,7 @@ def get_session(request, username):
 @require_http_methods(["GET", "POST"])
 @api_view(["GET", "POST"])
 def get_recent_session(request, username):
+    """Retrieves the most recent sessions for a user, filtered by device."""
     # Parse the JSON body
     data = json.loads(request.body)
     task_device = data.get("task_device")

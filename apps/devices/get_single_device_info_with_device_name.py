@@ -4,6 +4,22 @@ from django.views.decorators.csrf import csrf_exempt
 from bson.objectid import ObjectId
 
 def get_single_device_info_with_device_name(username, device_name):
+    """
+    Retrieves detailed information for a single device using its name and owner's username.
+
+    Connects to MongoDB, finds the user by username, then finds the specific
+    device by its name associated with that user's ID. Formats the device
+    data into a dictionary.
+
+    Args:
+        username (str): The username of the device owner.
+        device_name (str): The name of the device to retrieve.
+
+    Returns:
+        dict: A dictionary containing the device details under the key "device_info",
+              or an error message under the key "error" if the connection fails,
+              the user is not found, or the device is not found for that user.
+    """
     try:
         # MongoDB connection
         uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
@@ -64,5 +80,6 @@ def get_single_device_info_with_device_name(username, device_name):
     return device_data
 
 if __name__ == "__main__":
+    """Script execution entry point for testing get_single_device_info_with_device_name."""
     device_info = get_single_device_info_with_device_name("mmills", "michael-mills-ubuntu")
     print(device_info)

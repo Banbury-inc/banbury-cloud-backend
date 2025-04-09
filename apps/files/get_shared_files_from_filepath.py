@@ -178,6 +178,25 @@ def get_shared_files_from_filepath(username, filepath):
         }
 
 def get_shared_files_from_filepath(username, filepath):
+    """
+    Retrieves files shared with the specified user, optionally filtered by a filepath.
+
+    Handles different filepath scenarios for shared files:
+    - If filepath is None, empty, "Core", or "Core/Shared", it fetches all files
+      directly shared with the user (up to 100), sorted by upload date.
+    - If filepath specifies a path within the shared context (e.g., "Core/Shared/FolderName"),
+      it attempts to fetch shared files matching that parent path.
+
+    Args:
+        username (str): The username of the user whose shared files are being queried.
+        filepath (str or None): The path within the shared context to filter by.
+
+    Returns:
+        dict: A dictionary containing:
+              - "result": Always "success" in this implementation.
+              - "files": A list of shared file data dictionaries.
+              - "error": An error message string if the user is not found.
+    """
     # Find the user by username
     user = user_collection.find_one({"username": username})
 
@@ -253,6 +272,21 @@ def get_shared_files_from_filepath(username, filepath):
     }
 
 async def get_shared_files_from_filepath_async(username, filepath):
+    """
+    Asynchronous version intended to mirror get_shared_files_from_filepath.
+
+    Fetches user information asynchronously but currently lacks the
+    full implementation for fetching shared file data asynchronously.
+
+    Args:
+        username (str): The username of the user.
+        filepath (str or None): The filepath within the shared context to filter by.
+
+    Returns:
+        # Currently incomplete - intended to return shared file data similarly to the sync version.
+        # The function body only fetches the user async, needs file fetching logic.
+        pass # Placeholder, actual return value depends on full implementation
+    """
     # Convert your MongoDB client to async
     client = motor.motor_asyncio.AsyncIOMotorClient(uri)
     db = client["NeuraNet"]

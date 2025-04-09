@@ -2,6 +2,21 @@ import json
 from pymongo import MongoClient
 
 def remove_downloaded_model(username, device_name, model_name):
+    """
+    Removes a model name from the list of downloaded models for a specific device.
+
+    Connects to MongoDB, finds the user and device, checks if the model exists
+    in the 'downloaded_models' array, and removes it using $pull.
+
+    Args:
+        username (str): The username of the device owner.
+        device_name (str): The name of the device.
+        model_name (str): The name of the model to remove.
+
+    Returns:
+        dict: A dictionary containing the result ("success" or "error"),
+              a message or username, and an HTTP status code.
+    """
     # MongoDB connection
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
@@ -44,6 +59,12 @@ def remove_downloaded_model(username, device_name, model_name):
     return {"result": "success", "username": username, "status": 200}
 
 def main():
+    """
+    Provides a simple test case for the remove_downloaded_model function.
+
+    Uses predefined test data to call remove_downloaded_model and prints
+    the JSON response.
+    """
     # Test the function
     username = "mmills"
     device_name = "michael-mills-ubuntu"

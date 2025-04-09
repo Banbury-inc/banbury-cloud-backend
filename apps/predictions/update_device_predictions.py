@@ -4,6 +4,23 @@ from django.views.decorators.csrf import csrf_exempt
 from datetime import datetime
 
 def update_device_predictions(username, device_name, device_predictions):
+    """Updates or inserts prediction data for a specific device.
+
+    Finds the user and device, then updates the corresponding document in the
+    'device_predictions' collection with the provided prediction data using upsert.
+    Includes current sync capacity, file queue info, and a new timestamp.
+
+    Args:
+        username (str): The username of the user.
+        device_name (str): The name of the device whose predictions are being updated.
+        device_predictions (dict): A dictionary containing the new predicted values
+                                   (e.g., 'predicted_upload_speed', 'predicted_cpu_usage').
+
+    Returns:
+        str: "success" if the update/insert is successful, "user not found" or
+             "device not found" if lookups fail, or "error" if a database
+             exception occurs.
+    """
     '''
     Update a single device's predictions in the database
     '''

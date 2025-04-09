@@ -25,6 +25,29 @@ file_collection.create_index([("device_id", 1)])
 file_collection.create_index([("file_parent", 1)])  # Add index for file_parent
 
 def get_files_from_filepath(username, filepath):
+    """
+    Retrieves a list of files based on a specified filepath for a given user.
+
+    Handles different filepath scenarios:
+    - If filepath is None, empty, "Core", or "Core/Devices", it fetches a combined list
+      of the most recent file from each device and other recent files (up to 100).
+    - If filepath points to a specific device (e.g., "Core/Devices/DeviceName"),
+      it fetches files from that device.
+    - If filepath points to a directory within a device (e.g., "Core/Devices/DeviceName/Folder"),
+      it attempts to fetch files matching that path within the device.
+
+    Args:
+        username (str): The username of the user whose files are being queried.
+        filepath (str or None): The path to filter files by. Can represent the root,
+                                a specific device, or a directory within a device.
+
+    Returns:
+        JsonResponse: A Django JsonResponse object containing:
+                      - "result": "success" or "error".
+                      - "files": A list of file data dictionaries (if successful).
+                      - "error"/"message": An error message (if unsuccessful).
+                      Uses a custom JSONEncoder to handle ObjectId serialization.
+    """
 
     # Find the user by username
     user = user_collection.find_one({"username": username})
@@ -185,6 +208,21 @@ def get_files_from_filepath(username, filepath):
         }, encoder=JSONEncoder)
 
 async def get_files_from_filepath_async(username, filepath):
+    """
+    Asynchronous version of get_files_from_filepath.
+
+    Fetches user and device information asynchronously but currently lacks the
+    full implementation for fetching file data asynchronously.
+
+    Args:
+        username (str): The username of the user.
+        filepath (str or None): The filepath to filter files by.
+
+    Returns:
+        # Currently incomplete - intended to return file data similarly to the sync version.
+        # The function body only fetches user and devices async, needs file fetching logic.
+        pass # Placeholder, actual return value depends on full implementation
+    """
     # Convert your MongoDB client to async
     client = motor.motor_asyncio.AsyncIOMotorClient(uri)
     db = client["NeuraNet"]

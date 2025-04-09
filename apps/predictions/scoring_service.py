@@ -2,8 +2,24 @@ from ..settings.get_settings import get_settings
 
 class ScoringService():
     def __init__(self):
+        """Initializes the ScoringService."""
         pass
     def devices(self, performance_data, username):
+        """Calculates a weighted score for each device based on predicted performance.
+
+        Normalizes predicted metrics (speeds, usage) between 0 and 100. Higher speeds
+        are better, lower usage is better. Applies weights fetched from user settings
+        to compute a final score for each device.
+
+        Args:
+            performance_data (list): A list of dictionaries, where each dictionary
+                                    contains predicted performance metrics for a device.
+            username (str): The username to fetch scoring weights settings for.
+
+        Returns:
+            list: The input `performance_data` list, with a 'score' key added to
+                  each device dictionary.
+        """
         # Define the maximum and minimum for normalization from observed or expected ranges
         max_upload_speed = max(device['predicted_upload_speed'] for device in performance_data)
         min_upload_speed = min(device['predicted_upload_speed'] for device in performance_data)

@@ -2,6 +2,21 @@ from pymongo.mongo_client import MongoClient
 from bson.objectid import ObjectId
 
 def declare_device_online_with_id(device_id):
+    """
+    Marks a device as online in the database using its MongoDB ObjectId.
+
+    Connects to MongoDB, finds the device by its ID, and sets the 'online'
+    field to True. It uses upsert=True, which means if the device is somehow
+    not found after the initial check, it might create a new entry (though the
+    initial check should prevent this).
+
+    Args:
+        device_id (str): The MongoDB ObjectId of the device as a string.
+
+    Returns:
+        dict: A dictionary indicating success or error, along with a message
+              or the device_id on success.
+    """
     print(f"[declare_device_online] Starting - Device ID: {device_id}")
 
     # MongoDB connection

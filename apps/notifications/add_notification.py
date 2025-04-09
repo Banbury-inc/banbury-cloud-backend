@@ -23,7 +23,21 @@ def convert_objectid(obj):
 
 
 def add_notification(username, notification):
+    """Adds a notification for a specific user and sends a WebSocket update.
 
+    Args:
+        username (str): The username of the user to add the notification for.
+        notification (dict): A dictionary containing notification details:
+            - type (str): The type of notification.
+            - title (str): The title of the notification.
+            - description (str): The description of the notification.
+            - timestamp (datetime): The timestamp when the notification was created.
+            - read (bool): The read status of the notification.
+
+    Returns:
+        dict or str: A success dictionary with the username if successful,
+                     or an error string "User not found" if the user doesn't exist.
+    """
     # Find the user by username
     user = user_collection.find_one({'username': username})
     if not user:

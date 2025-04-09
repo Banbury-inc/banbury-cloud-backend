@@ -3,6 +3,20 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
 def get_device_info(username):
+    """
+    Retrieves information for all devices associated with a specific user.
+
+    Connects to MongoDB, finds the user by username, and fetches all device
+    documents linked to that user's ID. Formats the device data into a list.
+
+    Args:
+        username (str): The username of the user whose devices are to be retrieved.
+
+    Returns:
+        dict: A dictionary containing a list of device details under the key "devices",
+              or an error message under the key "error" if the connection fails
+              or the user is not found.
+    """
     try:
         # MongoDB connection
         uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
@@ -65,5 +79,6 @@ def get_device_info(username):
     return device_data
 
 if __name__ == "__main__":
+    """Script execution entry point for testing get_device_info."""
     device_info = get_device_info("mmills")
     print(device_info)

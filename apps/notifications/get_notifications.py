@@ -22,7 +22,16 @@ def convert_objectid(obj):
 
 
 def get_notifications(username):
+    """Retrieves all notifications for a specific user.
 
+    Args:
+        username (str): The username of the user whose notifications are to be retrieved.
+
+    Returns:
+        dict or str: A dictionary containing the result ("success") and a list of
+                     notifications (with ObjectIds converted to strings) if successful,
+                     or the string "User not found" if the user doesn't exist.
+    """
     # Find the user by username
     user = user_collection.find_one({'username': username})
     if not user:
@@ -36,10 +45,6 @@ def get_notifications(username):
     notifications = list(notifications_collection.find({'user_id': user_id}))
     # Convert ObjectIds to strings
     notifications = convert_objectid(notifications)
-
-
-
-
 
     # Return success response
     response = {

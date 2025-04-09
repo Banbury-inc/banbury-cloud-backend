@@ -4,6 +4,21 @@ from django.views.decorators.csrf import csrf_exempt
 from bson.objectid import ObjectId
 
 def get_single_device_info(device_id):
+    """
+    Retrieves detailed information for a single device using its MongoDB ObjectId.
+
+    Connects to MongoDB and fetches the device document corresponding to the
+    provided device_id. Formats the device data into a dictionary.
+
+    Args:
+        device_id (str): The MongoDB ObjectId of the device as a string.
+
+    Returns:
+        dict: A dictionary containing the device details under the key "device_info".
+              If the connection fails, returns {"error": "..."}.
+              If the device is not found, returns a dictionary with None values
+              for all device fields under "device_info".
+    """
     try:
         # MongoDB connection
         uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
@@ -57,5 +72,9 @@ def get_single_device_info(device_id):
     return device_data
 
 if __name__ == "__main__":
-    device_info = get_single_device_info("mmills", "6756092e76ebec5a4ac8cd09")
+    """Script execution entry point for testing get_single_device_info."""
+    # Note: The original call had two arguments, but the function only takes one.
+    # Assuming the first argument was intended to be the device_id.
+    # Replace "6756092e76ebec5a4ac8cd09" with a valid ObjectId for testing.
+    device_info = get_single_device_info("6756092e76ebec5a4ac8cd09")
     print(device_info)

@@ -1,6 +1,23 @@
 from pymongo import MongoClient
 
 def search_for_file(username, file_name):
+    """
+    Searches for a specific file by name across all devices belonging to a user.
+
+    Iterates through the user's devices and checks the file collection for a match
+    based on device_id and file_name.
+
+    Args:
+        username (str): The username of the user whose devices will be searched.
+        file_name (str): The exact name of the file to search for.
+
+    Returns:
+        dict or str: If the file is found, returns a dictionary containing file details
+                     and the name of the device it was found on.
+                     If the user is not found, returns the string "User not found".
+                     If the user has no devices, returns "No devices found for this user."
+                     If the file is not found on any device, returns {"result": "File not found"}.
+    """
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
     db = client['NeuraNet']

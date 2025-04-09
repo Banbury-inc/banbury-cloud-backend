@@ -6,6 +6,23 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 def get_file_sync(username, global_file_path=None):
+    """Retrieves the file synchronization information for a user.
+
+    Fetches all entries from the 'file_sync' collection associated with the
+    given username.
+
+    Args:
+        username (str): The username of the user.
+        global_file_path (str, optional): Path filter (currently unused). Defaults to None.
+
+    Returns:
+        tuple: A tuple containing:
+               - dict: A dictionary with a "files" key holding a list of sync file
+                       documents (ObjectIds converted to strings). If an error occurs,
+                       this dictionary contains an "error" key with a message.
+               - int: The HTTP status code (200 for success, 400 for missing username,
+                      404 for user not found, 500 for database errors).
+    """
     client = None
     try:
         if not username:

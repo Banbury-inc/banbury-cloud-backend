@@ -16,7 +16,22 @@ except Exception as e:
 
 
 def get_shared_files(username):
+    """
+    Retrieves a list of all files shared with the specified user.
 
+    For each shared file, it attempts to find the associated device belonging to the user
+    to determine its availability and fetches the original owner's username.
+
+    Args:
+        username (str): The username of the user whose shared files are being queried.
+
+    Returns:
+        dict: A dictionary containing:
+              - "shared_files": A list of dictionaries, each representing a shared file
+                                with details like name, path, size, owner, availability, etc.
+              - "error": An error message string if the user is not found.
+                       Note: Does not explicitly handle MongoDB connection errors after initial try/except.
+    """
 
     # Find the user by username
     user = user_collection.find_one({"username": username})

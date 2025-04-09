@@ -3,6 +3,21 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
 def get_user_info(user_id):
+    """
+    Retrieves information for a single user using their MongoDB ObjectId.
+
+    Connects to MongoDB and fetches the user document corresponding to the
+    provided user_id. Formats selected user data into a dictionary within a list.
+
+    Args:
+        user_id (str or ObjectId): The MongoDB ObjectId of the user (can be string or ObjectId).
+
+    Returns:
+        dict: A dictionary containing a list with a single user's details under
+              the key "user_info", or an error message under the key "error"
+              if the connection fails or the user is not found.
+              Note: List/array fields (devices, friends, friend_requests) are converted to strings.
+    """
     try:
         # MongoDB connection
         uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
@@ -42,5 +57,12 @@ def get_user_info(user_id):
     return user_data
 
 if __name__ == "__main__":
-    user_info = get_user_info("mmills")
+    """Script execution entry point for testing get_user_info."""
+    # Note: The function expects an ObjectId, but "mmills" is passed.
+    # This will likely fail unless there's a user document with _id="mmills".
+    # Replace "mmills" with a valid ObjectId string for testing.
+    from bson import ObjectId # Added for testing
+    # Example with a placeholder ObjectId string:
+    # user_info = get_user_info(ObjectId("507f1f77bcf86cd799439011"))
+    user_info = get_user_info("mmills") # Original call, likely needs correction
     print(user_info)

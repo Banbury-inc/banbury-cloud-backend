@@ -1,6 +1,27 @@
 from pymongo import MongoClient
 
 def update_files(username, device_name, files):
+    """
+    Updates or inserts file metadata in the database for a specific device.
+
+    Finds the device based on device_name. For each file in the 'files' list,
+    it attempts to find a matching document based on device_id, file_name,
+    and file_type. If found, it updates the document with new metadata;
+    otherwise (or if upsert=True), it inserts a new document.
+
+    Args:
+        username (str): The username of the user (currently unused in the function).
+        device_name (str): The name of the device whose files are being updated.
+        files (list): A list of dictionaries, each representing a file and containing
+                      metadata to be updated (e.g., file_path, dates, size, etc.).
+                      Must include 'file_name' and 'file_type' for matching.
+
+    Returns:
+        str: A status string indicating the outcome:
+             "device_not_found": If the specified device doesn't exist.
+             "device_id_not_found": If the found device document lacks an '_id'.
+             "success": If the update/upsert operations were processed for all files.
+    """
     # Connect to MongoDB
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)

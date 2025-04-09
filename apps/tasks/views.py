@@ -25,6 +25,7 @@ device_collection = db["devices"]
 @require_http_methods(["POST"])
 @api_view(["POST"])
 def add_task(request, username):
+    """Adds a new task for a given user."""
     try:
         data = json.loads(request.body)
         task_name = data.get("task_name")
@@ -80,6 +81,7 @@ def add_task(request, username):
 @require_http_methods(["POST"])
 @api_view(["POST"])
 def update_task(request, username):
+    """Updates an existing task for a given user."""
     try:
         data = json.loads(request.body)
         task_id = data.get("task_id")  # Get task_id instead of task_name
@@ -121,6 +123,7 @@ def update_task(request, username):
 @require_http_methods(["POST"])
 @api_view(["POST"])
 def fail_task(request, username):
+    """Marks a task as failed for a given user."""
     try:
         # Parse the JSON body
         data = json.loads(request.body)

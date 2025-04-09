@@ -20,6 +20,7 @@ import re
 @require_http_methods(["POST"])
 @api_view(["POST"])
 def get_settings(request, username):
+    """Retrieves settings for a given username."""
     try:
         response = db_get_settings(username)
         return JsonResponse(response)
@@ -32,6 +33,7 @@ def get_settings(request, username):
 @require_http_methods(["POST"])
 @api_view(["POST"])
 def update_settings(request, username):
+    """Updates settings for a given username."""
     try:
         data = json.loads(request.body)
         sync_entire_device_checked = data.get("sync_entire_device_checked")

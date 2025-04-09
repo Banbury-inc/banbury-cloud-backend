@@ -3,6 +3,23 @@ from pymongo import MongoClient
 from bson import ObjectId
 
 def add_downloaded_model(username, device_id, model_name):
+    """
+    Adds a model name to the list of downloaded models for a specific device.
+
+    Connects to MongoDB, finds the user and device, and updates the
+    'downloaded_models' array field in the device document.
+    If the field doesn't exist or is not a list, it initializes it.
+    It prevents adding duplicate model names.
+
+    Args:
+        username (str): The username of the device owner.
+        device_id (ObjectId): The MongoDB ObjectId of the device.
+        model_name (str): The name of the model to add.
+
+    Returns:
+        dict: A dictionary containing the result ("success" or "error"),
+              a message, and an HTTP status code.
+    """
     # MongoDB connection
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
@@ -50,6 +67,14 @@ def add_downloaded_model(username, device_id, model_name):
     return {"result": "success", "message": "Model added successfully", "status": 200}
 
 def main():
+    """
+    Provides a simple test case for the add_downloaded_model function.
+
+    Uses predefined test data to call add_downloaded_model and prints
+    the JSON response.
+    Note: The device_id used is a placeholder and likely needs to be replaced
+          with a valid ObjectId from the database for a successful test.
+    """
     # Test the function
     username = "mmills"
     device_id = "507f1f77bcf86cd799439011"  # This should be a valid ObjectId string

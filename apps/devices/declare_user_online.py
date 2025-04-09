@@ -2,6 +2,21 @@ from pymongo.mongo_client import MongoClient
 from bson.objectid import ObjectId
 
 def declare_user_online(user_id):
+    """
+    Marks a user as online in the database using their MongoDB ObjectId.
+
+    Connects to MongoDB, finds the user by their ID, and sets the 'online'
+    field to True. It uses upsert=True, meaning if the user is not found
+    after the initial check, it might create a new user document (though the
+    initial check should prevent this).
+
+    Args:
+        user_id (str): The MongoDB ObjectId of the user as a string.
+
+    Returns:
+        dict: A dictionary indicating success or error, along with a message
+              or the user_id on success.
+    """
     print(f"[declare_user_online] Starting - User ID: {user_id}")
 
     # MongoDB connection

@@ -8,6 +8,14 @@ db = client['NeuraNet']
 notifications_collection = db['notifications']
 
 def mark_notification_as_read(notification_id):
+    """Marks a specific notification as read.
+
+    Args:
+        notification_id (str): The ID of the notification to mark as read.
+
+    Returns:
+        dict: A dictionary indicating the success of the operation.
+    """
     # Add notification to the user's notifications
 
     # Set the notification_id to an object id

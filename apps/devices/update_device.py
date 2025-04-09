@@ -3,6 +3,28 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
 def update_device(username, sending_device_name, requesting_device_name, device_info):
+    """
+    Updates the information for a specific device based on received data.
+
+    Connects to MongoDB, finds the user by username, finds the device by the
+    'sending_device_name', and updates its details using $set for static info
+    and $push for time-series data (usage, speeds, etc.).
+
+    Args:
+        username (str): The username of the device owner.
+        sending_device_name (str): The name of the device whose info is being updated.
+        requesting_device_name (str): The name of the device that requested the info (currently unused).
+        device_info (dict): A dictionary containing the new device details.
+                            Expected keys include static info (like manufacturer,
+                            model, capacity) and time-series data points (like
+                            cpu_usage, ram_usage, speeds, current_time).
+
+    Returns:
+        str: "success" if the update was successful.
+             "user not found" if the user does not exist.
+             "device not found" if the sending device does not exist for that user.
+             "error" if an exception occurred during the database update.
+    """
     # MongoDB connection
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)

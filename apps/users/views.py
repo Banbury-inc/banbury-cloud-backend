@@ -21,6 +21,7 @@ from asgiref.sync import async_to_sync
 
 @api_view(["GET"])
 def getuserinfo2(request, username):
+    """Retrieves detailed user information (version 2)."""
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
     username = username
@@ -62,6 +63,7 @@ def getuserinfo2(request, username):
 
 @api_view(["GET"])
 def getuserinfo(request, username):
+    """Retrieves user information including profile picture and friends."""
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
     db = client["NeuraNet"]
@@ -101,6 +103,7 @@ def getuserinfo(request, username):
 
 @api_view(["GET"])
 def get_small_user_info(request, username):
+    """Retrieves basic user information (first name, last name, phone, email)."""
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
     username = username
@@ -128,6 +131,7 @@ def get_small_user_info(request, username):
 
 @api_view(["GET"])
 def getuserinfo3(request, username, password):
+    """Authenticates a user based on username and password (version 3)."""
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
     db = client["NeuraNet"]
@@ -161,6 +165,7 @@ def getuserinfo3(request, username, password):
 
 @api_view(["GET"])
 def getuserinfo4(request, username, password):
+    """Authenticates a user based on username and password (version 4)."""
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
     db = client["NeuraNet"]
@@ -204,6 +209,7 @@ def getuserinfo4(request, username, password):
 
 @api_view(["POST"])
 def update_user_profile(request):
+    """Updates the user profile based on the provided data."""
     try:
         uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
         client = pymongo.MongoClient(uri, server_api=ServerApi("1"))
@@ -280,6 +286,7 @@ def update_user_profile(request):
 
 @api_view(["GET"])
 def change_profile(request, username, password, first_name, last_name, email):
+    """Updates user profile information, including optional password change."""
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
     db = client["NeuraNet"]
@@ -331,6 +338,7 @@ def change_profile(request, username, password, first_name, last_name, email):
 
 @api_view(["GET"])
 def get_profile_picture(request, username):
+    """Retrieves the profile picture for a given user."""
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
     db = client["NeuraNet"]
@@ -358,6 +366,7 @@ def get_profile_picture(request, username):
 
 @api_view(["GET"])
 def typeahead(request, search):
+    """Provides typeahead suggestions for users based on a search term."""
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
     db = client["NeuraNet"]
@@ -405,6 +414,7 @@ def typeahead(request, search):
 
 @api_view(["POST"])
 def send_friend_request(request):
+    """Sends a friend request from one user to another."""
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
     db = client["NeuraNet"]
@@ -461,6 +471,7 @@ def send_friend_request(request):
 
 @api_view(["POST"])
 def remove_friend(request):
+    """Removes a friend connection between two users."""
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
     db = client["NeuraNet"]
@@ -516,6 +527,7 @@ def remove_friend(request):
 
 @api_view(["GET"])
 def get_friends(request, username):
+    """Retrieves the list of friends for a given user."""
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
     db = client["NeuraNet"]
@@ -538,6 +550,7 @@ def get_friends(request, username):
 
 @api_view(["GET"])
 def get_friend_requests(request, username):
+    """Retrieves the list of pending friend requests for a given user."""
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
     db = client["NeuraNet"]
@@ -559,6 +572,7 @@ def get_friend_requests(request, username):
 
 @api_view(["POST"])
 def accept_friend_request(request):
+    """Accepts a pending friend request."""
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
     db = client["NeuraNet"]
@@ -615,6 +629,7 @@ def accept_friend_request(request):
 
 @api_view(["POST"])
 def reject_friend_request(request):
+    """Rejects a pending friend request."""
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
     db = client["NeuraNet"]
@@ -672,6 +687,7 @@ def reject_friend_request(request):
 
 @api_view(["GET"])
 def get_user_friends(request, username):
+    """Retrieves the list of friends for a given user using the helper function."""
     friends = getUserFriends(username)
     if friends: 
         return JsonResponse({"result": "success", "friends": friends})

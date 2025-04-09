@@ -12,10 +12,23 @@ from concurrent.futures import ThreadPoolExecutor
 
 class PredictionService:
     def __init__(self):
+        """Initializes the PredictionService with a ThreadPoolExecutor."""
         # Create a thread pool for CPU-intensive ML operations
         self.executor = ThreadPoolExecutor(max_workers=3)
     
     def create_dataset(self, X, y, time_steps=1):
+        """Creates sequences for LSTM model training.
+
+        Args:
+            X (pd.DataFrame): DataFrame of features.
+            y (pd.Series): Series of target values.
+            time_steps (int): The number of time steps to look back.
+
+        Returns:
+            tuple: A tuple containing:
+                   - np.array: Input sequences (Xs).
+                   - np.array: Target values (ys).
+        """
         Xs, ys = [], []
         for i in range(len(X) - time_steps):
             v = X.iloc[i:(i + time_steps)].values
@@ -24,6 +37,17 @@ class PredictionService:
         return np.array(Xs), np.array(ys)
 
     def build_and_train_model(self, X_train, y_train, time_steps, features):
+        """Builds and trains an LSTM model.
+
+        Args:
+            X_train (np.array): Training input sequences.
+            y_train (np.array): Training target values.
+            time_steps (int): Number of time steps in input sequences.
+            features (int): Number of features in input sequences.
+
+        Returns:
+            tensorflow.keras.models.Sequential: The trained Keras LSTM model.
+        """
         model = Sequential([
             LSTM(50, activation='relu', input_shape=(time_steps, features)),
             Dense(1)
@@ -33,6 +57,19 @@ class PredictionService:
         return model
 
     def predict_future_speed(self, model, df, scaler, time_steps, data_type):
+        """Predicts the next value in a time series using the trained model.
+
+        Args:
+            model (tensorflow.keras.models.Sequential): The trained LSTM model.
+            df (pd.DataFrame): DataFrame containing the historical data.
+            scaler (sklearn.preprocessing.MinMaxScaler): Scaler used for normalization.
+            time_steps (int): Number of time steps used for prediction.
+            data_type (str): The column name in df containing the data to predict
+                             (e.g., 'speed', 'usage').
+
+        Returns:
+            float: The predicted value, inverse-transformed to the original scale.
+        """
         data = df[[data_type]].tail(time_steps).values
         last_X_scaled = scaler.transform(data)
         last_X = last_X_scaled.reshape(1, time_steps, 1)
@@ -41,6 +78,19 @@ class PredictionService:
         return predicted_speed
 
     async def performance_data(self, devices, show_graph):
+        """Asynchronously predicts performance metrics for a list of devices.
+
+        Delegates the actual prediction work to `_perform_predictions` running
+        in a ThreadPoolExecutor.
+
+        Args:
+            devices (dict): A dictionary containing a list of device dictionaries under the key 'devices'.
+            show_graph (bool): Whether to display matplotlib graphs of predictions.
+
+        Returns:
+            list: A list of dictionaries, each containing predictions for one device.
+                  Returns an empty list or list with partial results if errors occur.
+        """
         # Run the CPU-intensive predictions in a thread pool
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(
@@ -53,6 +103,19 @@ class PredictionService:
         return result if isinstance(result, list) else [result]
 
     def _perform_predictions(self, devices, show_graph):
+        """Synchronously performs performance predictions for devices.
+
+        Processes each device, extracts historical data (speeds, usage), trains
+        LSTM models for each metric, and predicts future values.
+
+        Args:
+            devices (dict): A dictionary containing a list of device dictionaries under the key 'devices'.
+            show_graph (bool): Whether to display matplotlib graphs.
+
+        Returns:
+            list: A list of dictionaries, each containing predicted metrics for a device
+                  (e.g., 'predicted_upload_speed', 'predicted_cpu_usage').
+        """
         future_datetime = datetime.strptime('2024-04-30 12:00:00', '%Y-%m-%d %H:%M:%S')
         performance_data = []
 
@@ -306,6 +369,19 @@ class PredictionService:
         return performance_data
 
     def train_model_with_data(self, X, y, time_steps, features):
+        """Trains an LSTM model after splitting data, handling insufficient data.
+
+        Args:
+            X (np.array): Input sequences.
+            y (np.array): Target values.
+            time_steps (int): Number of time steps.
+            features (int): Number of features.
+
+        Returns:
+            tensorflow.keras.models.Sequential or None: The trained model, or None if
+                                                      there is insufficient data or
+                                                      an error occurs during training.
+        """
         if len(X) < 2:  # If we have too few samples
             print(f"Not enough data points for prediction. We currnently have {len(X)} samples, and need at least 2.")
             return None

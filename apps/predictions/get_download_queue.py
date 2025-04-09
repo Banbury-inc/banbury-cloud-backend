@@ -5,6 +5,26 @@ import json
 import asyncio
 
 def get_download_queue(username, device_id):
+    """Gets the download queue for a specific device.
+
+    Finds files that are proposed to be synced to this device but are not yet present
+    ('proposed_device_ids' contains device_id, but 'device_ids' does not).
+    It then checks which of these needed files are available on at least one *online*
+    device that currently holds the file.
+
+    Args:
+        username (str): The username of the user.
+        device_id (str): The ID of the device for which to get the download queue.
+
+    Returns:
+        dict or str: A dictionary containing:
+                        - 'files_needed': Count of files proposed but not yet on the device.
+                        - 'files_available_for_download': Count of needed files available from online peers.
+                        - 'files': List of dicts, each with 'file_name' and the 'device_name'
+                          of an online peer that has the file.
+                     Returns an error string if input is missing, user not found, or
+                     a database error occurs.
+    """
     try:
         if not username or not device_id:
             return "Missing username or device_id"

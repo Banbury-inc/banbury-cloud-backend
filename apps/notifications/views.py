@@ -23,6 +23,17 @@ import re
 @require_http_methods(["GET"])
 @api_view(["GET"])
 def get_notifications(request, username):
+    """
+    Retrieves all notifications for a specific user.
+
+    Args:
+        request: The HTTP request object.
+        username: The username of the user whose notifications are to be retrieved.
+
+    Returns:
+        JsonResponse: A JSON response containing the list of notifications
+                      or an error message.
+    """
     try:
         # Since we're not using request parameters, we just pass username directly
         notifications = db_get_notifications(username)
@@ -43,6 +54,18 @@ def get_notifications(request, username):
 @require_http_methods(["POST"])
 @api_view(["POST"])
 def add_notification(request, username):
+    """
+    Adds a new notification for a specific user.
+
+    Expects a JSON body with a "notification" key.
+
+    Args:
+        request: The HTTP request object.
+        username: The username of the user for whom the notification is added.
+
+    Returns:
+        JsonResponse: A JSON response indicating the result of the operation.
+    """
     try:
         data = json.loads(request.body)
         notification = data.get("notification")
@@ -56,6 +79,18 @@ def add_notification(request, username):
 @require_http_methods(["POST"])
 @api_view(["POST"])
 def delete_notification(request, username):
+    """
+    Deletes a specific notification for a user.
+
+    Expects a JSON body with a "notification_id" key.
+
+    Args:
+        request: The HTTP request object.
+        username: The username of the user whose notification is to be deleted.
+
+    Returns:
+        JsonResponse: A JSON response indicating the result of the operation.
+    """
     try:
         data = json.loads(request.body)
         notification_id = data.get("notification_id")
@@ -69,6 +104,17 @@ def delete_notification(request, username):
 @require_http_methods(["POST"])
 @api_view(["POST"])
 def mark_notification_as_read(request):
+    """
+    Marks a specific notification as read based on its ID.
+
+    Expects a JSON body with a "notification_id" key.
+
+    Args:
+        request: The HTTP request object.
+
+    Returns:
+        JsonResponse: A JSON response indicating the result of the operation.
+    """
     try:
         data = json.loads(request.body)
         notification_id = data.get("notification_id")

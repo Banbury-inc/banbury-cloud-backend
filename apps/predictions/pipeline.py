@@ -17,6 +17,40 @@ from datetime import datetime
 import asyncio
 
 async def pipeline(username):
+    """Executes the end-to-end prediction and allocation pipeline for a user.
+
+    Steps:
+    1. Fetches current device information, existing predictions, and file sync info.
+    2. Checks if device predictions are older than 30 minutes.
+    3. If outdated:
+        a. Runs the PredictionService to generate new performance predictions.
+        b. Updates device predictions in the database.
+        c. Runs the ScoringService to calculate device scores based on predictions.
+        d. Updates device scores in the database.
+        e. Fetches the updated predictions (including scores).
+        f. Runs the AllocationService to allocate files to devices based on scores.
+        g. Generates file-to-device mappings from the allocation.
+        h. Updates the 'proposed_device_ids' for each file in the 'file_sync' collection.
+        i. For each allocated device, gets its download queue (needed vs. available files).
+        j. Updates the download queue status (files_needed, files_available_for_download)
+           in the device predictions collection.
+    4. If predictions are up-to-date:
+        a. Runs AllocationService with existing predictions.
+        b. Generates file-to-device mappings.
+        c. Gets the download queue for each device.
+
+    Args:
+        username (str): The username for whom to run the pipeline.
+
+    Returns:
+        dict: A dictionary containing:
+              - "success": A success message string.
+              - "results": A list of results from update operations (may be empty).
+              - "allocated_devices": The output from the AllocationService.
+              - "file_device_mappings": The generated file-to-device mappings.
+              - "download_queue": The download queue for the last processed device.
+              Or an error dictionary if any step fails.
+    """
     try:
         device_info = get_device_info(username)
     except Exception as e:

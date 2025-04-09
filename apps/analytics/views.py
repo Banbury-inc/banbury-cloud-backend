@@ -9,6 +9,7 @@ from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
+from drf_spectacular.utils import extend_schema, OpenApiResponse
 import pymongo
 import json
 import re
@@ -24,6 +25,7 @@ analytics_collection = db["analytics"]
 @require_http_methods(["POST", "GET"])
 @api_view(["POST", "GET"])
 def add_file_request(request):
+    """Increments the file_requests count in the analytics collection."""
     # Find the analytics document for this user, or create if it doesn't exist
     analytics = analytics_collection.find_one_and_update(
         {"_id": "analytics"},  # Filter to find the document
@@ -43,6 +45,7 @@ def add_file_request(request):
 @require_http_methods(["POST", "GET"])
 @api_view(["POST", "GET"])
 def add_file_request_success(request):
+    """Increments the file_requests_success count in the analytics collection."""
     # Find the analytics document for this user, or create if it doesn't exist
     analytics = analytics_collection.find_one_and_update(
         {"_id": "analytics"},  # Filter to find the document
@@ -63,7 +66,7 @@ def add_file_request_success(request):
 @require_http_methods(["GET"])
 @api_view(["GET"])
 def get_analytics(request, username):
-
+    """Retrieves analytics data for a specific user."""
 
     response_data = {"result": "success", "analytics": "analytics"}
 

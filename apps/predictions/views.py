@@ -27,6 +27,16 @@ import re
 @require_http_methods(["GET"])
 @api_view(["GET"])
 def run_pipeline(request, username):
+    """
+    Executes the prediction pipeline for the specified user.
+
+    Args:
+        request: The HttpRequest object.
+        username: The username for whom to run the pipeline.
+
+    Returns:
+        JsonResponse: A JSON response indicating success and containing the pipeline results.
+    """
     result = pipeline(username)
     response_data = {
         "result": "success",
@@ -40,6 +50,18 @@ def run_pipeline(request, username):
 @require_http_methods(["POST"])
 @api_view(["POST"])
 def add_file_to_sync(request, username):
+    """
+    Adds a file to the synchronization list for a specific device belonging to the user.
+
+    Expects a JSON body with 'device_name' and 'file_path'.
+
+    Args:
+        request: The HttpRequest object containing the file details in its body.
+        username: The username who owns the device.
+
+    Returns:
+        JsonResponse: A JSON response indicating the result of the operation.
+    """
     data = json.loads(request.body)
     device_name = data.get("device_name")
     file_path = data.get("file_path")
@@ -57,6 +79,18 @@ def add_file_to_sync(request, username):
 @require_http_methods(["POST"])
 @api_view(["POST"])
 def remove_file_from_sync(request, username):
+    """
+    Removes a file from the synchronization list for a specific device belonging to the user.
+
+    Expects a JSON body with 'device_name' and 'file_path'.
+
+    Args:
+        request: The HttpRequest object containing the file details in its body.
+        username: The username who owns the device.
+
+    Returns:
+        JsonResponse: A JSON response indicating the result of the operation.
+    """
     data = json.loads(request.body)
     device_name = data.get("device_name")
     file_path = data.get("file_path")
@@ -75,6 +109,19 @@ def remove_file_from_sync(request, username):
 @require_http_methods(["POST"])
 @api_view(["POST"])
 def get_files_to_sync(request, username):
+    """
+    Retrieves the list of files marked for synchronization for a user.
+
+    Optionally filters by a specific global file path provided in the JSON body.
+    Expects an optional JSON body with 'global_file_path'.
+
+    Args:
+        request: The HttpRequest object, potentially containing 'global_file_path'.
+        username: The username whose sync files are being requested.
+
+    Returns:
+        JsonResponse: A JSON response containing the list of files or an error message.
+    """
     try:
         # Parse request body
         data = json.loads(request.body)
@@ -114,6 +161,18 @@ def get_files_to_sync(request, username):
 @require_http_methods(["POST"])
 @api_view(["POST"])
 def update_file_priority(request, username):
+    """
+    Updates the synchronization priority of a specific file for the user.
+
+    Expects a JSON body with 'file_id' and 'priority'.
+
+    Args:
+        request: The HttpRequest object containing 'file_id' and 'priority'.
+        username: The username whose file priority is being updated.
+
+    Returns:
+        JsonResponse: A JSON response indicating the result and message of the operation.
+    """
     try:
         data = json.loads(request.body)
         file_id = data.get("file_id")
@@ -137,6 +196,18 @@ def update_file_priority(request, username):
 @require_http_methods(["POST"])
 @api_view(["POST"])
 def add_device_id_to_file_sync_file(request, username):
+    """
+    Associates a device ID with a specific file in the user's synchronization list.
+
+    Expects a JSON body with 'file_name' and 'device_name'.
+
+    Args:
+        request: The HttpRequest object containing 'file_name' and 'device_name'.
+        username: The username who owns the file and device.
+
+    Returns:
+        JsonResponse: A JSON response indicating the result and message of the operation.
+    """
     try:
         data = json.loads(request.body)
         file_name = data.get("file_name")
@@ -160,6 +231,19 @@ def add_device_id_to_file_sync_file(request, username):
 @require_http_methods(["POST"])
 @api_view(["POST"])
 def update_sync_storage_capacity(request, username):
+    """
+    Updates the reported storage capacity for a specific device associated with the user.
+
+    Expects a JSON body with 'device_name' and 'storage_capacity'.
+
+    Args:
+        request: The HttpRequest object containing 'device_name' and 'storage_capacity'.
+        username: The username who owns the device.
+
+    Returns:
+        JsonResponse: A JSON response indicating the result and message of the operation,
+                      or an error if JSON is invalid.
+    """
     try:
         data = json.loads(request.body)
         device_name = data.get("device_name")
@@ -186,6 +270,18 @@ def update_sync_storage_capacity(request, username):
 @csrf_exempt
 @require_http_methods(["POST"])
 def get_download_queue(request, username):
+    """
+    Retrieves the download queue for a specific device belonging to the user.
+
+    Expects a JSON body with 'device_id'.
+
+    Args:
+        request: The HttpRequest object containing 'device_id'.
+        username: The username who owns the device.
+
+    Returns:
+        JsonResponse: A JSON response containing the download queue or an error message.
+    """
     try:
         data = json.loads(request.body)
         device_id = data.get("device_id")
@@ -205,6 +301,16 @@ def get_download_queue(request, username):
 @require_http_methods(["GET"])
 @api_view(["GET"])
 def get_device_prediction_data(request, username):
+    """
+    Retrieves the device prediction data for the specified user.
+
+    Args:
+        request: The HttpRequest object.
+        username: The username whose prediction data is being requested.
+
+    Returns:
+        JsonResponse: A JSON response containing the device prediction data.
+    """
     result = db_get_device_predictions(username)
     response_data = {   
         "result": "success",

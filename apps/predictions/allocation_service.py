@@ -1,4 +1,3 @@
-
 # Example data
 devices = [
     {"device_name": "Device A", "score": 90, "sync_storage_capacity_gb": 500},
@@ -9,11 +8,37 @@ devices = [
 
 class AllocationService():
     def __init__(self):
+        """Initializes the AllocationService."""
         pass
     def bytes_to_gigabytes(self, bytes):
+        """Converts bytes to gigabytes.
+
+        Args:
+            bytes (int): The size in bytes.
+
+        Returns:
+            float: The size in gigabytes.
+        """
         return bytes / (1024 ** 3)  # Convert bytes to gigabytes
 
     def devices(self, fetched_device_predictions, file_sync_info):
+        """Allocates files to devices based on device scores and file priorities.
+
+        Sorts devices by score (descending) and files by priority (high to low)
+        and then size (descending). Assigns files to the highest-scoring available
+        device that has sufficient capacity.
+
+        Args:
+            fetched_device_predictions (dict): A dictionary containing device prediction data,
+                                              including scores and storage capacities.
+            file_sync_info (list): A list of dictionaries, where the first element
+                                  contains a list of files to be synced, including
+                                  their size and priority.
+
+        Returns:
+            list: A list of device dictionaries, updated with allocated files
+                  and used capacity.
+        """
         # Extract the list of devices from the nested dictionary
         devices_list = fetched_device_predictions.get("device_predictions", [])
         
@@ -62,6 +87,20 @@ class AllocationService():
 
         return devices_list
     def devices_with_capacity_cap(self, fetched_device_predictions, file_sync_info, device_capacity_cap):
+        """Allocates files to devices with a uniform capacity cap.
+
+        Similar to the `devices` method but applies a specified capacity cap
+        to all devices before allocation.
+
+        Args:
+            fetched_device_predictions (dict): Device prediction data.
+            file_sync_info (list): List of files to be synced.
+            device_capacity_cap (int): The storage capacity cap in GB for each device.
+
+        Returns:
+            list: A list of device dictionaries, updated with allocated files,
+                  used capacity, and the applied capacity cap.
+        """
         # Extract the list of devices from the nested dictionary
         devices_list = fetched_device_predictions.get("device_predictions", [])
         
@@ -93,9 +132,16 @@ class AllocationService():
         return devices_list
 
     def generate_file_device_mappings(self, allocated_devices):
-        """
-        Converts device-centric allocation data to file-centric mapping
-        Returns a list of dictionaries, each containing a file_id and its proposed_device_ids
+        """Generates a mapping of files to the devices they are proposed to be stored on.
+
+        Args:
+            allocated_devices (list): A list of device dictionaries, output from
+                                      the allocation methods (`devices` or
+                                      `devices_with_capacity_cap`).
+
+        Returns:
+            list: A list of dictionaries, each containing a 'file_id' and a
+                  list of 'proposed_device_ids' (as ObjectIds) for that file.
         """
         file_mappings = {}
 

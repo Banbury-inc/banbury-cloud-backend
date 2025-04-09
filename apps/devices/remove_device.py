@@ -3,6 +3,23 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
 def remove_device(username, device_name):
+    """
+    Removes a specific device associated with a user from the database.
+
+    Connects to MongoDB, finds the user by username, finds the device by name
+    belonging to that user, and deletes the device document.
+
+    Args:
+        username (str): The username of the device owner.
+        device_name (str): The name of the device to remove.
+
+    Returns:
+        str: "success" if the device was deleted successfully.
+             "user not found" if the user does not exist.
+             "device not found" if the device does not exist for that user.
+             "device not deleted" if the delete operation reported 0 deletions.
+             "error" if an exception occurred during deletion.
+    """
     # MongoDB connection
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)

@@ -1,6 +1,21 @@
 from pymongo.mongo_client import MongoClient
 
 def update_sync_storage_capacity(username, device_name, sync_storage_capacity_gb):
+    """Updates the sync storage capacity for a specific device.
+
+    Updates the 'sync_storage_capacity_gb' field in both the 'devices'
+    collection and the 'device_predictions' collection (using upsert for the latter).
+
+    Args:
+        username (str): The username of the user.
+        device_name (str): The name of the device to update.
+        sync_storage_capacity_gb (int or str): The new storage capacity in GB.
+
+    Returns:
+        dict or str: A success dictionary with the username if successful.
+                     An error message string if the user or device is not found,
+                     or if a database update error occurs.
+    """
 
     # MongoDB connection
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"

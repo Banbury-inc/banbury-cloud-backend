@@ -11,6 +11,17 @@ user_collection = db['users']
 notifications_collection = db['notifications']
 
 def delete_notification(username, notification_id):
+    """Deletes a specific notification for a user and sends a WebSocket update.
+
+    Args:
+        username (str): The username of the user whose notification is to be deleted.
+        notification_id (str): The ID of the notification to delete.
+
+    Returns:
+        dict or str: A success dictionary if deletion is successful,
+                     a dictionary with a failure message if the notification is not found,
+                     or the string "User not found" if the user doesn't exist.
+    """
     # Find the user by username
     user = user_collection.find_one({'username': username})
     if not user:

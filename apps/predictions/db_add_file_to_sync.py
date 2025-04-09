@@ -3,6 +3,22 @@ from django.http import JsonResponse
 from datetime import datetime
 
 def db_add_file_to_sync(username, device_name, file_name):
+    """Adds a file to the synchronization list for a user.
+
+    Retrieves file details from the 'files' collection and adds or updates
+    an entry in the 'file_sync' collection. Associates the file with the
+    specified user and device.
+
+    Args:
+        username (str): The username of the user initiating the sync.
+        device_name (str): The name of the device associated with this file addition.
+        file_name (str): The name of the file to add to the sync list.
+
+    Returns:
+        str: "success" if the operation is successful, or an error message string
+             if validation fails, the user/device/file is not found, or a database
+             error occurs.
+    """
     try:
         if not file_name or not device_name:
             return "Missing files or device_name"

@@ -3,6 +3,18 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
 def get_files_info(username):
+    """
+    Retrieves information for all files associated with all devices belonging to a user.
+
+    Args:
+        username (str): The username of the user whose files are being queried.
+
+    Returns:
+        dict: A dictionary containing:
+              - "files": A list of dictionaries, each representing a file with its details
+                         (name, size, type, path, dates, kind, device_name).
+              - "error": An error message string if the user is not found.
+    """
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
     db = client["NeuraNet"]

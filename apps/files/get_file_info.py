@@ -4,6 +4,18 @@ from django.views.decorators.csrf import csrf_exempt
 from bson.objectid import ObjectId
 
 def get_file_info(username, file_id):
+    """
+    Retrieves detailed information for a specific file based on its ObjectId.
+
+    Args:
+        username (str): The username of the user (currently unused in the function).
+        file_id (str): The ObjectId string of the file to retrieve information for.
+
+    Returns:
+        dict or None: A dictionary containing file details (file_name, file_size, etc.)
+                      if the file is found, otherwise None.
+                      Returns None if the file ID is invalid or the file is not found.
+    """
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
     db = client["NeuraNet"]

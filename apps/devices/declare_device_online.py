@@ -1,6 +1,24 @@
 from pymongo.mongo_client import MongoClient
 
 def declare_device_online(username, device_name):
+    """
+    Marks a specific device associated with a user as online in the database.
+
+    Connects to MongoDB, finds the user by username, then finds the specific
+    device by name belonging to that user. Sets the 'online' field of the
+    device document to True. Uses upsert=True for the update operation.
+
+    Args:
+        username (str): The username of the device owner.
+        device_name (str): The name of the device to mark online.
+
+    Returns:
+        dict: A dictionary indicating success or error, along with a message.
+              On success, includes username and the string representation of
+              the device_id.
+              Example success: {"result": "success", "username": "user1", "device_id": "..."}
+              Example error: {"result": "error", "message": "User not found"}
+    """
     print(f"[declare_device_online] Starting - User: {username}, Device: {device_name}")
 
     # MongoDB connection

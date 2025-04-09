@@ -31,6 +31,7 @@ REDIRECT_URI = os.getenv('REDIRECT_URI')
 
 @api_view(["GET"])
 def login(request):
+    """Handles user login via a traditional form (GET displays form, POST processes it)."""
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
     db = client["myDatabase"]
@@ -83,7 +84,7 @@ flow = Flow.from_client_config(
 )
 
 def google(request):
-    """Initialize Google OAuth2 flow"""
+    """Initiates the Google OAuth2 authentication flow."""
     flow.redirect_uri = REDIRECT_URI
     
     # Generate the authorization URL without state
@@ -98,7 +99,7 @@ def google(request):
     })
 
 def google_callback(request):
-    """Handle the OAuth2 callback"""
+    """Handles the callback from Google after OAuth2 authentication."""
     code = request.GET.get("code")
     
     if not code:
@@ -152,6 +153,7 @@ def google_callback(request):
 @require_http_methods(["POST"])
 @api_view(["GET"])
 def login_api(request):
+    """Handles API-based user login with username and password."""
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = pymongo.MongoClient(uri, server_api=ServerApi("1"))
     db = client["myDatabase"]
@@ -181,6 +183,7 @@ def login_api(request):
 @require_http_methods(["POST"])
 @api_view(["POST"])
 def register(request):
+    """Registers a new user, potentially using Google OAuth profile information."""
     # WE ARE USING THIS ENDPOINT AGAIN IN 3.3
 
 
@@ -268,6 +271,7 @@ def register(request):
 
 @api_view(["GET"])
 def new_register(request, username, password, firstName, lastName):
+    """Registers a new user with basic information (username, password, names)."""
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
     db = client["NeuraNet"]
@@ -306,6 +310,7 @@ def new_register(request, username, password, firstName, lastName):
 
 @api_view(["GET"])
 def getuserinfo4(request, username, password):
+    """Authenticates a user based on username and password (version 4). Duplicate of the one in users/views.py?"""
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
     db = client["NeuraNet"]
@@ -351,6 +356,7 @@ def getuserinfo4(request, username, password):
 @require_http_methods(["POST"])
 @api_view(["POST"])
 def add_site_visitor_info(request):
+    """Records information about site visitors, including IP-based geolocation."""
     try:
         # Parse the JSON body
         data = json.loads(request.body)

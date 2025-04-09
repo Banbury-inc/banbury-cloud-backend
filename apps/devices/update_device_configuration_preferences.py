@@ -4,9 +4,28 @@ from django.views.decorators.csrf import csrf_exempt
 from datetime import datetime
 
 def update_device_configuration_preferences(username, device_name, device_configurations):
-    '''
-    Update a single device's prediction preferences in the database
-    '''
+    """
+    Updates or creates the prediction configuration preferences for a specific device.
+
+    Connects to MongoDB, finds the user and device, then updates or inserts
+    a document in the 'device_predictions' collection with the provided
+    configuration settings. Uses upsert=True.
+
+    Initializes boolean configuration fields to False if the document is created.
+
+    Args:
+        username (str): The username of the device owner.
+        device_name (str): The name of the device.
+        device_configurations (dict): A dictionary containing the configuration
+                                      key-value pairs to update (e.g.,
+                                      {"use_predicted_cpu_usage": True}).
+
+    Returns:
+        str: "success" if the update/insert was successful.
+             "user not found" if the user doesn't exist.
+             "device not found: [device_name]" if the device doesn't exist.
+             "error" if an exception occurred during the database operation.
+    """
 
     # MongoDB connection
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"

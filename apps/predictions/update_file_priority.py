@@ -2,6 +2,19 @@ from pymongo.mongo_client import MongoClient
 from bson import ObjectId
 
 def update_file_priority(username, file_id, priority):
+    """Updates the priority of a specific file in the file sync list.
+
+    Finds the file sync entry by user ID and file ID and sets the 'file_priority' field.
+
+    Args:
+        username (str): The username of the user.
+        file_id (str): The string representation of the ObjectId of the file sync entry.
+        priority (int): The new priority value for the file (e.g., 1, 2, 3).
+
+    Returns:
+        dict: A dictionary indicating success (with username, file_id, modified_count)
+              or failure (with an error message).
+    """
     try:
         # MongoDB connection
         uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
