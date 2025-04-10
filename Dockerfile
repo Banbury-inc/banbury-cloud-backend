@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y \
     libssl-dev \
     libffi-dev \
     python3-dev \
+    curl \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Set the working directory to /app
@@ -31,19 +32,19 @@ COPY nginx.conf /etc/nginx/sites-enabled/default
 
 # Create health check script
 RUN echo '#!/bin/bash\n\
-curl -f http://localhost:8080/health/ || exit 1' > /app/healthcheck.sh
+curl -f http://localhost:80/health/ || exit 1' > /app/healthcheck.sh
 RUN chmod +x /app/healthcheck.sh
 
 # Create startup script
 RUN echo '#!/bin/bash\n\
 redis-server --daemonize yes\n\
-daphne -b 0.0.0.0 -p 8080 core.asgi:application &\n\
+daphne -b 0.0.0.0 -p 8082 core.asgi:application &\n\
 sleep 2\n\
 exec nginx -g "daemon off;"' > /app/startup.sh
 RUN chmod +x /app/startup.sh
 
 # Expose the port Nginx listens on
-EXPOSE 8080
+EXPOSE 80
 
 # Add health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
