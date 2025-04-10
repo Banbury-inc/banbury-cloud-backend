@@ -34,7 +34,7 @@ SECRET_KEY = 'fxfwao!b&53)8l$t3nc(+)9^63t%b09f_dn@jx6e_(ghhkbgh5'
 DEBUG = True
 
 # Change this to your production URL for deployment
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = ['*', 'localhost', '127.0.0.1']
 
 # CSRF_TRUSTED_ORIGINS = ['https://website2-v3xlkt54dq-uc.a.run.app']
 # CSRF_TRUSTED_ORIGINS = ['*']
@@ -335,5 +335,9 @@ SPECTACULAR_SETTINGS = {
         'sortPropsAlphabetically': True,
     },
 }
+
+# Add health check specific settings
+HEALTH_CHECK_ALLOWED_HOSTS = ['*']
+HEALTH_CHECK_ALLOWED_METHODS = ['GET', 'HEAD']
 
 

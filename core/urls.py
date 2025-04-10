@@ -1,5 +1,6 @@
 from django.urls import path, include
 from websocket.urls import websocket_urlpatterns
+from apps.health.views import HealthCheckView
 
 urlpatterns = [
     path('', include('apps.urls')),
@@ -15,4 +16,5 @@ urlpatterns = [
     path('notifications/', include('apps.notifications.urls')),
     path('analytics/', include('apps.analytics.urls')),
     path('ws/', include(websocket_urlpatterns)),
+    path('health/', HealthCheckView.as_view(), name='health_check'),
 ]
