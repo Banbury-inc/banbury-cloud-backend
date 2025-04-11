@@ -130,7 +130,7 @@ class Consumer(AsyncWebsocketConsumer):
                     await handle_file_transfer_complete(self, data)
                 elif message_type == 'file_sent_successfully':
                     await handle_file_sent_successfully(self, data)
-                elif message_type == 'file_start_transfer' or message_type == 'file_transfer_start':
+                elif message_type == 'file_start_transfer' or message_type == 'file_transfer_start' or message_type == 'start_file_transfer':
                     await handle_start_file_transfer(self, data)
                     
                     # If we have a transfer_room in the data, store it
