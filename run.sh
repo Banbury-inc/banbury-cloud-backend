@@ -1,6 +1,6 @@
 #!/bin/bash
 
-APP_PORT=8080
+HTTP_PORT=8080
 CONTAINER_NAME="banbury-backend"
 IMAGE_NAME="banbury-backend-image"
 
@@ -171,13 +171,13 @@ check_host_ports() {
     local conflict_ports=""
     local conflict_ports_array=()
 
-    # Check App port
-    if ! is_port_available $APP_PORT; then
+    # Check HTTP port
+    if ! is_port_available $HTTP_PORT; then
         # Verify port is actually in use before reporting a conflict
-        if verify_port_in_use $APP_PORT; then
+        if verify_port_in_use $HTTP_PORT; then
             has_conflicts=true
-            conflict_ports="$APP_PORT"
-            conflict_ports_array+=($APP_PORT)
+            conflict_ports="$HTTP_PORT"
+            conflict_ports_array+=($HTTP_PORT)
         fi
     fi
 
@@ -185,8 +185,8 @@ check_host_ports() {
         echo "Error: Port(s) $conflict_ports already in use on the host system."
         echo "Options:"
         echo "  1. Stop the processes using these ports"
-        echo "  2. Edit run.sh to use different ports (APP_PORT=$APP_PORT)"
-        echo "  3. Run 'lsof -i:$APP_PORT' to identify processes"
+        echo "  2. Edit run.sh to use different ports (HTTP_PORT=$HTTP_PORT)"
+        echo "  3. Run 'lsof -i:$HTTP_PORT' to identify processes"
         echo "  4. Quit"
         
         # Interactive prompt
@@ -267,14 +267,13 @@ start_container() {
     fi
     
     echo "Starting container $CONTAINER_NAME..."
-    if ! docker run --name $CONTAINER_NAME -p $APP_PORT:80 -d $IMAGE_NAME; then
+    if ! docker run --name $CONTAINER_NAME -p $HTTP_PORT:8080 -d $IMAGE_NAME; then
         echo "Failed to start Docker container."
         return 1
     fi
     
     echo "Container started successfully."
-    echo "Application available at http://localhost:$APP_PORT"
-    echo "Websocket available at ws://localhost:$APP_PORT/ws/..."
+    echo "Application available at http://localhost:$HTTP_PORT"
     return 0
 }
 
@@ -350,16 +349,16 @@ else
     case "$ACTION" in
         "start"|"restart")
             # Kill process on the app port
-            kill_process_on_port $APP_PORT
+            kill_process_on_port $HTTP_PORT
 
-            echo "Starting Daphne server on port $APP_PORT (handles HTTP and WebSocket)"
-            # Run Daphne directly on the APP_PORT
-            daphne -p $APP_PORT -b 0.0.0.0 core.asgi:application
+            echo "Starting Daphne server on port $HTTP_PORT"
+            # Run Daphne directly on the HTTP_PORT
+            daphne -p $HTTP_PORT -b 0.0.0.0 core.asgi:application
 
             echo "Server stopped."
             ;;
         "stop")
-            kill_process_on_port $APP_PORT
+            kill_process_on_port $HTTP_PORT
             echo "Server stopped."
             ;;
         "logs"|"stream-logs")
