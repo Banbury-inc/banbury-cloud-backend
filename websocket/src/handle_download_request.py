@@ -75,6 +75,7 @@ async def handle_download_request(consumer, data):
         await consumer.send(text_data=json.dumps({
             "type": "download_request_sent",
             "file_name": file_name,
+            "file_info": file_info,
             "sending_device_id": sending_device_id,
             "transfer_room": transfer_room,  # Include transfer room in response
             "timestamp": datetime.now().isoformat()
