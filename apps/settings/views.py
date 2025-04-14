@@ -100,3 +100,57 @@ def update_settings(request, username):
             "result": "error",
             "message": str(e)
         }, status=500)
+
+
+
+@csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
+@require_http_methods(["POST"])
+@api_view(["POST"])
+def delete_account(request, username):
+    """Deletes a user's account."""
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client["NeuraNet"]
+    user_collection = db["users"]
+    settings_collection = db["settings"]
+    device_collection = db["devices"]  
+    file_collection = db["files"]  
+
+    try:
+        data = json.loads(request.body)
+        delete_account_confirmed = data.get("delete_account_confirmed")
+        if not delete_account_confirmed:
+            return JsonResponse({"error": "Account deletion not confirmed."}, status=400)
+
+        # Delete user from users collection
+        user = user_collection.find_one({"username": username})
+        if not user:
+            return JsonResponse({"error": "User not found."}, status=404)
+            
+        user_id = user["_id"]
+        
+        # Delete all devices associated with this user
+        device_collection.delete_many({"user_id": user_id})
+        
+        # Delete all files associated with this user
+        file_collection.delete_many({"user_id": user_id})
+        
+        # Delete user's settings
+        settings_collection.delete_one({"user_id": user_id})
+        
+        # Finally delete the user
+        user_collection.delete_one({"username": username})
+
+        return JsonResponse({
+            "result": "success",
+            "message": "Account deleted successfully"
+        })
+    except Exception as e:
+        print(f"Error deleting account: {e}")
+        return JsonResponse({
+            "result": "error",
+            "message": f"Error deleting account: {str(e)}"
+        }, status=500)
+
+        
+        

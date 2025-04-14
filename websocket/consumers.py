@@ -165,7 +165,6 @@ class Consumer(AsyncWebsocketConsumer):
                 }))
                 print(f"Current active groups: {self.active_groups}")
         elif message_type == "start_file_transfer":
-            # Add handling for start_file_transfer message
             transfer_room = data.get("transfer_room")
             if transfer_room and transfer_room not in self.active_groups:
                 await self.channel_layer.group_add(
