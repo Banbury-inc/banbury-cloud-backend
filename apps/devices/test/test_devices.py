@@ -196,3 +196,268 @@ class TestDevices:
                 'use_files_available_for_download': True
             }
         )
+
+    @patch('apps.devices.declare_device_online.MongoClient')
+    def test_declare_device_online_success(self, mock_client, test_data, sample_user_data, sample_device_data):
+        """Test successfully declaring a device online"""
+        from apps.devices.declare_device_online import declare_device_online
+        
+        # Setup mock database
+        mock_db = MagicMock()
+        mock_client.return_value.__getitem__.return_value = mock_db
+        
+        # Mock collections
+        mock_devices = MagicMock()
+        mock_users = MagicMock()
+        
+        mock_db.__getitem__.side_effect = lambda x: {
+            'devices': mock_devices,
+            'users': mock_users
+        }[x]
+        
+        # Setup mock returns
+        mock_users.find_one.return_value = sample_user_data
+        mock_devices.find_one.return_value = sample_device_data
+        
+        # Setup mock update result
+        mock_update_result = MagicMock()
+        mock_update_result.modified_count = 1
+        mock_devices.update_one.return_value = mock_update_result
+        
+        # Call the function
+        result = declare_device_online(test_data['username'], test_data['device_name'])
+        
+        # Check result
+        assert result['result'] == 'success'
+        assert result['username'] == test_data['username']
+        assert result['device_id'] == str(sample_device_data['_id'])
+        
+        # Verify that the correct MongoDB calls were made
+        mock_users.find_one.assert_called_once_with({'username': test_data['username']})
+        mock_devices.find_one.assert_called_once_with({
+            'user_id': sample_user_data['_id'], 
+            'device_name': test_data['device_name']
+        })
+        mock_devices.update_one.assert_called_once_with(
+            {'_id': sample_device_data['_id']},
+            {'$set': {'online': True}},
+            upsert=True
+        )
+
+    @patch('apps.devices.declare_device_online.MongoClient')
+    def test_declare_device_online_user_not_found(self, mock_client, test_data):
+        """Test declare device online when user is not found"""
+        from apps.devices.declare_device_online import declare_device_online
+        
+        # Setup mock database
+        mock_db = MagicMock()
+        mock_client.return_value.__getitem__.return_value = mock_db
+        
+        # Mock collections
+        mock_devices = MagicMock()
+        mock_users = MagicMock()
+        
+        mock_db.__getitem__.side_effect = lambda x: {
+            'devices': mock_devices,
+            'users': mock_users
+        }[x]
+        
+        # Setup mock returns - user not found
+        mock_users.find_one.return_value = None
+        
+        # Call the function
+        result = declare_device_online(test_data['username'], test_data['device_name'])
+        
+        # Check result
+        assert result['result'] == 'error'
+        assert result['message'] == 'User not found'
+        
+        # Verify that only the user find call was made
+        mock_users.find_one.assert_called_once_with({'username': test_data['username']})
+        mock_devices.find_one.assert_not_called()
+        mock_devices.update_one.assert_not_called()
+
+    @patch('apps.devices.declare_device_online.MongoClient')
+    def test_declare_device_online_device_not_found(self, mock_client, test_data, sample_user_data):
+        """Test declare device online when device is not found"""
+        from apps.devices.declare_device_online import declare_device_online
+        
+        # Setup mock database
+        mock_db = MagicMock()
+        mock_client.return_value.__getitem__.return_value = mock_db
+        
+        # Mock collections
+        mock_devices = MagicMock()
+        mock_users = MagicMock()
+        
+        mock_db.__getitem__.side_effect = lambda x: {
+            'devices': mock_devices,
+            'users': mock_users
+        }[x]
+        
+        # Setup mock returns
+        mock_users.find_one.return_value = sample_user_data
+        mock_devices.find_one.return_value = None
+        
+        # Call the function
+        result = declare_device_online(test_data['username'], test_data['device_name'])
+        
+        # Check result
+        assert result['result'] == 'error'
+        assert result['message'] == 'Device not found'
+        
+        # Verify that the correct MongoDB calls were made
+        mock_users.find_one.assert_called_once_with({'username': test_data['username']})
+        mock_devices.find_one.assert_called_once_with({
+            'user_id': sample_user_data['_id'], 
+            'device_name': test_data['device_name']
+        })
+        mock_devices.update_one.assert_not_called()
+
+    @patch('apps.devices.declare_device_offline.MongoClient')
+    def test_declare_device_offline_success(self, mock_client, test_data, sample_user_data, sample_device_data):
+        """Test successfully declaring a device offline"""
+        from apps.devices.declare_device_offline import declare_device_offline
+        
+        # Setup mock database
+        mock_db = MagicMock()
+        mock_client.return_value.__getitem__.return_value = mock_db
+        
+        # Mock collections
+        mock_devices = MagicMock()
+        mock_users = MagicMock()
+        
+        mock_db.__getitem__.side_effect = lambda x: {
+            'devices': mock_devices,
+            'users': mock_users
+        }[x]
+        
+        # Setup mock returns
+        mock_users.find_one.return_value = sample_user_data
+        mock_devices.find_one.return_value = sample_device_data
+        
+        # Call the function
+        result = declare_device_offline(test_data['username'], test_data['device_name'])
+        
+        # Check result
+        assert result['result'] == 'success'
+        assert result['username'] == test_data['username']
+        
+        # Verify that the correct MongoDB calls were made
+        mock_users.find_one.assert_called_once_with({'username': test_data['username']})
+        mock_devices.find_one.assert_called_once_with({
+            'user_id': sample_user_data['_id'], 
+            'device_name': test_data['device_name']
+        })
+        mock_devices.update_one.assert_called_once_with(
+            {'_id': sample_device_data['_id']},
+            {'$set': {'online': False}}
+        )
+
+    @patch('apps.devices.declare_device_offline.MongoClient')
+    def test_declare_device_offline_user_not_found(self, mock_client, test_data):
+        """Test declare device offline when user is not found"""
+        from apps.devices.declare_device_offline import declare_device_offline
+        
+        # Setup mock database
+        mock_db = MagicMock()
+        mock_client.return_value.__getitem__.return_value = mock_db
+        
+        # Mock collections
+        mock_devices = MagicMock()
+        mock_users = MagicMock()
+        
+        mock_db.__getitem__.side_effect = lambda x: {
+            'devices': mock_devices,
+            'users': mock_users
+        }[x]
+        
+        # Setup mock returns - user not found
+        mock_users.find_one.return_value = None
+        
+        # Call the function
+        result = declare_device_offline(test_data['username'], test_data['device_name'])
+        
+        # Check result
+        assert result == "User not found"
+        
+        # Verify that only the user find call was made
+        mock_users.find_one.assert_called_once_with({'username': test_data['username']})
+        mock_devices.find_one.assert_not_called()
+        mock_devices.update_one.assert_not_called()
+
+    @patch('apps.devices.declare_device_offline.MongoClient')
+    def test_declare_device_offline_device_not_found(self, mock_client, test_data, sample_user_data):
+        """Test declare device offline when device is not found"""
+        from apps.devices.declare_device_offline import declare_device_offline
+        
+        # Setup mock database
+        mock_db = MagicMock()
+        mock_client.return_value.__getitem__.return_value = mock_db
+        
+        # Mock collections
+        mock_devices = MagicMock()
+        mock_users = MagicMock()
+        
+        mock_db.__getitem__.side_effect = lambda x: {
+            'devices': mock_devices,
+            'users': mock_users
+        }[x]
+        
+        # Setup mock returns
+        mock_users.find_one.return_value = sample_user_data
+        mock_devices.find_one.return_value = None
+        
+        # Call the function
+        result = declare_device_offline(test_data['username'], test_data['device_name'])
+        
+        # Check result
+        assert result == "Device not found"
+        
+        # Verify that the correct MongoDB calls were made
+        mock_users.find_one.assert_called_once_with({'username': test_data['username']})
+        mock_devices.find_one.assert_called_once_with({
+            'user_id': sample_user_data['_id'], 
+            'device_name': test_data['device_name']
+        })
+        mock_devices.update_one.assert_not_called()
+
+    @patch('apps.devices.declare_device_offline.MongoClient')
+    def test_declare_device_offline_update_error(self, mock_client, test_data, sample_user_data, sample_device_data):
+        """Test declare device offline when update throws an error"""
+        from apps.devices.declare_device_offline import declare_device_offline
+        
+        # Setup mock database
+        mock_db = MagicMock()
+        mock_client.return_value.__getitem__.return_value = mock_db
+        
+        # Mock collections
+        mock_devices = MagicMock()
+        mock_users = MagicMock()
+        
+        mock_db.__getitem__.side_effect = lambda x: {
+            'devices': mock_devices,
+            'users': mock_users
+        }[x]
+        
+        # Setup mock returns
+        mock_users.find_one.return_value = sample_user_data
+        mock_devices.find_one.return_value = sample_device_data
+        mock_devices.update_one.side_effect = Exception("Database error")
+        
+        # Call the function
+        result = declare_device_offline(test_data['username'], test_data['device_name'])
+        
+        # Check result
+        assert result == "Error updating device status"
+        
+        # Verify that the correct MongoDB calls were made
+        mock_users.find_one.assert_called_once_with({'username': test_data['username']})
+        mock_devices.find_one.assert_called_once_with({
+            'user_id': sample_user_data['_id'], 
+            'device_name': test_data['device_name']
+        })
+        mock_devices.update_one.assert_called_once_with(
+            {'_id': sample_device_data['_id']},
+            {'$set': {'online': False}}
+        )
