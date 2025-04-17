@@ -3,6 +3,11 @@
 import os
 import sys
 
+# Import TensorFlow configuration to suppress warnings
+try:
+    from core.tensorflow_config import *  # Configure TensorFlow logging at module level
+except ImportError:
+    pass
 
 def main():
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'core.settings')
