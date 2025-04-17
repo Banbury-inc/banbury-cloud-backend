@@ -41,7 +41,7 @@ jobs:
         pylint --rcfile=.pylintrc .
 
   test:
-    name: Run Django Tests
+    name: Run Tests
     runs-on: ubuntu-latest
     strategy:
       max-parallel: 4
