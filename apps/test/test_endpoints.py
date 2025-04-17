@@ -1,5 +1,4 @@
 import requests
-import json
 
 def test_ping():
     response = requests.get('http://0.0.0.0:8082/ping/')

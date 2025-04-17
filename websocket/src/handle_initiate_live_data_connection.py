@@ -1,6 +1,4 @@
 import json
-from datetime import datetime
-from apps.predictions.pipeline import pipeline
 import asyncio
 from ..src.make_device_predictions import make_device_predictions as external_make_device_predictions
 

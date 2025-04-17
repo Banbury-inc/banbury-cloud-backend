@@ -1,6 +1,4 @@
 from pymongo.mongo_client import MongoClient
-from django.http import JsonResponse
-from datetime import datetime
 
 def db_add_file_to_sync(username, device_name, file_name):
     """Adds a file to the synchronization list for a user.

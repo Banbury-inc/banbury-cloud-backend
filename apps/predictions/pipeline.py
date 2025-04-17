@@ -1,11 +1,9 @@
 # pipeline for prediction service
 
 from apps.devices.get_device_info import get_device_info
-from apps.files.get_files_info import get_files_info
 from apps.predictions.get_file_sync import get_file_sync
 from apps.predictions.get_device_predictions import get_device_predictions
 from apps.predictions.update_device_predictions import update_device_predictions
-from apps.predictions.get_device_predictions import get_device_predictions
 from apps.predictions.update_device_score import update_device_score
 from apps.predictions.update_file_sync_proposed_device_ids import update_file_sync_proposed_device_ids
 from apps.predictions.get_download_queue import get_download_queue

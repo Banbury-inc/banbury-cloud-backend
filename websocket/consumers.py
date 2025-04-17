@@ -1,10 +1,8 @@
 import json
-from bson.objectid import ObjectId
 from channels.generic.websocket import AsyncWebsocketConsumer
 from asgiref.sync import sync_to_async
 from .src.handle_device_info_response import handle_device_info_response
 from .src.handle_download_request import handle_download_request
-from .src.handle_file_sent_successfully import handle_file_sent_successfully
 from .src.handle_initiate_live_data_connection import handle_initiate_live_data_connection
 from .src.handle_file_transfer_complete import handle_file_transfer_complete
 from .src.handle_direct_message import handle_direct_message
@@ -15,7 +13,6 @@ from apps.devices.declare_user_online import declare_user_online
 from apps.devices.declare_user_offline import declare_user_offline
 from apps.devices.get_user_info import get_user_info
 from apps.devices.get_device_info import get_device_info
-from apps.notifications.get_notifications import get_notifications as db_get_notifications
 
 
 def device_group_name(device_id):

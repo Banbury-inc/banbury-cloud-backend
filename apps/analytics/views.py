@@ -1,18 +1,9 @@
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
-import bcrypt
-from django.shortcuts import render, redirect
-from django.http import HttpResponse, JsonResponse
-from ..forms import LoginForm
-import requests
+from django.http import JsonResponse
 from pymongo.mongo_client import MongoClient
-from pymongo.server_api import ServerApi
 from rest_framework.decorators import api_view
-from rest_framework.response import Response
-from drf_spectacular.utils import extend_schema, OpenApiResponse
 import pymongo
-import json
-import re
 
 
 uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"

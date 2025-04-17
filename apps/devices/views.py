@@ -1,14 +1,8 @@
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
-import bcrypt
-from django.shortcuts import render, redirect
-from django.http import HttpResponse, JsonResponse
-from ..forms import LoginForm
-import requests
+from django.http import JsonResponse
 from pymongo.mongo_client import MongoClient
-from pymongo.server_api import ServerApi
 from rest_framework.decorators import api_view
-from rest_framework.response import Response
 from bson import ObjectId
 from .remove_device import remove_device
 from .get_online_devices import get_online_devices
@@ -16,10 +10,7 @@ from .update_device_configuration_preferences import update_device_configuration
 from .get_single_device_info import get_single_device_info as db_get_single_device_info
 from .get_single_device_info_with_device_name import get_single_device_info_with_device_name as db_get_single_device_info_with_device_name
 from .add_downloaded_model import add_downloaded_model as db_add_downloaded_model
-import pymongo
 import json
-import re
-
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])

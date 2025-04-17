@@ -1,6 +1,4 @@
 from pymongo.mongo_client import MongoClient
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
 
 def remove_device(username, device_name):
     """

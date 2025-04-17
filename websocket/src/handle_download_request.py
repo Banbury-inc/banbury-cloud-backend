@@ -1,6 +1,5 @@
 import json
 from datetime import datetime
-from apps.files.search_for_file import search_for_file
 
 def device_group_name(device_id):
     """

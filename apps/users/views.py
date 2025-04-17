@@ -1,20 +1,12 @@
-from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_http_methods
 import bcrypt
-from django.shortcuts import render, redirect
 from django.http import HttpResponse, JsonResponse
-from ..forms import LoginForm
-import requests
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
 from rest_framework.decorators import api_view
-from rest_framework.response import Response
 import pymongo
 import json
-import re
 from bson import json_util
 import base64
-from .forms import UserProfileForm
 from .src.getUserFriends import getUserFriends
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync

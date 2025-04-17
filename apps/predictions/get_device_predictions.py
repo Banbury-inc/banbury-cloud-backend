@@ -1,7 +1,4 @@
 from pymongo.mongo_client import MongoClient
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-from bson import ObjectId
 
 def get_device_predictions(username):
     """Retrieves device prediction data for a specific user.

@@ -1,8 +1,6 @@
 import json
 from channels.generic.websocket import AsyncWebsocketConsumer
 
-from .handle_device_info_response import handle_device_info_response
-from .handle_direct_message import handle_direct_message
 from .handle_download_request import handle_download_request
 from .handle_file_sent_successfully import handle_file_sent_successfully
 from .handle_file_transfer_complete import handle_file_transfer_complete

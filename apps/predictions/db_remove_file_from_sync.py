@@ -1,6 +1,4 @@
 from pymongo.mongo_client import MongoClient
-from django.http import JsonResponse
-from datetime import datetime
 
 def db_remove_file_from_sync(username, device_name, file_name):
     """Removes a file from the file synchronization list.

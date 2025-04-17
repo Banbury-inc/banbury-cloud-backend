@@ -1,5 +1,4 @@
 import json
-from datetime import datetime
 
 def device_group_name(device_id):
     """

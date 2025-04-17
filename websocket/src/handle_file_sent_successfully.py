@@ -1,8 +1,4 @@
 import json
-from datetime import datetime
-from apps.predictions.pipeline import pipeline
-
-
 
 def device_group_name(device_id):
     """

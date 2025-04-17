@@ -1,6 +1,4 @@
 from pymongo.mongo_client import MongoClient
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
 from datetime import datetime
 
 def update_device_predictions(username, device_name, device_predictions):

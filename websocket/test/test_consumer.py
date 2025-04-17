@@ -1,4 +1,3 @@
-import json
 from django.test import TestCase, override_settings
 from channels.testing import WebsocketCommunicator
 from channels.routing import URLRouter

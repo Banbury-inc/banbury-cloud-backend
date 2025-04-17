@@ -1,8 +1,5 @@
 from pymongo.mongo_client import MongoClient
-from django.http import JsonResponse
-from datetime import datetime
-import json
-import asyncio
+
 
 def get_download_queue(username, device_id):
     """Gets the download queue for a specific device.
@@ -44,7 +41,6 @@ def get_download_queue(username, device_id):
             return "User not found."
         user_id = user.get("_id")
 
-
         # Find files that have device_id in proposed_device_ids but not in device_ids array
         sync_files = list(file_sync_collection.find({
             "user_id": user_id,
@@ -56,18 +52,19 @@ def get_download_queue(username, device_id):
         files = []
         # Remove MongoDB _id field for JSON serialization
         for file in sync_files:
-            print(f"Processing file {len(files_available_for_download) + 1} of {len(sync_files)} for device {device_id}")
+            print(f"Processing file {len(
+                files_available_for_download) + 1} of {len(sync_files)} for device {device_id}")
             file["_id"] = str(file["_id"])
-            
+
             # Find online devices that have this file
             for device_id in file['device_ids']:
                 device_obj = device_collection.find_one({"_id": device_id})
                 if not device_obj:
                     continue
-                    
+
                 device_name = device_obj["device_name"]
                 print(f"{device_name} has the file, checking if online")
-                
+
                 if device_obj.get("online"):
                     print(f"{device_name} is online, adding to download queue")
                     files_available_for_download.append(file)
@@ -81,10 +78,10 @@ def get_download_queue(username, device_id):
 
         result = {
             "files_needed": len(sync_files),
-            "files_available_for_download": len(files_available_for_download), 
+            "files_available_for_download": len(files_available_for_download),
             "files": files
         }
-            
+
         return result
 
     except Exception as e:
@@ -97,5 +94,7 @@ def main():
     result = get_download_queue("mmills", "6756092e76ebec5a4ac8cd09")
     # result = get_download_queue("mmills", "Michaels-MacBook-Pro-3.local")
     print(result)
+
+
 if __name__ == "__main__":
     main()

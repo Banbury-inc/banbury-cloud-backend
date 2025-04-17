@@ -1,6 +1,4 @@
 from pymongo.mongo_client import MongoClient
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
 
 def get_user_info(user_id):
     """
@@ -61,7 +59,6 @@ if __name__ == "__main__":
     # Note: The function expects an ObjectId, but "mmills" is passed.
     # This will likely fail unless there's a user document with _id="mmills".
     # Replace "mmills" with a valid ObjectId string for testing.
-    from bson import ObjectId # Added for testing
     # Example with a placeholder ObjectId string:
     # user_info = get_user_info(ObjectId("507f1f77bcf86cd799439011"))
     user_info = get_user_info("mmills") # Original call, likely needs correction

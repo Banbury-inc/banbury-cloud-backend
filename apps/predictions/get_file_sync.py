@@ -1,5 +1,4 @@
 from pymongo.mongo_client import MongoClient
-from django.http import JsonResponse
 import logging
 from datetime import datetime
 

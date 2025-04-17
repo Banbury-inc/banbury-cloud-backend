@@ -1,11 +1,8 @@
 from pymongo.mongo_client import MongoClient
 from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
 from bson import ObjectId
 import json
-import os
 import motor.motor_asyncio
-from asgiref.sync import sync_to_async
 
 class JSONEncoder(json.JSONEncoder):
     def default(self, o):

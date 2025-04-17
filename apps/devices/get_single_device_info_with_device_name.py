@@ -1,7 +1,4 @@
 from pymongo.mongo_client import MongoClient
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-from bson.objectid import ObjectId
 
 def get_single_device_info_with_device_name(username, device_name):
     """

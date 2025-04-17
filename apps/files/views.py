@@ -1,24 +1,14 @@
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
-import bcrypt
-from django.shortcuts import render, redirect
-from django.http import HttpResponse, JsonResponse
-from ..forms import LoginForm
-import requests
+from django.http import JsonResponse
 from pymongo.mongo_client import MongoClient
-from pymongo.server_api import ServerApi
 from rest_framework.decorators import api_view
-from rest_framework.response import Response
 from .delete_files import delete_files
 from .get_files_from_filepath import get_files_from_filepath as db_get_files_from_filepath
 from .update_files import update_files
 from .get_file_info import get_file_info as db_get_file_info
 from websocket.utils import broadcast_new_file
 from .get_shared_files import get_shared_files as db_get_shared_files
-
-
-
-import pymongo
 import json
 import re
 

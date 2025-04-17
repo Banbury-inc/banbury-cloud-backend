@@ -1,14 +1,7 @@
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
-import bcrypt
-from django.shortcuts import render, redirect
-from django.http import HttpResponse, JsonResponse
-from ..forms import LoginForm
-import requests
-from pymongo.mongo_client import MongoClient
-from pymongo.server_api import ServerApi
+from django.http import JsonResponse
 from rest_framework.decorators import api_view
-from rest_framework.response import Response
 from .get_device_predictions import get_device_predictions as db_get_device_predictions
 from .update_sync_storage_capacity import update_sync_storage_capacity as db_update_sync_storage_capacity
 from .add_device_id_to_file_sync_file import add_device_id_to_file_sync_file as db_add_device_id_to_file_sync_file
@@ -18,9 +11,7 @@ from .pipeline import pipeline
 from .get_file_sync import get_file_sync as db_get_file_sync
 from .update_file_priority import update_file_priority as db_update_file_priority
 from .db_remove_file_from_sync import db_remove_file_from_sync as db_remove_file_from_sync
-import pymongo
 import json
-import re
 
 
 @csrf_exempt

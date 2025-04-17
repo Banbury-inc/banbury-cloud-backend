@@ -1,6 +1,5 @@
 from pymongo.mongo_client import MongoClient
 from bson import ObjectId
-import json
 
 
 # MongoDB connection

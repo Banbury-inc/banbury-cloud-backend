@@ -1,22 +1,12 @@
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
-import bcrypt
-from django.shortcuts import render, redirect
-from django.http import HttpResponse, JsonResponse
-from ..forms import LoginForm
-import requests
-from pymongo.mongo_client import MongoClient
-from pymongo.server_api import ServerApi
+from django.http import JsonResponse
 from rest_framework.decorators import api_view
-from rest_framework.response import Response
 from .get_notifications import get_notifications as db_get_notifications
 from .add_notification import add_notification as db_add_notification
 from .delete_notification import delete_notification as db_delete_notification
 from .mark_notification_as_read import mark_notification_as_read as db_mark_notification_as_read
-import pymongo
 import json
-import re
-
 
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)

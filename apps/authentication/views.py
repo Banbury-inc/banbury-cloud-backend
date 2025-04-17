@@ -2,18 +2,15 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 import bcrypt
 from django.shortcuts import render, redirect
-from django.http import HttpResponse, JsonResponse
+from django.http import JsonResponse
 from ..forms import LoginForm
 import requests as http_requests
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
 from rest_framework.decorators import api_view
-from rest_framework.response import Response
 import pymongo
 from datetime import datetime
 import json
-import re
-from django.conf import settings
 from google_auth_oauthlib.flow import Flow
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests

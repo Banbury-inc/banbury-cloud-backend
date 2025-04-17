@@ -1,6 +1,4 @@
 from pymongo.mongo_client import MongoClient
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
 
 def update_device(username, sending_device_name, requesting_device_name, device_info):
     """

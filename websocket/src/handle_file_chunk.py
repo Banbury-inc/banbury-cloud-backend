@@ -1,4 +1,3 @@
-import json
 
 async def handle_file_chunk(consumer, bytes_data):
     """

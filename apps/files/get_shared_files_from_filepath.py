@@ -1,9 +1,5 @@
 from pymongo.mongo_client import MongoClient
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-import os
 import motor.motor_asyncio
-from asgiref.sync import sync_to_async
 
 
 uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"

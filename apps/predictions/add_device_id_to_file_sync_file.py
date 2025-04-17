@@ -1,5 +1,4 @@
 from pymongo.mongo_client import MongoClient
-from bson import ObjectId
 
 def add_device_id_to_file_sync_file(username, file_name, device_name):
     """Adds a device ID to the device_ids array of a specific file sync entry.
