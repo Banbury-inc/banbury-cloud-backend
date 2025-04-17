@@ -148,7 +148,7 @@ def google_callback(request):
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
-@api_view(["GET"])
+@api_view(["POST"])
 def login_api(request):
     """Handles API-based user login with username and password."""
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"

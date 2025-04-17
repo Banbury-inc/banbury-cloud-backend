@@ -119,9 +119,18 @@ TEMPLATES = [
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
+    'filters': {
+        'require_debug_true': {
+            '()': 'django.utils.log.RequireDebugTrue',
+        },
+    },
     'formatters': {
         'verbose': {
             'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {message}',
             'style': '{',
         },
         'colored': {
@@ -139,23 +148,39 @@ LOGGING = {
     'loggers': {
         'django': {
             'handlers': ['console'],
-            'level': 'DEBUG',
+            'level': 'INFO',
+            'propagate': True,
+        },
+        'django.db.backends': {
+            'handlers': ['console'],
+            'level': 'WARNING',  # Set to WARNING to suppress DEBUG SQL logs
+            'propagate': False,
+        },
+        'django.schema': {
+            'handlers': ['console'],
+            'level': 'WARNING',  # Suppress schema debug logs
+            'propagate': False,
         },
         'channels': {
             'handlers': ['console'],
-            'level': 'DEBUG',
+            'level': 'INFO',
         },
         'channels.server': {
             'handlers': ['console'],
-            'level': 'DEBUG',
+            'level': 'INFO',
         },
         'websocket': {
             'handlers': ['console'],
-            'level': 'DEBUG',
+            'level': 'INFO',
         },
         'daphne': {
             'handlers': ['console'],
-            'level': 'DEBUG',
+            'level': 'INFO',
+        },
+        'tensorflow': {
+            'handlers': ['console'],
+            'level': 'ERROR',  # Only show errors for TensorFlow
+            'propagate': False,
         },
     },
 }

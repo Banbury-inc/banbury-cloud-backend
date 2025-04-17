@@ -1,4 +1,4 @@
-name: Django CI and AWS Deployment
+name: Test, Lint, and AWS Deploy
 
 on:
   push:
@@ -41,7 +41,7 @@ jobs:
         pylint --rcfile=.pylintrc .
 
   test:
-    name: Run Django Tests
+    name: Run Tests
     runs-on: ubuntu-latest
     strategy:
       max-parallel: 4
@@ -63,7 +63,7 @@ jobs:
         
     - name: Run Tests
       run: |
-        python manage.py test --noinput
+        pytest
       env:
         DJANGO_SETTINGS_MODULE: core.settings
         DEBUG: "False"

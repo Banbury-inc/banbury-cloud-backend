@@ -9,6 +9,12 @@ https://docs.djangoproject.com/en/3.0/howto/deployment/wsgi/
 
 import os
 
+# Import TensorFlow configuration to suppress warnings
+try:
+    from core.tensorflow_config import *  # Configure TensorFlow logging at module level
+except ImportError:
+    pass
+
 from django.core.wsgi import get_wsgi_application
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'core.settings')
