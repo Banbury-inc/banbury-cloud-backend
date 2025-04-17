@@ -1,4 +1,4 @@
-name: Django CI and AWS Deployment
+name: Test, Lint, and AWS Deploy
 
 on:
   push:
