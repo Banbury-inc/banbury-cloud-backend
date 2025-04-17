@@ -4,9 +4,15 @@ venv312
 .env
 
 # Python cache files
-__pycache__/
 *.py[cod]
 *$py.class
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Python cache directories
+__pycache__/
+**/__pycache__/
+
+
+
