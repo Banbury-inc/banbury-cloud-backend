@@ -42,7 +42,6 @@ jobs:
 
   test:
     name: Run Django Tests
-    needs: lint
     runs-on: ubuntu-latest
     strategy:
       max-parallel: 4
