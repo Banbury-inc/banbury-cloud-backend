@@ -1,0 +1,19 @@
+[MASTER]
+# Only check for unused imports
+disable=all
+enable=unused-import
+# Ignore the virtual environment directory
+ignore=venv
+
+[REPORTS]
+# No reports, just the errors
+reports=no
+score=no
+
+[FORMAT]
+# Simple output format
+output-format=text
+
+[MISCELLANEOUS]
+# Don't require docstrings
+no-docstring-rgx=.* 
