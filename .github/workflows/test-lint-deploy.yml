@@ -70,8 +70,8 @@ jobs:
 
   deploy:
     name: Deploy to AWS
-    needs: [test]
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev') && needs.test.result == 'success'
+    needs: [lint, test]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev') && needs.test.result == 'success' && needs.lint.result == 'success'
     runs-on: ubuntu-latest
     environment: production
 
