@@ -72,6 +72,25 @@ daphne -p 8082 -b 0.0.0.0 core.asgi:application
 request file
 
 
+# Run Tests
+
+To run the test suite:
+
+```bash
+# Run all tests
+pytest
+
+# Run specific test file
+pytest path/to/test_file.py
+
+# Run with verbose output
+pytest -v
+
+# Run tests marked as asyncio
+pytest -m asyncio
+```
+
+Tests use the configuration in pytest.ini, which enables asyncio mode automatically.
 
 
 
