@@ -172,6 +172,40 @@ class Consumer(AsyncWebsocketConsumer):
                 self.active_groups.add(transfer_room)
                 print(f"Added to transfer room during start_file_transfer: {transfer_room}")
                 print(f"Current active groups: {self.active_groups}")
+        elif message_type == "leave_transfer_room":
+            transfer_room = data.get("transfer_room")
+            if transfer_room:
+                print(f"[Consumer] Handling leave_transfer_room for {self.channel_name} from room {transfer_room}")
+                # Remove self from the group
+                await self.channel_layer.group_discard(
+                    transfer_room,
+                    self.channel_name
+                )
+                # Update internal tracking
+                self.active_groups.discard(transfer_room)
+                Consumer.active_transfer_rooms.discard(transfer_room) # Also update class-level tracking
+                print(f"[Consumer] Removed {self.channel_name} from group {transfer_room}. Active groups: {self.active_groups}")
+                
+                # Send confirmation back to the client who sent leave
+                await self.send(text_data=json.dumps({
+                    "type": "left_transfer_room", # Confirmation type
+                    "transfer_room": transfer_room,
+                    "success": True
+                }))
+                
+                # Notify *other* members of the group that this user left
+                await self.channel_layer.group_send(
+                    transfer_room, # Send to the remaining members
+                    {
+                        "type": "transfer_participant_left", # Use a specific type for this notification
+                        "transfer_room": transfer_room,
+                        "leaving_channel": self.channel_name, # Inform who left
+                        "timestamp": data.get("timestamp", 0) # Forward timestamp if available
+                    }
+                )
+                print(f"[Consumer] Notified group {transfer_room} that {self.channel_name} left.")
+            else:
+                print("[Consumer] leave_transfer_room message missing transfer_room")
         elif message_type == "initiate_live_data_connection":
             await handle_initiate_live_data_connection(self, data)
         elif message_type == "device_info_response":
@@ -318,3 +352,15 @@ class Consumer(AsyncWebsocketConsumer):
         This forwards the cancellation instruction to the specific consumer (sending device).
         """
         await cancel_transfer_event(self, event)
+
+    # Add handler for the new group message type 'transfer_participant_left'
+    async def transfer_participant_left(self, event):
+        """Forwards the notification about a participant leaving a transfer room."""
+        print(f"[Consumer] Forwarding transfer_participant_left event: {event}")
+        await self.send(text_data=json.dumps({
+            "type": "leave_transfer_room", # Match receiver expectation
+            "transfer_room": event.get("transfer_room"),
+            "reason": "participant_left",
+            "leaving_channel": event.get("leaving_channel"),
+            "timestamp": event.get("timestamp")
+        }))

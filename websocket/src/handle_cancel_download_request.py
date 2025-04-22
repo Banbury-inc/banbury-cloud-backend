@@ -91,4 +91,4 @@ async def cancel_transfer_event(consumer, event):
         "filename": event.get("filename"),
         "requesting_device_id": event.get("requesting_device_id"),
         "timestamp": event.get("timestamp")
-    })) 
+    }))
