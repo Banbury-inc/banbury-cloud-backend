@@ -7,6 +7,7 @@ from .handle_file_transfer_complete import handle_file_transfer_complete
 from .handle_initiate_live_data_connection import handle_initiate_live_data_connection
 from .handle_start_file_transfer import handle_start_file_transfer
 from .handle_file_chunk import handle_file_chunk
+from .handle_cancel_download_request import handle_cancel_download_request, cancel_transfer_event
 
 
 class Consumer(AsyncWebsocketConsumer):
@@ -120,6 +121,10 @@ class Consumer(AsyncWebsocketConsumer):
                         }))
                         return
                 
+                # Handle cancel_download_request
+                elif message_type == 'cancel_download_request':
+                    await handle_cancel_download_request(self, data)
+                
                 if message_type == 'initiate_live_data_connection':
                     await handle_initiate_live_data_connection(self, data)
                 elif message_type == 'download_request':
@@ -152,3 +157,11 @@ class Consumer(AsyncWebsocketConsumer):
             print(f"Forwarding binary chunk of {len(bytes_data)} bytes to client")
             await self.send(bytes_data=bytes_data)
             print(f"Successfully forwarded {len(bytes_data)} bytes to client") 
+
+    # Add the event handler method for the channel layer message
+    async def cancel_transfer_event(self, event):
+        """
+        Handler for the 'cancel_transfer_event' type sent via channel layers.
+        This forwards the cancellation instruction to the specific consumer (sending device).
+        """
+        await cancel_transfer_event(self, event) 
