@@ -6,6 +6,7 @@ from .src.handle_download_request import handle_download_request
 from .src.handle_initiate_live_data_connection import handle_initiate_live_data_connection
 from .src.handle_file_transfer_complete import handle_file_transfer_complete
 from .src.handle_direct_message import handle_direct_message
+from .src.handle_cancel_download_request import handle_cancel_download_request, cancel_transfer_event
 from apps.devices.declare_device_online_with_id import declare_device_online_with_id
 from apps.devices.declare_device_offline_with_id import declare_device_offline_with_id
 from apps.devices.get_single_device_info import get_single_device_info
@@ -137,9 +138,9 @@ class Consumer(AsyncWebsocketConsumer):
         else:
             print("No data received")
 
-    async def handle_text_data(self, data):
-        print(f"Received text data: {data}")
-        data = json.loads(data)
+    async def handle_text_data(self, text_data):
+        print(f"Received text data: {text_data}")
+        data = json.loads(text_data)
         message_type = data.get("message_type")
         print(f"Message type: {message_type}")
 
@@ -177,6 +178,8 @@ class Consumer(AsyncWebsocketConsumer):
             await handle_device_info_response(data)
         elif message_type == "download_request":
             await handle_download_request(self, data)
+        elif message_type == "cancel_download_request":
+            await handle_cancel_download_request(self, data)
         elif message_type == "file_sent_successfully":
             transfer_room = data.get("transfer_room", f"transfer_{data['sending_device_id']}_{data['requesting_device_id']}")
             # Make sure we're in the transfer room before sending
@@ -221,7 +224,7 @@ class Consumer(AsyncWebsocketConsumer):
                     }
                 )
         else:
-            print(f"Received unrecognized message: {message_type}")
+            print(f"Received unrecognized message type: {message_type}")
 
     async def handle_bytes_data(self, data):
         """Handle incoming bytes data"""
@@ -308,3 +311,10 @@ class Consumer(AsyncWebsocketConsumer):
             await self.send(text_data=json.dumps({
                 "type": "notification_update",
             }))
+
+    async def cancel_transfer_event(self, event):
+        """
+        Handler for the 'cancel_transfer_event' type sent via channel layers.
+        This forwards the cancellation instruction to the specific consumer (sending device).
+        """
+        await cancel_transfer_event(self, event)
