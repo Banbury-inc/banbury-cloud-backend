@@ -122,7 +122,7 @@ class TestDevices:
         
         # Check response
         assert response.status_code == 200
-        assert response.json() == {'result': 'fail', 'message': 'Device not deleted.'}
+        assert response.json() == {'result': 'fail', 'message': 'error'}
         
     @patch('apps.devices.views.db_update_device_configuration_preferences')
     def test_update_device_configuration_preferences(self, mock_update_config, client, test_data):
