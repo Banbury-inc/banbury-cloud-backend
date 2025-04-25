@@ -54,6 +54,7 @@ def delete_device(request, username):
         data = json.loads(request.body)
         device_name = data.get("device_name")
         response = remove_device(username, device_name)
+        print('response', response)
         if response == "success":
             return JsonResponse({
                 "result": "success",
@@ -62,7 +63,7 @@ def delete_device(request, username):
         else:
             return JsonResponse({
                 "result": "fail",
-                "message": "Device not deleted.",
+                "message": response,
             })
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
