@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>S3 Upload Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, button {
+            padding: 8px;
+            width: 100%;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            min-height: 100px;
+            background-color: #f9f9f9;
+        }
+    </style>
+</head>
+<body>
+    <h1>S3 File Upload Test</h1>
+    
+    <form id="uploadForm" enctype="multipart/form-data">
+        <div class="form-group">
+            <label for="username">Username:</label>
+            <input type="text" id="username" name="username" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="device_name">Device Name:</label>
+            <input type="text" id="device_name" name="device_name" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="file_path">File Path (optional):</label>
+            <input type="text" id="file_path" name="file_path">
+        </div>
+        
+        <div class="form-group">
+            <label for="file_parent">File Parent (optional):</label>
+            <input type="text" id="file_parent" name="file_parent">
+        </div>
+        
+        <div class="form-group">
+            <label for="file">Select File:</label>
+            <input type="file" id="file" name="file" required>
+        </div>
+        
+        <button type="submit">Upload to S3</button>
+    </form>
+    
+    <div id="result">
+        <h3>Upload Result:</h3>
+        <pre id="resultContent">No upload yet</pre>
+    </div>
+    
+    <script>
+        document.getElementById('uploadForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData();
+            const username = document.getElementById('username').value;
+            
+            // Add form fields to formData
+            formData.append('device_name', document.getElementById('device_name').value);
+            formData.append('file_path', document.getElementById('file_path').value);
+            formData.append('file_parent', document.getElementById('file_parent').value);
+            formData.append('file', document.getElementById('file').files[0]);
+            
+            // Display loading message
+            document.getElementById('resultContent').textContent = 'Uploading...';
+            
+            try {
+                const response = await fetch(`/files/upload_to_s3/${username}/`, {
+                    method: 'POST',
+                    body: formData,
+                });
+                
+                const result = await response.json();
+                document.getElementById('resultContent').textContent = JSON.stringify(result, null, 2);
+            } catch (error) {
+                document.getElementById('resultContent').textContent = `Error: ${error.message}`;
+            }
+        });
+    </script>
+</body>
+</html> 

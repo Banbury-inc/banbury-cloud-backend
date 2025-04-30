@@ -20,4 +20,5 @@ urlpatterns = [
     path("get_shared_files/", views.get_shared_files, name="get_shared_files"),
     path("get_shared_files_from_filepath/", views.get_shared_files_from_filepath, name="get_shared_files_from_filepath"),
     path("get_file_info/<str:username>/<str:file_id>/", views.get_file_info, name="get_file_info"),
+    path("upload_to_s3/<str:username>/", views.upload_to_s3, name="upload_to_s3"),
 ]
