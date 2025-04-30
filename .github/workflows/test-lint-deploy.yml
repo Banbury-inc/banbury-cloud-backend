@@ -79,10 +79,7 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
-    - name: Create .env file using script
-      run: |
-        chmod +x ./create_env.sh
-        ./create_env.sh
+    - name: Create .env file
       env:
         # Django settings
         SECRET_KEY: ${{ secrets.SECRET_KEY }}
