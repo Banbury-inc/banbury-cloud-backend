@@ -9,8 +9,16 @@ from .update_files import update_files
 from .get_file_info import get_file_info as db_get_file_info
 from websocket.utils import broadcast_new_file
 from .get_shared_files import get_shared_files as db_get_shared_files
+from .upload_to_s3 import upload_file_to_s3
+from .list_s3_files import list_s3_files
+from .download_s3_file import download_s3_file
 import json
 import re
+import boto3
+from django.core.files.uploadedfile import UploadedFile
+import os
+from datetime import datetime
+from botocore.exceptions import ClientError
 
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
@@ -1250,3 +1258,58 @@ def get_file_info(request, username, file_id):
         return JsonResponse({"status": "success", "file_info": file_info})
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+@api_view(["POST"])
+def upload_to_s3(request, username):
+    """
+    Wrapper for the upload_file_to_s3 function in upload_to_s3.py.
+    
+    Uploads a file to an Amazon S3 bucket and stores metadata in MongoDB.
+    See the upload_file_to_s3 function documentation for details.
+    """
+    return upload_file_to_s3(request, username)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+@api_view(["GET"])
+def get_s3_files(request, username):
+    """
+    Retrieves all S3 files for a specific user.
+    
+    URL Parameters:
+        username (str): The username whose S3 files to list
+        
+    Returns:
+        JsonResponse: A list of files stored in S3 for the user
+    """
+    result = list_s3_files(username)
+    
+    if "error" in result:
+        return JsonResponse({"error": result["error"]}, status=result.get("status_code", 500))
+    
+    return JsonResponse(result)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+@api_view(["GET"])
+def download_s3_file_view(request, username, file_id):
+    """
+    Downloads a file from S3 for a specific user.
+    
+    URL Parameters:
+        username (str): The username requesting the download
+        file_id (str): The ID of the file to download
+        
+    Returns:
+        HttpResponse: The file content for download
+        or
+        JsonResponse: Error details if download fails
+    """
+    return download_s3_file(username, file_id)
+
+
