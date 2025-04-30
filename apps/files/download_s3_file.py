@@ -44,6 +44,9 @@ def download_s3_file(username, file_id):
         
         # Get S3 bucket name
         bucket_name = os.environ.get('AWS_S3_BUCKET_NAME')
+        if not bucket_name:
+            print(f"Error: AWS_S3_BUCKET_NAME environment variable not set")
+            return JsonResponse({"error": "S3 bucket configuration missing"}, status=500)
         
         # Get the S3 object key
         object_key = file.get('s3_key')
