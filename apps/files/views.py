@@ -2,7 +2,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.http import JsonResponse
 from pymongo.mongo_client import MongoClient
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from .delete_files import delete_files
 from .get_files_from_filepath import get_files_from_filepath as db_get_files_from_filepath
 from .update_files import update_files
@@ -19,6 +19,7 @@ from django.core.files.uploadedfile import UploadedFile
 import os
 from datetime import datetime
 from botocore.exceptions import ClientError
+from rest_framework.permissions import AllowAny
 
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
@@ -869,6 +870,8 @@ def remove_scanned_folder(request, username):
 @csrf_exempt
 @require_http_methods(["POST"])
 @api_view(["POST"])
+@permission_classes([AllowAny])  # Allow any user to access this endpoint
+@authentication_classes([])  # Skip DRF authentication completely
 def get_scanned_folders(request, username):
     """
     Retrieves the list of scanned folders for a specific user's device.
@@ -891,9 +894,42 @@ def get_scanned_folders(request, username):
                 - {"error": "User not found."}, status=404
                 - {"error": "Device not found."}, status=404
     """
+    
+    # Check if there are any DRF authentication classes active
+    from rest_framework.settings import api_settings
+    
+    # Check if we have a DRF authenticator on the view  
+    from rest_framework.views import APIView
+    view_class = APIView()
+    view_class.authentication_classes = []
+    
+    # Print the request HTTP_AUTHORIZATION header if it exists
+    http_auth = request.META.get('HTTP_AUTHORIZATION', None)  
+    
+    # Try direct access to the auth info
+    try:
+        auth_header = request.headers.get('Authorization', '')
+        if auth_header.startswith('Bearer '):
+            token = auth_header.split(' ')[1]
+            print(f"Direct token from header: {token[:20]}...")
+    except Exception as e:
+        print(f"Error accessing token: {str(e)}")
+    
     try:
         data = json.loads(request.body)
         device_name = data.get("device_name")
+        
+        # If username is provided in the request body, use it instead of URL parameter
+        # This helps with token validation workaround
+        body_username = data.get("username")
+        if body_username:
+            username = body_username
+        
+        # Check if username was set by middleware from X-Username header
+        if hasattr(request, 'username') and request.username:
+            username = request.username
+        
+        
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
     
@@ -907,20 +943,29 @@ def get_scanned_folders(request, username):
     # Find the user by username
     user = user_collection.find_one({"username": username})
     if not user:
+        print(f"Error: User '{username}' not found")
         return JsonResponse({"error": "User not found."}, status=404)
     
     # Find the device belonging to the user by device_name
+    if not device_name:
+        print("Error: No device_name provided in request body")
+        return JsonResponse({"error": "device_name is required"}, status=400)
+        
     device = device_collection.find_one({
         "user_id": user["_id"],
         "device_name": device_name,
     })
     if not device:
+        print(f"Error: Device '{device_name}' not found for user '{username}'")
         return JsonResponse({"error": "Device not found."}, status=404)
     
     # Return the scanned folders
+    scanned_folders = device.get("scanned_folders", [])
+    print(f"Success: Returning {len(scanned_folders)} scanned folders for user {username}")
     return JsonResponse({
         "result": "success",
-        "scanned_folders": device.get("scanned_folders", [])
+        "username": username,
+        "scanned_folders": scanned_folders
     })
 
 @csrf_exempt

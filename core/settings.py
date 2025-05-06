@@ -95,6 +95,7 @@ MIDDLEWARE = [
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
+    'apps.authentication.middleware.JWTAuthenticationMiddleware',
 ]
 
 ROOT_URLCONF = 'core.urls'

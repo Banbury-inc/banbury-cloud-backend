@@ -7,7 +7,7 @@ from ..forms import LoginForm
 import requests as http_requests
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
 import pymongo
 from datetime import datetime
 import json
@@ -17,6 +17,10 @@ from google.auth.transport import requests as google_requests
 from dotenv import load_dotenv
 import os
 import base64
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import AllowAny
 
 load_dotenv()
 
@@ -406,5 +410,159 @@ def add_site_visitor_info(request):
 
     # Return the result
     return JsonResponse({"result": result})
+
+
+@csrf_exempt
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def token_obtain_pair(request):
+    """
+    Authenticates a user and returns JWT access and refresh tokens.
+    """
+    try:
+        data = json.loads(request.body)
+        username = data.get("username")
+        password = data.get("password")
+
+        if not username or not password:
+            return Response(
+                {"error": "Username and password are required"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Connect to MongoDB
+        uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+        client = pymongo.MongoClient(uri, server_api=ServerApi("1"))
+        db = client["NeuraNet"]
+        user_collection = db["users"]
+        
+        # Find user
+        user = user_collection.find_one({"username": username})
+        
+        if not user:
+            return Response(
+                {"error": "Invalid credentials"}, 
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        # Verify password
+        password_bytes = password.encode("utf-8")
+        if not bcrypt.checkpw(password_bytes, user["password"]):
+            return Response(
+                {"error": "Invalid credentials"}, 
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        # Generate tokens
+        refresh = RefreshToken()
+        
+        # Add user data to token payload
+        refresh["username"] = user["username"]
+        refresh["first_name"] = user.get("first_name")
+        refresh["last_name"] = user.get("last_name")
+        refresh["email"] = user.get("email")
+        
+        # Get device ID or generate one if not available
+        device_id = f"{username}-{os.uname()[1]}"
+        
+        return Response({
+            "refresh": str(refresh),
+            "access": str(refresh.access_token),
+            "username": username,
+            "deviceId": device_id,
+            "result": "success"
+        })
+        
+    except Exception as e:
+        return Response(
+            {"error": str(e)}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@csrf_exempt
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def token_refresh(request):
+    """
+    Refreshes a JWT token using a valid refresh token.
+    
+    Importantly, this preserves all user details from the original token.
+    """
+    try:
+        data = json.loads(request.body)
+        refresh_token = data.get("refresh")
+        
+        if not refresh_token:
+            return Response(
+                {"error": "Refresh token is required"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Extract the token first to get the user data
+        try:
+            # Validate the refresh token
+            old_refresh = RefreshToken(refresh_token)
+            
+            # Print the token payload for debugging
+            print(f"Original refresh token payload: {old_refresh.payload}")
+            
+            # Extract user data from the old token
+            payload = old_refresh.payload
+            username = payload.get('username')
+            
+            if not username:
+                print("WARNING: No username found in the refresh token")
+                # Try to find the user by other means if available
+                uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+                client = pymongo.MongoClient(uri, server_api=ServerApi("1"))
+                db = client["NeuraNet"]
+                user_collection = db["users"]
+                
+                # If we have user_id, try to get username
+                if 'user_id' in payload:
+                    user = user_collection.find_one({"_id": payload['user_id']})
+                    if user:
+                        username = user.get("username")
+                
+                if not username:
+                    return Response(
+                        {"error": "Could not identify user from refresh token"}, 
+                        status=status.HTTP_401_UNAUTHORIZED
+                    )
+            
+            # Generate new tokens
+            new_refresh = RefreshToken()
+            
+            # Copy over all the claims from the old token
+            for key in payload:
+                if key not in ['exp', 'iat', 'jti', 'token_type']:  # Skip standard JWT claims
+                    new_refresh[key] = payload[key]
+            
+            # Ensure username is set
+            new_refresh['username'] = username
+            
+            # Debug the new token payload
+            print(f"New refresh token payload: {new_refresh.payload}")
+            
+            return Response({
+                "access": str(new_refresh.access_token),
+                "refresh": str(new_refresh),
+                "username": username,
+                "result": "success"
+            })
+            
+        except Exception as e:
+            print(f"Error refreshing token: {str(e)}")
+            return Response(
+                {"error": str(e)}, 
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+            
+    except Exception as e:
+        return Response(
+            {"error": str(e)}, 
+            status=status.HTTP_401_UNAUTHORIZED
+        )
 
 

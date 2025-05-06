@@ -10,4 +10,7 @@ urlpatterns = [
     path("add_site_visitor_info/", views.add_site_visitor_info, name="get_site_visitor_info"),
     path("google/", views.google, name="google"),
     path("auth/callback/", views.google_callback, name="google_callback"),
+    # JWT token endpoints
+    path("token/", views.token_obtain_pair, name="token_obtain_pair"),
+    path("token/refresh/", views.token_refresh, name="token_refresh"),
 ]
