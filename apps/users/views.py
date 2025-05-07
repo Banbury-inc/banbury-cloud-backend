@@ -55,7 +55,7 @@ def getuserinfo2(request):
 
 
 @api_view(["GET"])
-def getuserinfo(request):
+def getfrienduserinfo(request):
     """Retrieves user information including profile picture and friends."""
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)

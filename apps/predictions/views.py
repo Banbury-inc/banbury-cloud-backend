@@ -290,7 +290,6 @@ def get_download_queue(request):
 
 @csrf_exempt
 @require_http_methods(["GET"])
-@api_view(["GET"])
 def get_device_prediction_data(request):
     """
     Retrieves the device prediction data for the specified user.
