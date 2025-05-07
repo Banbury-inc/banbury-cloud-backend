@@ -9,9 +9,8 @@ from .mark_notification_as_read import mark_notification_as_read as db_mark_noti
 import json
 
 
-@csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
-@require_http_methods(["GET"])
-@api_view(["GET"])
+@csrf_exempt
+@require_http_methods(["POST"])
 def get_notifications(request):
     """
     Retrieves all notifications for a specific user.

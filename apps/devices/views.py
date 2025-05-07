@@ -110,8 +110,9 @@ def update_device_configuration_preferences(request, username):
 
 
 
-@api_view(["GET"])
-def getdeviceinfo(request, username):
+@csrf_exempt
+@require_http_methods(["POST"])
+def getdeviceinfo(request):
     """
     Retrieves information for all devices associated with a specific user.
 
@@ -131,6 +132,7 @@ def getdeviceinfo(request, username):
     db = client["NeuraNet"]
     user_collection = db["users"]
     device_collection = db["devices"]
+    username = request.username_from_token
 
     # Find the user by username
     user = user_collection.find_one({"username": username})
@@ -340,7 +342,8 @@ def declare_device_offline(request, username):
     return JsonResponse(user_data)
 
 
-@api_view(["GET"])
+
+@require_http_methods(["POST"])
 def get_single_device_info(request, username, device_id):
     """
     Retrieves detailed information for a single device using its database ID.
@@ -360,8 +363,7 @@ def get_single_device_info(request, username, device_id):
 
     return JsonResponse(device_info)
 
-@api_view(["GET"])
-def get_single_device_info_with_device_name(request, username, device_name):
+def get_single_device_info_with_device_name(request, device_name):
     """
     Retrieves detailed information for a single device using its name.
 
@@ -375,7 +377,7 @@ def get_single_device_info_with_device_name(request, username, device_name):
     Returns:
         JsonResponse: A JSON response containing the device information.
     """
-    device_info = db_get_single_device_info_with_device_name(username, device_name)
+    device_info = db_get_single_device_info_with_device_name(request.username_from_token, device_name)
     return JsonResponse(device_info)
 
 

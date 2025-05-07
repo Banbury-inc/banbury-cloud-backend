@@ -432,7 +432,6 @@ def getfileinfo(request):
 
 @csrf_exempt
 @require_http_methods(["POST"])
-@api_view(["POST"])
 def get_files_from_filepath(request):
     """
     Retrieves files located under a specific 'global_file_path' for a user.

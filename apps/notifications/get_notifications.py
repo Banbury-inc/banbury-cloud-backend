@@ -20,7 +20,7 @@ def convert_objectid(obj):
     return obj
 
 
-def get_notifications(request):
+def get_notifications(username):
     """Retrieves all notifications for a specific user.
 
     Args:
@@ -32,7 +32,7 @@ def get_notifications(request):
                      or the string "User not found" if the user doesn't exist.
     """
     # Find the user by username
-    user = user_collection.find_one({'username': request.username_from_token})
+    user = user_collection.find_one({'username': username})
     if not user:
         response = "User not found"
         return response
