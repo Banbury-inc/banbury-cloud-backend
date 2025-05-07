@@ -1,6 +1,6 @@
 from pymongo.mongo_client import MongoClient
 
-def get_device_info(request):
+def get_device_info(username):
     """
     Retrieves information for all devices associated with a specific user.
 
@@ -26,9 +26,8 @@ def get_device_info(request):
         print(f"Error connecting to MongoDB: {e}")
         return {"error": "Failed to connect to MongoDB"}
 
-
     # Find the user by username
-    user = user_collection.find_one({"username": request.username_from_token})
+    user = user_collection.find_one({"username": username})
 
     if not user:
         return {"error": "Please login first."}

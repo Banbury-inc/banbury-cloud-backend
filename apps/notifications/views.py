@@ -10,7 +10,7 @@ import json
 
 
 @csrf_exempt
-@require_http_methods(["POST"])
+@require_http_methods(["GET"])
 def get_notifications(request):
     """
     Retrieves all notifications for a specific user.

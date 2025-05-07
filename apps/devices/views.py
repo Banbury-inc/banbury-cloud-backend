@@ -111,7 +111,7 @@ def update_device_configuration_preferences(request, username):
 
 
 @csrf_exempt
-@require_http_methods(["POST"])
+@require_http_methods(["GET"])
 def getdeviceinfo(request):
     """
     Retrieves information for all devices associated with a specific user.
