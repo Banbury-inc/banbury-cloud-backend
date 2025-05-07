@@ -1,6 +1,6 @@
 from pymongo import MongoClient
 
-def update_files(username, device_name, files):
+def update_files(request, device_name, files):
     """
     Updates or inserts file metadata in the database for a specific device.
 

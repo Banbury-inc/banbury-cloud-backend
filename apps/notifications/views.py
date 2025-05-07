@@ -12,7 +12,7 @@ import json
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["GET"])
 @api_view(["GET"])
-def get_notifications(request, username):
+def get_notifications(request):
     """
     Retrieves all notifications for a specific user.
 
@@ -26,11 +26,11 @@ def get_notifications(request, username):
     """
     try:
         # Since we're not using request parameters, we just pass username directly
-        notifications = db_get_notifications(username)
+        notifications = db_get_notifications(request.username_from_token)
         return JsonResponse({
             "result": "success",
             "notifications": notifications,
-            "username": username
+            "username": request.username_from_token,
         }, safe=False)
     except Exception as e:
         return JsonResponse({
@@ -43,7 +43,7 @@ def get_notifications(request, username):
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
 @api_view(["POST"])
-def add_notification(request, username):
+def add_notification(request):
     """
     Adds a new notification for a specific user.
 
@@ -59,7 +59,7 @@ def add_notification(request, username):
     try:
         data = json.loads(request.body)
         notification = data.get("notification")
-        response = db_add_notification(username, notification)
+        response = db_add_notification(request.username_from_token, notification)
         return JsonResponse(response)
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
@@ -68,7 +68,7 @@ def add_notification(request, username):
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
 @api_view(["POST"])
-def delete_notification(request, username):
+def delete_notification(request):
     """
     Deletes a specific notification for a user.
 
@@ -84,7 +84,7 @@ def delete_notification(request, username):
     try:
         data = json.loads(request.body)
         notification_id = data.get("notification_id")
-        response = db_delete_notification(username, notification_id)
+        response = db_delete_notification(request.username_from_token, notification_id)
         return JsonResponse(response)
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)

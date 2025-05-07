@@ -13,7 +13,7 @@ except Exception as e:
     print(f"Error connecting to MongoDB: {e}")
 
 
-def get_shared_files(username):
+def get_shared_files(request):
     """
     Retrieves a list of all files shared with the specified user.
 
@@ -32,7 +32,7 @@ def get_shared_files(username):
     """
 
     # Find the user by username
-    user = user_collection.find_one({"username": username})
+    user = user_collection.find_one({"username": request.username_from_token})
 
     if not user:
         return {"error": "Please login first."}

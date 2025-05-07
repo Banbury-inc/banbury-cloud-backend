@@ -1,6 +1,6 @@
 from pymongo.mongo_client import MongoClient
 
-def get_settings(username):
+def get_settings(request):
 
     # MongoDB connection
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
@@ -10,7 +10,7 @@ def get_settings(username):
     settings_collection = db['settings']
 
     # Find the user by username
-    user = user_collection.find_one({'username': username})
+    user = user_collection.find_one({'username': request.username_from_token})
     if not user:
         response = "User not found"
         return response
@@ -26,7 +26,7 @@ def get_settings(username):
     response = {
         "result": "success",
         "settings": settings,
-        "username": username
+        "username": request.username_from_token,
     }
     return response
 

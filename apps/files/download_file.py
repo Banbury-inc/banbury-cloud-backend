@@ -9,7 +9,7 @@ file_collection = db['files']
 file_sync_collection = db['file_sync']
 device_collection = db['devices']
 
-def download_file(username, file_id, is_file_sync):
+def download_file(file_id, is_file_sync):
     """
     Retrieves file information for download, potentially triggering a download request.
 

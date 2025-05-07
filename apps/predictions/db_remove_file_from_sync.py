@@ -1,6 +1,6 @@
 from pymongo.mongo_client import MongoClient
 
-def db_remove_file_from_sync(username, device_name, file_name):
+def db_remove_file_from_sync(device_name, file_name):
     """Removes a file from the file synchronization list.
 
     Deletes the corresponding entry from the 'file_sync' collection based on

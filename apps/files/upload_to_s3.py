@@ -7,7 +7,7 @@ from django.core.files.uploadedfile import UploadedFile
 from pymongo.mongo_client import MongoClient
 from .utils import broadcast_new_file
 
-def upload_file_to_s3(request, username):
+def upload_file_to_s3(request):
     """
     Uploads a file to an Amazon S3 bucket and stores metadata in MongoDB.
     
@@ -59,7 +59,7 @@ def upload_file_to_s3(request, username):
     file_collection = db["files"]
     
     # Find the user by username
-    user = user_collection.find_one({"username": username})
+    user = user_collection.find_one({"username": request.username_from_token})
     if not user:
         return JsonResponse({"error": "User not found."}, status=404)
     

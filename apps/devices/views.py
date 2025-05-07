@@ -15,7 +15,7 @@ import json
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
-def add_device_view(request, username, device_name):
+def add_device_view(request, device_name):
     """
     View function that handles the add_device request.
     
@@ -27,7 +27,7 @@ def add_device_view(request, username, device_name):
     Returns:
         JsonResponse: A JSON response indicating success or failure.
     """
-    return add_device(request, username, device_name)
+    return add_device(request, request.username_from_token, device_name)
 
 
 
@@ -36,7 +36,7 @@ def add_device_view(request, username, device_name):
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
 @api_view(["POST"])
-def delete_device(request, username):
+def delete_device(request):
     """
     Deletes a device associated with a specific user.
 
@@ -53,7 +53,7 @@ def delete_device(request, username):
     try:
         data = json.loads(request.body)
         device_name = data.get("device_name")
-        response = remove_device(username, device_name)
+        response = remove_device(request.username_from_token, device_name)
         print('response', response)
         if response == "success":
             return JsonResponse({

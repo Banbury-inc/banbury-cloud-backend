@@ -13,10 +13,10 @@ file_collection = db["files"]
 file_collection.create_index([("device_id", 1)])
 file_collection.create_index([("file_parent", 1)])  # Add index for file_parent
 
-def get_shared_files_from_filepath(username, filepath):
+def get_shared_files_from_filepath(request, filepath):
 
     # Find the user by username
-    user = user_collection.find_one({"username": username})
+    user = user_collection.find_one({"username": request.username_from_token})
 
     if not user:
         return {"error": "Please login first."}
@@ -173,7 +173,7 @@ def get_shared_files_from_filepath(username, filepath):
             "files": files_data
         }
 
-def get_shared_files_from_filepath(username, filepath):
+def get_shared_files_from_filepath(request, filepath):
     """
     Retrieves files shared with the specified user, optionally filtered by a filepath.
 
@@ -194,7 +194,7 @@ def get_shared_files_from_filepath(username, filepath):
               - "error": An error message string if the user is not found.
     """
     # Find the user by username
-    user = user_collection.find_one({"username": username})
+    user = user_collection.find_one({"username": request.username_from_token})
 
     if not user:
         return {"error": "Please login first."}
@@ -267,7 +267,7 @@ def get_shared_files_from_filepath(username, filepath):
         "files": files_data
     }
 
-async def get_shared_files_from_filepath_async(username, filepath):
+async def get_shared_files_from_filepath_async(request, filepath):
     """
     Asynchronous version intended to mirror get_shared_files_from_filepath.
 
@@ -288,5 +288,5 @@ async def get_shared_files_from_filepath_async(username, filepath):
     db = client["NeuraNet"]
     
     # Perform async queries
-    user = await db.users.find_one({"username": username})
+    user = await db.users.find_one({"username": request.username_from_token})
     # ... implement async version similarly ...

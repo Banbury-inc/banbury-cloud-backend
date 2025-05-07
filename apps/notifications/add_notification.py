@@ -22,7 +22,7 @@ def convert_objectid(obj):
     return obj
 
 
-def add_notification(username, notification):
+def add_notification(request, notification):
     """Adds a notification for a specific user and sends a WebSocket update.
 
     Args:
@@ -39,7 +39,7 @@ def add_notification(username, notification):
                      or an error string "User not found" if the user doesn't exist.
     """
     # Find the user by username
-    user = user_collection.find_one({'username': username})
+    user = user_collection.find_one({'username': request.username_from_token})
     if not user:
         response = "User not found"
         return response
@@ -84,7 +84,7 @@ def add_notification(username, notification):
     # Return success response
     response = {
         "result": "success",
-        "username": username
+        "username": request.username_from_token,
     }
     return response
 

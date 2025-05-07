@@ -1,6 +1,6 @@
 from pymongo.mongo_client import MongoClient
 
-def declare_device_offline(username, device_name):
+def declare_device_offline(request, device_name):
     """
     Marks a specific device associated with a user as offline in the database.
 
@@ -27,7 +27,7 @@ def declare_device_offline(username, device_name):
     device_collection = db['devices']
 
     # Find the user by username
-    user = user_collection.find_one({'username': username})
+    user = user_collection.find_one({'username': request.username_from_token})
     if not user:
         response = "User not found"
         return response
@@ -53,7 +53,7 @@ def declare_device_offline(username, device_name):
     # Return success response
     response = {
         "result": "success",
-        "username": username
+        "username": request.username_from_token,
     }
 
     return response

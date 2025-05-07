@@ -1,6 +1,6 @@
 from pymongo.mongo_client import MongoClient
 
-def update_device(username, sending_device_name, requesting_device_name, device_info):
+def update_device(request, sending_device_name, requesting_device_name, device_info):
     """
     Updates the information for a specific device based on received data.
 
@@ -31,7 +31,7 @@ def update_device(username, sending_device_name, requesting_device_name, device_
     device_collection = db["devices"]
 
     # Find the user by username
-    user = user_collection.find_one({"username": username})
+    user = user_collection.find_one({"username": request.username_from_token})
     if not user:
         return "user not found"
 

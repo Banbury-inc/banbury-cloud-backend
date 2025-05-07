@@ -21,7 +21,7 @@ file_collection = db["files"]
 file_collection.create_index([("device_id", 1)])
 file_collection.create_index([("file_parent", 1)])  # Add index for file_parent
 
-def get_files_from_filepath(username, filepath):
+def get_files_from_filepath(request, filepath):
     """
     Retrieves a list of files based on a specified filepath for a given user.
 
@@ -47,7 +47,7 @@ def get_files_from_filepath(username, filepath):
     """
 
     # Find the user by username
-    user = user_collection.find_one({"username": username})
+    user = user_collection.find_one({"username": request.username_from_token})
 
     if not user:
         return JsonResponse({"error": "Please login first."}, encoder=JSONEncoder)
@@ -204,7 +204,7 @@ def get_files_from_filepath(username, filepath):
             "files": files_data
         }, encoder=JSONEncoder)
 
-async def get_files_from_filepath_async(username, filepath):
+async def get_files_from_filepath_async(request, filepath):
     """
     Asynchronous version of get_files_from_filepath.
 
@@ -225,6 +225,6 @@ async def get_files_from_filepath_async(username, filepath):
     db = client["NeuraNet"]
     
     # Perform async queries
-    user = await db.users.find_one({"username": username})
+    user = await db.users.find_one({"username": request.username_from_token})
     devices = await db.devices.find({"user_id": user["_id"]}).to_list(None)
     

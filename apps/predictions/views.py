@@ -17,7 +17,7 @@ import json
 @csrf_exempt
 @require_http_methods(["GET"])
 @api_view(["GET"])
-def run_pipeline(request, username):
+def run_pipeline(request):
     """
     Executes the prediction pipeline for the specified user.
 
@@ -28,7 +28,7 @@ def run_pipeline(request, username):
     Returns:
         JsonResponse: A JSON response indicating success and containing the pipeline results.
     """
-    result = pipeline(username)
+    result = pipeline(request.username_from_token)
     response_data = {
         "result": "success",
         "data": result,
@@ -40,7 +40,7 @@ def run_pipeline(request, username):
 @csrf_exempt
 @require_http_methods(["POST"])
 @api_view(["POST"])
-def add_file_to_sync(request, username):
+def add_file_to_sync(request):
     """
     Adds a file to the synchronization list for a specific device belonging to the user.
 
@@ -56,11 +56,11 @@ def add_file_to_sync(request, username):
     data = json.loads(request.body)
     device_name = data.get("device_name")
     file_path = data.get("file_path")
-    response = db_add_file_to_sync(username, device_name, file_path)
+    response = db_add_file_to_sync(request.username_from_token, device_name, file_path)
 
     user_data = {
         "result": response,
-        "username": username,  # Return username if success, None if fail
+        "username": request.username_from_token,  # Return username if success, None if fail
     }
 
     return JsonResponse(user_data)
@@ -69,7 +69,7 @@ def add_file_to_sync(request, username):
 @csrf_exempt
 @require_http_methods(["POST"])
 @api_view(["POST"])
-def remove_file_from_sync(request, username):
+def remove_file_from_sync(request):
     """
     Removes a file from the synchronization list for a specific device belonging to the user.
 
@@ -85,11 +85,11 @@ def remove_file_from_sync(request, username):
     data = json.loads(request.body)
     device_name = data.get("device_name")
     file_path = data.get("file_path")
-    response = db_remove_file_from_sync(username, device_name, file_path)
+    response = db_remove_file_from_sync(request.username_from_token, device_name, file_path)
 
     user_data = {
         "result": response,
-        "username": username,  # Return username if success, None if fail
+        "username": request.username_from_token,  # Return username if success, None if fail
     }
 
     return JsonResponse(user_data)
@@ -99,7 +99,7 @@ def remove_file_from_sync(request, username):
 @csrf_exempt
 @require_http_methods(["POST"])
 @api_view(["POST"])
-def get_files_to_sync(request, username):
+def get_files_to_sync(request):
     """
     Retrieves the list of files marked for synchronization for a user.
 
@@ -119,7 +119,7 @@ def get_files_to_sync(request, username):
         global_file_path = data.get('global_file_path')
         
         # Call database function with optional global_file_path
-        response, status_code = db_get_file_sync(username, global_file_path)
+        response, status_code = db_get_file_sync(request.username_from_token, global_file_path)
         
         if status_code != 200:
             return JsonResponse({
@@ -151,7 +151,7 @@ def get_files_to_sync(request, username):
 @csrf_exempt
 @require_http_methods(["POST"])
 @api_view(["POST"])
-def update_file_priority(request, username):
+def update_file_priority(request):
     """
     Updates the synchronization priority of a specific file for the user.
 
@@ -171,7 +171,7 @@ def update_file_priority(request, username):
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
 
-    response = db_update_file_priority(username, file_id, priority)
+    response = db_update_file_priority(request.username_from_token, file_id, priority)
 
 
     files_data = {
@@ -186,7 +186,7 @@ def update_file_priority(request, username):
 @csrf_exempt
 @require_http_methods(["POST"])
 @api_view(["POST"])
-def add_device_id_to_file_sync_file(request, username):
+def add_device_id_to_file_sync_file(request):
     """
     Associates a device ID with a specific file in the user's synchronization list.
 
@@ -206,7 +206,7 @@ def add_device_id_to_file_sync_file(request, username):
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
 
-    response = db_add_device_id_to_file_sync_file(username, file_name, device_name)
+    response = db_add_device_id_to_file_sync_file(request.username_from_token, file_name, device_name)
     print(response)
 
 
@@ -221,7 +221,7 @@ def add_device_id_to_file_sync_file(request, username):
 @csrf_exempt
 @require_http_methods(["POST"])
 @api_view(["POST"])
-def update_sync_storage_capacity(request, username):
+def update_sync_storage_capacity(request):
     """
     Updates the reported storage capacity for a specific device associated with the user.
 
@@ -239,7 +239,7 @@ def update_sync_storage_capacity(request, username):
         data = json.loads(request.body)
         device_name = data.get("device_name")
         storage_capacity = data.get("storage_capacity")
-        response = db_update_sync_storage_capacity(username, device_name, storage_capacity)
+        response = db_update_sync_storage_capacity(request.username_from_token, device_name, storage_capacity)
 
         print(response)
 
@@ -260,7 +260,7 @@ def update_sync_storage_capacity(request, username):
 
 @csrf_exempt
 @require_http_methods(["POST"])
-def get_download_queue(request, username):
+def get_download_queue(request):
     """
     Retrieves the download queue for a specific device belonging to the user.
 
@@ -276,7 +276,7 @@ def get_download_queue(request, username):
     try:
         data = json.loads(request.body)
         device_id = data.get("device_id")
-        response = db_get_download_queue(username, device_id)
+        response = db_get_download_queue(request.username_from_token, device_id)
         print("response: ", response)
         return JsonResponse({
             "result": "success",
@@ -291,7 +291,7 @@ def get_download_queue(request, username):
 @csrf_exempt
 @require_http_methods(["GET"])
 @api_view(["GET"])
-def get_device_prediction_data(request, username):
+def get_device_prediction_data(request):
     """
     Retrieves the device prediction data for the specified user.
 
@@ -302,7 +302,7 @@ def get_device_prediction_data(request, username):
     Returns:
         JsonResponse: A JSON response containing the device prediction data.
     """
-    result = db_get_device_predictions(username)
+    result = db_get_device_predictions(request.username_from_token)
     response_data = {   
         "result": "success",
         "data": result,

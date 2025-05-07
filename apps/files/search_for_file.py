@@ -1,6 +1,7 @@
 from pymongo import MongoClient
 
-def search_for_file(username, file_name):
+ 
+def search_for_file(request, file_name):
     """
     Searches for a specific file by name across all devices belonging to a user.
 
@@ -25,17 +26,14 @@ def search_for_file(username, file_name):
     device_collection = db['devices']
     file_collection = db['files']
 
-
     # Find the user by username
-    user = user_collection.find_one({'username': username})
+    user = user_collection.find_one({'username': request.username_from_token})
 
-    
     if not user:
         return "User not found"
 
     # Find all devices belonging to the user
     devices = list(device_collection.find({'user_id': user['_id']}))
-
 
     if not devices:
         return "No devices found for this user."
@@ -43,7 +41,8 @@ def search_for_file(username, file_name):
     # Search for the file in all of the user's devices
     for device in devices:
         # Search for the file in the current device
-        file = file_collection.find_one({'device_id': device['_id'], 'file_name': file_name})
+        file = file_collection.find_one(
+            {'device_id': device['_id'], 'file_name': file_name})
 
         if file:
             # If the file is found, return the device and file details
@@ -57,10 +56,9 @@ def search_for_file(username, file_name):
                 "date_accessed": file.get('date_accessed'),
                 "device_id": str(file.get('device_id')),
                 "kind": file.get('kind'),
-                "device_name": device.get('device_name'),  # Include device name for context
+                # Include device name for context
+                "device_name": device.get('device_name'),
             }
             return file_data
-        
-
 
     return {"result": "File not found"}

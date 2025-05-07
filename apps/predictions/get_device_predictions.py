@@ -1,6 +1,6 @@
 from pymongo.mongo_client import MongoClient
 
-def get_device_predictions(username):
+def get_device_predictions(request):
     """Retrieves device prediction data for a specific user.
 
     Fetches all prediction documents associated with the user's ID from the
@@ -28,7 +28,7 @@ def get_device_predictions(username):
         return {"error": "Failed to connect to MongoDB"}
 
     # Find the user by username
-    user = user_collection.find_one({"username": username})
+    user = user_collection.find_one({"username": request.username_from_token})
 
     if not user:
         return {"error": "Please login first."}

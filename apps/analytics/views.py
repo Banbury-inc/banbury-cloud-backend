@@ -56,7 +56,7 @@ def add_file_request_success(request):
 @csrf_exempt
 @require_http_methods(["GET"])
 @api_view(["GET"])
-def get_analytics(request, username):
+def get_analytics(request):
     """Retrieves analytics data for a specific user."""
 
     response_data = {"result": "success", "analytics": "analytics"}

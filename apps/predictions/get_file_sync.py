@@ -4,7 +4,7 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-def get_file_sync(username, global_file_path=None):
+def get_file_sync(request, global_file_path=None):
     """Retrieves the file synchronization information for a user.
 
     Fetches all entries from the 'file_sync' collection associated with the
@@ -24,7 +24,7 @@ def get_file_sync(username, global_file_path=None):
     """
     client = None
     try:
-        if not username:
+        if not request.username_from_token:
             return {"error": "Missing username"}, 400
 
         # Connect to MongoDB
@@ -35,7 +35,7 @@ def get_file_sync(username, global_file_path=None):
         user_collection = db["users"]
 
         # Get user_id from username
-        user = user_collection.find_one({"username": username})
+        user = user_collection.find_one({"username": request.username_from_token})
         if not user:
             return {"error": "User not found"}, 404
         
@@ -57,7 +57,7 @@ def get_file_sync(username, global_file_path=None):
         return {"files": sync_files}, 200
 
     except Exception as e:
-        logger.error(f"Error in get_file_sync for user {username}: {str(e)}")
+        logger.error(f"Error in get_file_sync for user {request.username_from_token}: {str(e)}")
         return {"error": f"Error retrieving files: {str(e)}"}, 500
         
     finally:

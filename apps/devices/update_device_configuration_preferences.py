@@ -1,7 +1,7 @@
 from pymongo.mongo_client import MongoClient
 from datetime import datetime
 
-def update_device_configuration_preferences(username, device_name, device_configurations):
+def update_device_configuration_preferences(request, device_name, device_configurations):
     """
     Updates or creates the prediction configuration preferences for a specific device.
 
@@ -34,7 +34,7 @@ def update_device_configuration_preferences(username, device_name, device_config
     predictions_collection = db["device_predictions"]
 
     # Find the user by username
-    user = user_collection.find_one({"username": username})
+    user = user_collection.find_one({"username": request.username_from_token})
     if not user:
         return "user not found"
 
