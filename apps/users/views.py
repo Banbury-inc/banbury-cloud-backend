@@ -2,7 +2,8 @@ import bcrypt
 from django.http import HttpResponse, JsonResponse
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny
 import pymongo
 import json
 from bson import json_util
@@ -156,6 +157,7 @@ def getuserinfo3(request, username, password):
 
 
 @api_view(["GET"])
+@permission_classes([AllowAny])
 def getuserinfo4(request, username, password):
     """Authenticates a user based on username and password (version 4)."""
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"

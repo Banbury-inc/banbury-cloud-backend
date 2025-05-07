@@ -2,7 +2,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.http import JsonResponse
 from pymongo.mongo_client import MongoClient
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, authentication_classes
 from .delete_files import delete_files
 from .get_files_from_filepath import get_files_from_filepath as db_get_files_from_filepath
 from .update_files import update_files
@@ -17,13 +17,15 @@ import re
 import boto3
 from django.core.files.uploadedfile import UploadedFile
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from botocore.exceptions import ClientError
+import jwt
 
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
 @api_view(["POST"])
+@authentication_classes([])
 def add_file(request, username):
     """
     Adds metadata for a single file to the database for a given user and device.
@@ -868,7 +870,6 @@ def remove_scanned_folder(request, username):
 
 @csrf_exempt
 @require_http_methods(["POST"])
-@api_view(["POST"])
 def get_scanned_folders(request, username):
     """
     Retrieves the list of scanned folders for a specific user's device.
@@ -893,6 +894,7 @@ def get_scanned_folders(request, username):
     """
     try:
         data = json.loads(request.body)
+
         device_name = data.get("device_name")
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)

@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"path": "../../../banbury-frontend"
+		},
+		{
+			"path": "../.."
+		}
+	],
+	"settings": {
+		"codeQL.githubDatabase.download": "never"
+	}
+}

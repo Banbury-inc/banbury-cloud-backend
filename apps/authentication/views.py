@@ -1,5 +1,6 @@
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
+from rest_framework.permissions import AllowAny
 import bcrypt
 from django.shortcuts import render, redirect
 from django.http import JsonResponse
@@ -7,9 +8,9 @@ from ..forms import LoginForm
 import requests as http_requests
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes, authentication_classes
 import pymongo
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 from google_auth_oauthlib.flow import Flow
 from google.oauth2 import id_token
@@ -17,6 +18,9 @@ from google.auth.transport import requests as google_requests
 from dotenv import load_dotenv
 import os
 import base64
+import jwt
+from rest_framework_simplejwt.tokens import AccessToken
+from django.conf import settings
 
 load_dotenv()
 
@@ -306,8 +310,10 @@ def new_register(request, username, password, firstName, lastName):
 
 
 @api_view(["GET"])
+@authentication_classes([])
+@permission_classes([AllowAny])
 def getuserinfo4(request, username, password):
-    """Authenticates a user based on username and password (version 4). Duplicate of the one in users/views.py?"""
+    """Authenticates a user based on username and password (version 4)."""
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
     db = client["NeuraNet"]
@@ -320,30 +326,33 @@ def getuserinfo4(request, username, password):
             "message": "User not found. Please login first.",
         })
 
-    # Assuming password stored in the database is hashed and saved as bytes.
-    # Also assuming 'password' parameter from the function call is the plaintext password to verify.
     try:
         stored_hashed_password = user["password"]
     except:
         return JsonResponse({"result": "fail", "message": "Can't find user password"})
 
     try:
-        password_bytes = password.encode(
-            "utf-8"
-        )  # Encode the plaintext password to bytes
+        password_bytes = password.encode("utf-8")
     except:
         return JsonResponse({"result": "fail", "message": "Can't find user password"})
 
     if bcrypt.checkpw(password_bytes, stored_hashed_password):
         result = "success"
         username = user.get("username")
+        
+        # Generate a valid Simple JWT access token without hitting the DB
+        access = AccessToken()
+        access["username"] = username
+        token = str(access)
     else:
         result = "fail"
         username = None
+        token = None
 
     user_data = {
         "result": result,
-        "username": username,  # Return username if success, None if fail
+        "username": username,
+        "token": token if result == "success" else None,
     }
     return JsonResponse(user_data)
 
