@@ -1,6 +1,6 @@
 from pymongo.mongo_client import MongoClient
 
-def db_add_file_to_sync(request, device_name, file_name):
+def db_add_file_to_sync(username, device_name, file_name):
     """Adds a file to the synchronization list for a user.
 
     Retrieves file details from the 'files' collection and adds or updates
@@ -34,7 +34,7 @@ def db_add_file_to_sync(request, device_name, file_name):
     user_collection = db["users"]
 
     # Get user_id from username
-    user = user_collection.find_one({"username": request.username_from_token})
+    user = user_collection.find_one({"username": username})
     if not user:
         return "User not found."
     user_id = user["_id"]

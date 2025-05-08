@@ -1,7 +1,7 @@
 from pymongo.mongo_client import MongoClient
 
 
-def get_download_queue(request, device_id):
+def get_download_queue(username, device_id):
     """Gets the download queue for a specific device.
 
     Finds files that are proposed to be synced to this device but are not yet present
@@ -23,7 +23,7 @@ def get_download_queue(request, device_id):
                      a database error occurs.
     """
     try:
-        if not request.username_from_token or not device_id:
+        if not username or not device_id:
             return "Missing username or device_id"
 
         # Connect to MongoDB
@@ -36,7 +36,7 @@ def get_download_queue(request, device_id):
         device_predictions_collection = db["device_predictions"]
 
         # Get user_id from username
-        user = user_collection.find_one({"username": request.username_from_token})
+        user = user_collection.find_one({"username": username})
         if not user:
             return "User not found."
         user_id = user.get("_id")

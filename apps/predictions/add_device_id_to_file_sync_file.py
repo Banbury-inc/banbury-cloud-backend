@@ -1,6 +1,6 @@
 from pymongo.mongo_client import MongoClient
 
-def add_device_id_to_file_sync_file(request, file_name, device_name):
+def add_device_id_to_file_sync_file(username, file_name, device_name):
     """Adds a device ID to the device_ids array of a specific file sync entry.
 
     Args:
@@ -23,7 +23,7 @@ def add_device_id_to_file_sync_file(request, file_name, device_name):
         file_sync_collection = db['file_sync']
 
         # Find the user by username
-        user = user_collection.find_one({'username': request.username_from_token})
+        user = user_collection.find_one({'username': username})
         if not user:
             return {"error": "User not found"}
 
@@ -44,7 +44,7 @@ def add_device_id_to_file_sync_file(request, file_name, device_name):
 
             return {
                 "result": "success",
-                "username": request.username_from_token,
+                "username": username,
                 "file_name": file_name,
                 "modified_count": result.modified_count
             }

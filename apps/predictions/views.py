@@ -28,7 +28,8 @@ def run_pipeline(request):
     Returns:
         JsonResponse: A JSON response indicating success and containing the pipeline results.
     """
-    result = pipeline(request.username_from_token)
+    username = request.username_from_token
+    result = pipeline(username)
     response_data = {
         "result": "success",
         "data": result,
@@ -56,11 +57,13 @@ def add_file_to_sync(request):
     data = json.loads(request.body)
     device_name = data.get("device_name")
     file_path = data.get("file_path")
-    response = db_add_file_to_sync(request.username_from_token, device_name, file_path)
+    username = request.username_from_token
+    response = db_add_file_to_sync(username, device_name, file_path)
+    username = request.username_from_token
 
     user_data = {
         "result": response,
-        "username": request.username_from_token,  # Return username if success, None if fail
+        "username": username,  # Return username if success, None if fail
     }
 
     return JsonResponse(user_data)
@@ -85,11 +88,13 @@ def remove_file_from_sync(request):
     data = json.loads(request.body)
     device_name = data.get("device_name")
     file_path = data.get("file_path")
-    response = db_remove_file_from_sync(request.username_from_token, device_name, file_path)
+    username = request.username_from_token
+    response = db_remove_file_from_sync(username, device_name, file_path)
+    username = request.username_from_token
 
     user_data = {
         "result": response,
-        "username": request.username_from_token,  # Return username if success, None if fail
+        "username": username,  # Return username if success, None if fail
     }
 
     return JsonResponse(user_data)
@@ -119,7 +124,8 @@ def get_files_to_sync(request):
         global_file_path = data.get('global_file_path')
         
         # Call database function with optional global_file_path
-        response, status_code = db_get_file_sync(request.username_from_token, global_file_path)
+        username = request.username_from_token
+        response, status_code = db_get_file_sync(username, global_file_path)
         
         if status_code != 200:
             return JsonResponse({
@@ -170,8 +176,9 @@ def update_file_priority(request):
         priority = data.get("priority")
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
+    username = request.username_from_token
 
-    response = db_update_file_priority(request.username_from_token, file_id, priority)
+    response = db_update_file_priority(username, file_id, priority)
 
 
     files_data = {
@@ -206,7 +213,9 @@ def add_device_id_to_file_sync_file(request):
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
 
-    response = db_add_device_id_to_file_sync_file(request.username_from_token, file_name, device_name)
+    username = request.username_from_token
+
+    response = db_add_device_id_to_file_sync_file(username, file_name, device_name)
     print(response)
 
 
@@ -239,7 +248,8 @@ def update_sync_storage_capacity(request):
         data = json.loads(request.body)
         device_name = data.get("device_name")
         storage_capacity = data.get("storage_capacity")
-        response = db_update_sync_storage_capacity(request.username_from_token, device_name, storage_capacity)
+        username = request.username_from_token
+        response = db_update_sync_storage_capacity(username, device_name, storage_capacity)
 
         print(response)
 
@@ -273,10 +283,11 @@ def get_download_queue(request):
     Returns:
         JsonResponse: A JSON response containing the download queue or an error message.
     """
+    username = request.username_from_token
     try:
         data = json.loads(request.body)
         device_id = data.get("device_id")
-        response = db_get_download_queue(request.username_from_token, device_id)
+        response = db_get_download_queue(username, device_id)
         print("response: ", response)
         return JsonResponse({
             "result": "success",
@@ -301,7 +312,8 @@ def get_device_prediction_data(request):
     Returns:
         JsonResponse: A JSON response containing the device prediction data.
     """
-    result = db_get_device_predictions(request.username_from_token)
+    username = request.username_from_token
+    result = db_get_device_predictions(username)
     response_data = {   
         "result": "success",
         "data": result,
