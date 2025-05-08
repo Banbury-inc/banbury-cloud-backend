@@ -1,6 +1,6 @@
 from .update_device import update_device
 
-def process_device_info(request, sending_device_name, requesting_device_name, device_info):
+def process_device_info(username, sending_device_name, requesting_device_name, device_info):
     """
     Processes incoming device information by calling the update_device function.
 
@@ -17,5 +17,5 @@ def process_device_info(request, sending_device_name, requesting_device_name, de
         The result from the update_device function (typically "success" or an error string).
     """
 
-    response = update_device(request.username_from_token, sending_device_name, requesting_device_name, device_info)
+    response = update_device(username, sending_device_name, requesting_device_name, device_info)
 

@@ -1,6 +1,6 @@
 from pymongo.mongo_client import MongoClient
 
-def get_online_devices(request):
+def get_online_devices(username):
     """
     Retrieves a list of devices marked as online.
 
@@ -34,7 +34,7 @@ def get_online_devices(request):
     device_collection = db['devices']
 
     # Find the user by username
-    user = user_collection.find_one({'username': request.username_from_token})
+    user = user_collection.find_one({'username': username})
     if not user:
         response = "User not found"
         return response
@@ -48,7 +48,7 @@ def get_online_devices(request):
     response = {
         "result": "success",
         "online_devices": online_device_list,
-        "username": request.username_from_token,
+        "username": username,
     }
     return response
 

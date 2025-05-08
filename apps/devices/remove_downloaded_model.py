@@ -2,7 +2,7 @@ import json
 from pymongo import MongoClient
 
 
-def remove_downloaded_model(request, device_name, model_name):
+def remove_downloaded_model(username, device_name, model_name):
     """
     Removes a model name from the list of downloaded models for a specific device.
 
@@ -26,7 +26,7 @@ def remove_downloaded_model(request, device_name, model_name):
     device_collection = db["devices"]
 
     # Find the user by username
-    user = user_collection.find_one({"username": request.username_from_token})
+    user = user_collection.find_one({"username": username})
     if not user:
         return {"error": "User not found.", "status": 404}
 
@@ -57,7 +57,7 @@ def remove_downloaded_model(request, device_name, model_name):
         return {"error": "Failed to update device status.", "status": 500}
 
     # Return success response
-    return {"result": "success", "username": request.username_from_token, "status": 200}
+    return {"result": "success", "username": username, "status": 200}
 
 
 def main():

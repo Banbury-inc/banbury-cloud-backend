@@ -1,6 +1,6 @@
 from pymongo.mongo_client import MongoClient
 
-def declare_device_online(request, device_name):
+def declare_device_online(username, device_name):
     """
     Marks a specific device associated with a user as online in the database.
 
@@ -19,7 +19,7 @@ def declare_device_online(request, device_name):
               Example success: {"result": "success", "username": "user1", "device_id": "..."}
               Example error: {"result": "error", "message": "User not found"}
     """
-    print(f"[declare_device_online] Starting - User: {request.username_from_token}, Device: {device_name}")
+    print(f"[declare_device_online] Starting - User: {username}, Device: {device_name}")
 
     # MongoDB connection
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
@@ -33,9 +33,9 @@ def declare_device_online(request, device_name):
         return {"result": "error", "message": "Database connection failed"}
 
     # Find the user by username
-    user = user_collection.find_one({'username': request.username_from_token})
+    user = user_collection.find_one({'username': username})
     if not user:
-        print(f"[declare_device_online] User not found: {request.username_from_token}")
+        print(f"[declare_device_online] User not found: {username}")
         return {"result": "error", "message": "User not found"}
 
     print(f"[declare_device_online] Found user: {user['_id']}")
@@ -59,7 +59,7 @@ def declare_device_online(request, device_name):
         
         return {
             "result": "success",
-            "username": request.username_from_token,
+            "username": username,
             "device_id": str(device['_id'])
         }
             

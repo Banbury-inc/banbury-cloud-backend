@@ -2,7 +2,7 @@ import json
 from pymongo import MongoClient
 from bson import ObjectId
 
-def add_downloaded_model(request, device_id, model_name):
+def add_downloaded_model(username, device_id, model_name):
     """
     Adds a model name to the list of downloaded models for a specific device.
 
@@ -28,7 +28,7 @@ def add_downloaded_model(request, device_id, model_name):
     device_collection = db["devices"]
 
     # Find the user by username
-    user = user_collection.find_one({"username": request.username_from_token})
+    user = user_collection.find_one({"username": username})
     if not user:
         return {"error": "User not found.", "status": 404}
 

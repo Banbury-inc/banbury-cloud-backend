@@ -4,7 +4,7 @@ import json
 from django.views.decorators.csrf import csrf_exempt
 
 @csrf_exempt
-def add_device(request, device_name):
+def add_device(request, username, device_name):
     """
     Adds a new device associated with a specific user.
 
@@ -44,7 +44,7 @@ def add_device(request, device_name):
     user_collection = db["users"]
 
     # Find the user_id based on username
-    user = user_collection.find_one({"username": request.username_from_token})
+    user = user_collection.find_one({"username": username})
     if not user:
         return JsonResponse({"result": "error", "message": "User not found."})
 
@@ -116,6 +116,6 @@ def add_device(request, device_name):
 
     user_data = {
         "result": result,
-        "username": request.username_from_token,  # Return username if success, None if fail
+        "username": username,  # Return username if success, None if fail
     }
     return JsonResponse(user_data)
