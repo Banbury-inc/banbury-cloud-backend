@@ -2,7 +2,7 @@ import bcrypt
 from django.http import HttpResponse, JsonResponse
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import permission_classes
 from rest_framework.permissions import AllowAny
 import pymongo
 import json
@@ -12,7 +12,6 @@ from .src.getUserFriends import getUserFriends
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 
-@api_view(["GET"])
 def getuserinfo2(request):
     """Retrieves detailed user information (version 2)."""
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
@@ -54,7 +53,6 @@ def getuserinfo2(request):
             return JsonResponse(user_data)
 
 
-@api_view(["GET"])
 def getfrienduserinfo(request):
     """Retrieves user information including profile picture and friends."""
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
@@ -94,7 +92,6 @@ def getfrienduserinfo(request):
 
 
 
-@api_view(["GET"])
 def get_small_user_info(request):
     """Retrieves basic user information (first name, last name, phone, email)."""
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
@@ -122,7 +119,6 @@ def get_small_user_info(request):
 
 
 
-@api_view(["GET"])
 def getuserinfo3(request, password):
     """Authenticates a user based on username and password (version 3)."""
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
@@ -156,7 +152,6 @@ def getuserinfo3(request, password):
     return JsonResponse(user_data)
 
 
-@api_view(["GET"])
 @permission_classes([AllowAny])
 def getuserinfo4(request, username, password):
     """Authenticates a user based on username and password (version 4)."""
@@ -201,7 +196,6 @@ def getuserinfo4(request, username, password):
 
 
 
-@api_view(["POST"])
 def update_user_profile(request):
     """Updates the user profile based on the provided data."""
     try:
@@ -278,7 +272,6 @@ def update_user_profile(request):
 
 
 
-@api_view(["GET"])
 def change_profile(request, password, first_name, last_name, email):
     """Updates user profile information, including optional password change."""
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
@@ -330,7 +323,6 @@ def change_profile(request, password, first_name, last_name, email):
     }
     return JsonResponse(user_data)
 
-@api_view(["GET"])
 def get_profile_picture(request):
     """Retrieves the profile picture for a given user."""
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
@@ -358,7 +350,6 @@ def get_profile_picture(request):
         print(f"Error decoding image for user {request.username_from_token}: {e}")
         return HttpResponse(status=404)  # Error decoding image
 
-@api_view(["GET"])
 def typeahead(request, search):
     """Provides typeahead suggestions for users based on a search term."""
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
@@ -406,7 +397,6 @@ def typeahead(request, search):
         
     return JsonResponse(response)
 
-@api_view(["POST"])
 def send_friend_request(request):
     """Sends a friend request from one user to another."""
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
@@ -463,7 +453,6 @@ def send_friend_request(request):
     return JsonResponse({"result": "success", "message": "Friend request sent successfully"})
 
 
-@api_view(["POST"])
 def remove_friend(request):
     """Removes a friend connection between two users."""
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
@@ -519,7 +508,6 @@ def remove_friend(request):
     return JsonResponse({"result": "success", "message": "Friend removed successfully"})
 
 
-@api_view(["GET"])
 def get_friends(request):
     """Retrieves the list of friends for a given user."""
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
@@ -542,7 +530,6 @@ def get_friends(request):
     return JsonResponse({"result": "success", "friends": friend_list})
 
 
-@api_view(["GET"])
 def get_friend_requests(request):
     """Retrieves the list of pending friend requests for a given user."""
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
@@ -564,7 +551,6 @@ def get_friend_requests(request):
     return JsonResponse({"result": "success", "friend_requests": friend_requests_list})
 
 
-@api_view(["POST"])
 def accept_friend_request(request):
     """Accepts a pending friend request."""
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
@@ -621,7 +607,6 @@ def accept_friend_request(request):
     return JsonResponse({"result": "success", "message": "Friend request accepted successfully"})
 
 
-@api_view(["POST"])
 def reject_friend_request(request):
     """Rejects a pending friend request."""
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
@@ -679,7 +664,6 @@ def reject_friend_request(request):
 
 
 
-@api_view(["GET"])
 def get_user_friends(request):
     """Retrieves the list of friends for a given user using the helper function."""
     friends = getUserFriends(request.username_from_token)

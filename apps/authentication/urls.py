@@ -10,4 +10,6 @@ urlpatterns = [
     path("add_site_visitor_info/", views.add_site_visitor_info, name="get_site_visitor_info"),
     path("google/", views.google, name="google"),
     path("auth/callback/", views.google_callback, name="google_callback"),
+    path("validate-token/", views.validate_token, name="validate_token"),
+    path("refresh-token/", views.refresh_token, name="refresh_token"),
 ]

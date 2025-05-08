@@ -4,12 +4,10 @@ from django.shortcuts import render
 from django.http import JsonResponse
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
-from rest_framework.decorators import api_view
 import pymongo
 import json
 
 
-@api_view(["GET"])
 def dashboard(request):
     """Renders the dashboard page for a given user."""
     # Render the dashboard template with the username
@@ -41,7 +39,6 @@ def dashboard(request):
 
 @csrf_exempt
 @require_http_methods(["POST"])
-@api_view(["POST"])
 def get_session(request):
     """Retrieves all sessions associated with a given username."""
     # Parse the JSON body
@@ -88,7 +85,6 @@ def get_session(request):
 
 @csrf_exempt
 @require_http_methods(["GET", "POST"])
-@api_view(["GET", "POST"])
 def get_recent_session(request):
     """Retrieves the most recent sessions for a user, filtered by device."""
     # Parse the JSON body

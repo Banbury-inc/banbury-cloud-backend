@@ -2,7 +2,6 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.http import JsonResponse
 from pymongo.mongo_client import MongoClient
-from rest_framework.decorators import api_view
 import pymongo
 
 
@@ -14,7 +13,6 @@ analytics_collection = db["analytics"]
 
 @csrf_exempt
 @require_http_methods(["POST", "GET"])
-@api_view(["POST", "GET"])
 def add_file_request(request):
     """Increments the file_requests count in the analytics collection."""
     # Find the analytics document for this user, or create if it doesn't exist
@@ -34,7 +32,6 @@ def add_file_request(request):
 
 @csrf_exempt
 @require_http_methods(["POST", "GET"])
-@api_view(["POST", "GET"])
 def add_file_request_success(request):
     """Increments the file_requests_success count in the analytics collection."""
     # Find the analytics document for this user, or create if it doesn't exist
@@ -55,7 +52,6 @@ def add_file_request_success(request):
 
 @csrf_exempt
 @require_http_methods(["GET"])
-@api_view(["GET"])
 def get_analytics(request):
     """Retrieves analytics data for a specific user."""
 

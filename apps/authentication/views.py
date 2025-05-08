@@ -8,7 +8,7 @@ from ..forms import LoginForm
 import requests as http_requests
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
-from rest_framework.decorators import api_view, permission_classes, authentication_classes
+from rest_framework.decorators import permission_classes, authentication_classes
 import pymongo
 from datetime import datetime, timedelta
 import json
@@ -21,6 +21,7 @@ import base64
 import jwt
 from rest_framework_simplejwt.tokens import AccessToken
 from django.conf import settings
+from rest_framework.response import Response
 
 load_dotenv()
 
@@ -30,7 +31,6 @@ REDIRECT_URI = os.getenv('REDIRECT_URI')
 
 
 
-@api_view(["GET"])
 def login(request):
     """Handles user login via a traditional form (GET displays form, POST processes it)."""
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
@@ -152,7 +152,6 @@ def google_callback(request):
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
-@api_view(["POST"])
 def login_api(request):
     """Handles API-based user login with username and password."""
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
@@ -182,7 +181,6 @@ def login_api(request):
 
 @csrf_exempt
 @require_http_methods(["POST"])
-@api_view(["POST"])
 def register(request):
     """Registers a new user, potentially using Google OAuth profile information."""
     # WE ARE USING THIS ENDPOINT AGAIN IN 3.3
@@ -270,7 +268,6 @@ def register(request):
         return JsonResponse({"error": "Invalid JSON"}, status=400)
 
 
-@api_view(["GET"])
 def new_register(request, username, password, firstName, lastName):
     """Registers a new user with basic information (username, password, names)."""
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
@@ -309,7 +306,6 @@ def new_register(request, username, password, firstName, lastName):
     return JsonResponse(user_data)
 
 
-@api_view(["GET"])
 @authentication_classes([])
 @permission_classes([AllowAny])
 def getuserinfo4(request, username, password):
@@ -343,6 +339,8 @@ def getuserinfo4(request, username, password):
         # Generate a valid Simple JWT access token without hitting the DB
         access = AccessToken()
         access["username"] = username
+        # Set token expiry to 7 days
+        access.set_exp(lifetime=timedelta(days=7))
         token = str(access)
     else:
         result = "fail"
@@ -357,10 +355,52 @@ def getuserinfo4(request, username, password):
     return JsonResponse(user_data)
 
 
+def validate_token(request):
+    """
+    Validates the current token by simply returning a success response.
+    The authentication middleware will already validate the token.
+    """
+    username = request.username_from_token
+    return JsonResponse({
+        "valid": True,
+        "username": username
+    })
+
+def refresh_token(request):
+    """
+    Generates a new access token based on the username in the current token.
+    """
+    try:
+        # Get username from the existing token
+        username = request.username_from_token
+        
+        if not username:
+            return JsonResponse({
+                "success": False,
+                "message": "Invalid token"
+            }, status=401)
+        
+        # Generate a new token
+        access = AccessToken()
+        access["username"] = username
+        
+        # Set token expiry to 7 days
+        access.set_exp(lifetime=timedelta(days=7))
+        
+        return JsonResponse({
+            "success": True,
+            "token": str(access),
+            "username": username
+        })
+    except Exception as e:
+        return JsonResponse({
+            "success": False,
+            "message": str(e)
+        }, status=401)
+
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
-@api_view(["POST"])
 def add_site_visitor_info(request):
     """Records information about site visitors, including IP-based geolocation."""
     try:

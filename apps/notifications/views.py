@@ -1,7 +1,6 @@
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.http import JsonResponse
-from rest_framework.decorators import api_view
 from .get_notifications import get_notifications as db_get_notifications
 from .add_notification import add_notification as db_add_notification
 from .delete_notification import delete_notification as db_delete_notification
@@ -42,7 +41,6 @@ def get_notifications(request):
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
-@api_view(["POST"])
 def add_notification(request):
     """
     Adds a new notification for a specific user.
@@ -68,7 +66,6 @@ def add_notification(request):
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
-@api_view(["POST"])
 def delete_notification(request):
     """
     Deletes a specific notification for a user.
@@ -94,7 +91,6 @@ def delete_notification(request):
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
-@api_view(["POST"])
 def mark_notification_as_read(request):
     """
     Marks a specific notification as read based on its ID.

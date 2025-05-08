@@ -2,7 +2,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.http import JsonResponse
 from pymongo.mongo_client import MongoClient
-from rest_framework.decorators import api_view, authentication_classes
+from rest_framework.decorators import authentication_classes
 from .delete_files import delete_files
 from .get_files_from_filepath import get_files_from_filepath as db_get_files_from_filepath
 from .update_files import update_files
@@ -24,7 +24,6 @@ import jwt
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
-@api_view(["POST"])
 @authentication_classes([])
 def add_file(request):
     """
@@ -255,7 +254,6 @@ def add_files(request):
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
-@api_view(["POST"])
 def handle_delete_files(request):
     """
     Handles the deletion of metadata for multiple files associated with a user and device.
@@ -309,7 +307,6 @@ def handle_delete_files(request):
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
-@api_view(["POST"])
 def handle_update_files(request):
     """
     Handles the update of metadata for multiple files associated with a user and device.
@@ -368,7 +365,6 @@ def handle_update_files(request):
 
 
 
-@api_view(["GET"])
 def getfileinfo(request):
     """
     Retrieves metadata for all files associated with all devices for a given user.
@@ -511,7 +507,6 @@ def get_files_from_filepath(request):
 
 @csrf_exempt
 @require_http_methods(["POST"])
-@api_view(["POST"])
 def paginated_get_files_info(request):
     """
     Retrieves paginated file information for a user.
@@ -547,7 +542,6 @@ def paginated_get_files_info(request):
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
-@api_view(["POST"])
 def get_partial_file_info(request):
     """
     Retrieves file metadata within a specified folder path up to a maximum depth.
@@ -637,7 +631,6 @@ def get_partial_file_info(request):
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
-@api_view(["POST"])
 def search_file(request):
     """
     Searches for a specific file by name on a specific device for a user.
@@ -725,7 +718,6 @@ def search_file(request):
 
 @csrf_exempt
 @require_http_methods(["POST"])
-@api_view(["POST"])
 def add_scanned_folder(request):
     """
     Adds a folder path to the list of scanned folders for a specific user's device.
@@ -806,7 +798,6 @@ def add_scanned_folder(request):
 
 @csrf_exempt
 @require_http_methods(["POST"])
-@api_view(["POST"])
 def remove_scanned_folder(request):
     """
     Removes a folder path from the list of scanned folders for a specific user's device.
@@ -938,7 +929,6 @@ def get_scanned_folders(request):
 
 @csrf_exempt
 @require_http_methods(["POST"])
-@api_view(["POST"])
 def share_file(request):
     """
     Shares a file owned by 'username' with 'friend_username'.
@@ -1012,7 +1002,6 @@ def share_file(request):
 
 @csrf_exempt
 @require_http_methods(["POST"])
-@api_view(["POST"])
 def make_file_public(request):
     """
     Sets the 'is_public' flag to True for a specific file associated with a user's device.
@@ -1088,7 +1077,6 @@ def make_file_public(request):
 
 @csrf_exempt
 @require_http_methods(["POST"])
-@api_view(["POST"])
 def make_file_private(request):
     """
     Sets the 'is_public' flag to False for a specific file associated with a user's device.
@@ -1154,7 +1142,6 @@ def make_file_private(request):
 
 @csrf_exempt
 @require_http_methods(["POST"])
-@api_view(["POST"])
 def get_shared_files(request):
     """
     Retrieves metadata for files shared with the specified user.
@@ -1183,7 +1170,6 @@ def get_shared_files(request):
 
 @csrf_exempt
 @require_http_methods(["POST"])
-@api_view(["POST"])
 def get_shared_files_from_filepath(request):
     """
     Retrieves shared files under a specific filepath for the specified user.
@@ -1215,7 +1201,6 @@ def get_shared_files_from_filepath(request):
 
 @csrf_exempt
 @require_http_methods(["GET"])
-@api_view(["GET"])
 def download_file(request, file_id, is_file_sync):
     """
     Initiates a file download process.
@@ -1248,7 +1233,6 @@ def download_file(request, file_id, is_file_sync):
 
 @csrf_exempt
 @require_http_methods(["GET"])
-@api_view(["GET"])
 def get_file_info(request, file_id):
     """
     Retrieves detailed metadata information for a specific file by its ID.
@@ -1277,7 +1261,6 @@ def get_file_info(request, file_id):
 
 @csrf_exempt
 @require_http_methods(["POST"])
-@api_view(["POST"])
 def upload_to_s3(request):
     """
     Wrapper for the upload_file_to_s3 function in upload_to_s3.py.
@@ -1291,7 +1274,6 @@ def upload_to_s3(request):
 
 @csrf_exempt
 @require_http_methods(["GET"])
-@api_view(["GET"])
 def get_s3_files(request):
     """
     Retrieves all S3 files for a specific user.
@@ -1313,7 +1295,6 @@ def get_s3_files(request):
 
 @csrf_exempt
 @require_http_methods(["GET"])
-@api_view(["GET"])
 def download_s3_file_view(request, file_id):
     """
     Downloads a file from S3 for a specific user.

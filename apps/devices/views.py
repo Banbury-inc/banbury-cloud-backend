@@ -2,7 +2,6 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.http import JsonResponse
 from pymongo.mongo_client import MongoClient
-from rest_framework.decorators import api_view
 from bson import ObjectId
 from .remove_device import remove_device
 from .get_online_devices import get_online_devices
@@ -36,7 +35,6 @@ def add_device_view(request, device_name):
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
-@api_view(["POST"])
 def delete_device(request):
     """
     Deletes a device associated with a specific user.
@@ -76,7 +74,6 @@ def delete_device(request):
 
 @csrf_exempt
 @require_http_methods(["GET", "POST"])
-@api_view(["GET", "POST"])
 def update_device_configuration_preferences(request):
     """
     Updates the configuration preferences for a specific device.
@@ -187,7 +184,6 @@ def getdeviceinfo(request):
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
-@api_view(["POST"])
 def handle_get_online_devices(request):
     """
     Retrieves a list of online devices for a specific user.
@@ -226,7 +222,6 @@ def handle_get_online_devices(request):
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
-@api_view(["POST"])
 def declare_device_online(request):
     """
     Marks a specific device as online in the database.
@@ -290,7 +285,6 @@ def declare_device_online(request):
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
-@api_view(["POST"])
 def declare_device_offline(request):
     """
     Marks a specific device as offline in the database.
@@ -392,7 +386,6 @@ def get_single_device_info_with_device_name(request, device_name):
 
 @csrf_exempt
 @require_http_methods(["POST"])
-@api_view(["POST"])
 def add_downloaded_model(request):
     """
     Adds a record indicating a model has been downloaded to a specific device.
@@ -410,6 +403,7 @@ def add_downloaded_model(request):
     """
     try:
         data = json.loads(request.body)
+        username = request.username_from_token
         device_id = data.get("device_id")
         model_name = data.get("model_name")
         

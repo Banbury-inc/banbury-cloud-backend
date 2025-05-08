@@ -2,7 +2,6 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.http import JsonResponse
 from pymongo.mongo_client import MongoClient
-from rest_framework.decorators import api_view
 from .get_settings import get_settings as db_get_settings
 import json
 from bson.json_util import dumps
@@ -11,7 +10,6 @@ from bson.json_util import dumps
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
-@api_view(["POST"])
 def get_settings(request):
     """Retrieves settings for a given username."""
     try:
@@ -24,7 +22,6 @@ def get_settings(request):
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
-@api_view(["POST"])
 def update_settings(request):
     """Updates settings for a given username."""
     try:
@@ -98,7 +95,6 @@ def update_settings(request):
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
-@api_view(["POST"])
 def delete_account(request):
     """Deletes a user's account."""
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"

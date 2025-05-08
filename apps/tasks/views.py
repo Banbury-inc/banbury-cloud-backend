@@ -2,7 +2,6 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.http import JsonResponse
 from pymongo.mongo_client import MongoClient
-from rest_framework.decorators import api_view
 import json
 from datetime import datetime
 from bson.objectid import ObjectId
@@ -15,7 +14,6 @@ device_collection = db["devices"]
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
-@api_view(["POST"])
 def add_task(request):
     """Adds a new task for a given user."""
     try:
@@ -71,7 +69,6 @@ def add_task(request):
 
 @csrf_exempt
 @require_http_methods(["POST"])
-@api_view(["POST"])
 def update_task(request):
     """Updates an existing task for a given user."""
     try:
@@ -113,7 +110,6 @@ def update_task(request):
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
-@api_view(["POST"])
 def fail_task(request):
     """Marks a task as failed for a given user."""
     try:

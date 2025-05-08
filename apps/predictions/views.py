@@ -1,7 +1,6 @@
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.http import JsonResponse
-from rest_framework.decorators import api_view
 from .get_device_predictions import get_device_predictions as db_get_device_predictions
 from .update_sync_storage_capacity import update_sync_storage_capacity as db_update_sync_storage_capacity
 from .add_device_id_to_file_sync_file import add_device_id_to_file_sync_file as db_add_device_id_to_file_sync_file
@@ -16,7 +15,6 @@ import json
 
 @csrf_exempt
 @require_http_methods(["GET"])
-@api_view(["GET"])
 def run_pipeline(request):
     """
     Executes the prediction pipeline for the specified user.
@@ -40,7 +38,6 @@ def run_pipeline(request):
 
 @csrf_exempt
 @require_http_methods(["POST"])
-@api_view(["POST"])
 def add_file_to_sync(request):
     """
     Adds a file to the synchronization list for a specific device belonging to the user.
@@ -71,7 +68,6 @@ def add_file_to_sync(request):
 
 @csrf_exempt
 @require_http_methods(["POST"])
-@api_view(["POST"])
 def remove_file_from_sync(request):
     """
     Removes a file from the synchronization list for a specific device belonging to the user.
@@ -103,7 +99,6 @@ def remove_file_from_sync(request):
 
 @csrf_exempt
 @require_http_methods(["POST"])
-@api_view(["POST"])
 def get_files_to_sync(request):
     """
     Retrieves the list of files marked for synchronization for a user.
@@ -156,7 +151,6 @@ def get_files_to_sync(request):
 
 @csrf_exempt
 @require_http_methods(["POST"])
-@api_view(["POST"])
 def update_file_priority(request):
     """
     Updates the synchronization priority of a specific file for the user.
@@ -192,7 +186,6 @@ def update_file_priority(request):
 
 @csrf_exempt
 @require_http_methods(["POST"])
-@api_view(["POST"])
 def add_device_id_to_file_sync_file(request):
     """
     Associates a device ID with a specific file in the user's synchronization list.
@@ -229,7 +222,6 @@ def add_device_id_to_file_sync_file(request):
 
 @csrf_exempt
 @require_http_methods(["POST"])
-@api_view(["POST"])
 def update_sync_storage_capacity(request):
     """
     Updates the reported storage capacity for a specific device associated with the user.
