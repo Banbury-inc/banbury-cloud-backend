@@ -13,10 +13,10 @@ file_collection = db["files"]
 file_collection.create_index([("device_id", 1)])
 file_collection.create_index([("file_parent", 1)])  # Add index for file_parent
 
-def get_shared_files_from_filepath(request, filepath):
+def get_shared_files_from_filepath(username, filepath):
 
     # Find the user by username
-    user = user_collection.find_one({"username": request.username_from_token})
+    user = user_collection.find_one({"username": username})
 
     if not user:
         return {"error": "Please login first."}

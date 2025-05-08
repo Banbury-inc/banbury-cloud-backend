@@ -1,7 +1,7 @@
 from pymongo import MongoClient
 
  
-def search_for_file(request, file_name):
+def search_for_file(username, file_name):
     """
     Searches for a specific file by name across all devices belonging to a user.
 
@@ -27,7 +27,7 @@ def search_for_file(request, file_name):
     file_collection = db['files']
 
     # Find the user by username
-    user = user_collection.find_one({'username': request.username_from_token})
+    user = user_collection.find_one({'username': username})
 
     if not user:
         return "User not found"

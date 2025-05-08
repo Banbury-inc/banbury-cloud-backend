@@ -3,7 +3,7 @@ import os
 from pymongo.mongo_client import MongoClient
 from django.http import JsonResponse
 
-def list_s3_files(request):
+def list_s3_files(username):
     """
     Lists all S3 files for a specific user from the MongoDB database.
     
@@ -22,7 +22,7 @@ def list_s3_files(request):
         file_collection = db["files"]
         
         # Find the user by username
-        user = user_collection.find_one({"username": request.username_from_token})
+        user = user_collection.find_one({"username": username})
         if not user:
             return {"error": "User not found", "status_code": 404}
         

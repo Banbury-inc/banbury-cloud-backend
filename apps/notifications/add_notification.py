@@ -38,8 +38,9 @@ def add_notification(request, notification):
         dict or str: A success dictionary with the username if successful,
                      or an error string "User not found" if the user doesn't exist.
     """
+    username = request.username_from_token
     # Find the user by username
-    user = user_collection.find_one({'username': request.username_from_token})
+    user = user_collection.find_one({'username': username})
     if not user:
         response = "User not found"
         return response
@@ -84,7 +85,7 @@ def add_notification(request, notification):
     # Return success response
     response = {
         "result": "success",
-        "username": request.username_from_token,
+        "username": username,
     }
     return response
 

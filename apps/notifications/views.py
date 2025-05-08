@@ -25,7 +25,8 @@ def get_notifications(request):
     """
     try:
         # Since we're not using request parameters, we just pass username directly
-        notifications = db_get_notifications(request.username_from_token)
+        username = request.username_from_token
+        notifications = db_get_notifications(username)
         return JsonResponse({
             "result": "success",
             "notifications": notifications,
@@ -58,7 +59,8 @@ def add_notification(request):
     try:
         data = json.loads(request.body)
         notification = data.get("notification")
-        response = db_add_notification(request.username_from_token, notification)
+        username = request.username_from_token
+        response = db_add_notification(username, notification)
         return JsonResponse(response)
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
@@ -83,7 +85,8 @@ def delete_notification(request):
     try:
         data = json.loads(request.body)
         notification_id = data.get("notification_id")
-        response = db_delete_notification(request.username_from_token, notification_id)
+        username = request.username_from_token
+        response = db_delete_notification(username, notification_id)
         return JsonResponse(response)
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)

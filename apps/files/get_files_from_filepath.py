@@ -204,7 +204,7 @@ def get_files_from_filepath(username, filepath):
             "files": files_data
         }, encoder=JSONEncoder)
 
-async def get_files_from_filepath_async(request, filepath):
+async def get_files_from_filepath_async(username, filepath):
     """
     Asynchronous version of get_files_from_filepath.
 
@@ -225,6 +225,6 @@ async def get_files_from_filepath_async(request, filepath):
     db = client["NeuraNet"]
     
     # Perform async queries
-    user = await db.users.find_one({"username": request.username_from_token})
+    user = await db.users.find_one({"username": username})
     devices = await db.devices.find({"user_id": user["_id"]}).to_list(None)
     

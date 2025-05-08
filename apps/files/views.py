@@ -55,6 +55,7 @@ def add_file(request):
                 - If DB insert fails (prints error, returns success response but DB might be inconsistent).
     """
     try:
+        username = request.username_from_token
         # Parse the JSON body
         data = json.loads(request.body)
 
@@ -116,9 +117,10 @@ def add_file(request):
         print(f"Error sending to device: {e}")
     result = "success"
 
+    username = request.username_from_token
     user_data = {
         "result": result,
-        "username": request.username_from_token,  # Return username if success, None if fail
+        "username": username,  # Return username if success, None if fail
     }
 
     result = broadcast_new_file(new_file)
@@ -285,7 +287,8 @@ def handle_delete_files(request):
             return JsonResponse({"error": "Missing files or device_name"}, status=400)
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
-    response = delete_files(request.username_from_token, device_name, files)
+    username = request.username_from_token
+    response = delete_files(username, device_name, files)
     if response == "device_not_found":
         return JsonResponse({
             "result": "device_not_found",
@@ -343,7 +346,8 @@ def handle_update_files(request):
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
 
-    response = update_files(request.username_from_token, device_name, files)
+    username = request.username_from_token
+    response = update_files(username, device_name, files)
 
     if response == "device_not_found":
         return JsonResponse({
@@ -392,7 +396,8 @@ def getfileinfo(request):
     file_collection = db["files"]
 
     # Find the user by username
-    user = user_collection.find_one({"username": request.username_from_token})
+    username = request.username_from_token
+    user = user_collection.find_one({"username": username})
 
     if not user:
         return JsonResponse({"error": "Please login first."}, status=401)
@@ -470,7 +475,8 @@ def get_files_from_filepath(request):
         if filepath is None:
             filepath = ""  # or "Core" depending on your default behavior
         
-        response = db_get_files_from_filepath(request.username_from_token, filepath)
+        username = request.username_from_token
+        response = db_get_files_from_filepath(username, filepath)
         
         # Check if response is a JsonResponse object
         if isinstance(response, JsonResponse):
@@ -534,7 +540,8 @@ def paginated_get_files_info(request):
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
     
-    return paginated_get_files_info(request.username_from_token, page=page, items_per_page=items_per_page)
+    username = request.username_from_token
+    return paginated_get_files_info(username, page=page, items_per_page=items_per_page)
 
 
 
@@ -582,7 +589,8 @@ def get_partial_file_info(request):
     file_collection = db["files"]
 
     # Find the user by username
-    user = user_collection.find_one({"username": request.username_from_token})
+    username = request.username_from_token
+    user = user_collection.find_one({"username": username})
 
     if not user:
         return JsonResponse({"error": "User not found."}, status=404)
@@ -757,7 +765,8 @@ def add_scanned_folder(request):
     device_collection = db["devices"]
 
     # Find the user by username
-    user = user_collection.find_one({"username": request.username_from_token})
+    username = request.username_from_token
+    user = user_collection.find_one({"username": username})
     if not user:
         return JsonResponse({"error": "User not found."}, status=404)
 
@@ -788,7 +797,8 @@ def add_scanned_folder(request):
         return JsonResponse({"error": "Failed to update device status."}, status=500)
 
     # Return success response
-    user_data = {"result": "success", "username": request.username_from_token}
+    username = request.username_from_token
+    user_data = {"result": "success", "username": username}
 
     return JsonResponse(user_data)
 
@@ -835,7 +845,8 @@ def remove_scanned_folder(request):
     device_collection = db["devices"]
 
     # Find the user by username
-    user = user_collection.find_one({"username": request.username_from_token})
+    username = request.username_from_token
+    user = user_collection.find_one({"username": username})
     if not user:
         return JsonResponse({"error": "User not found."}, status=404)
 
@@ -906,7 +917,8 @@ def get_scanned_folders(request):
     device_collection = db["devices"]
 
     # Find the user by username
-    user = user_collection.find_one({"username": request.username_from_token})
+    username = request.username_from_token
+    user = user_collection.find_one({"username": username})
     if not user:
         return JsonResponse({"error": "User not found."}, status=404)
     
@@ -1226,7 +1238,8 @@ def download_file(request, file_id, is_file_sync):
                 - NameError if `download_file` is not defined.
     """
     try:
-        download_file(request.username_from_token, file_id, is_file_sync)
+        username = request.username_from_token
+        download_file(username, file_id, is_file_sync)
         return JsonResponse({"status": "success", "message": "File downloaded successfully"})
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
@@ -1255,7 +1268,8 @@ def get_file_info(request, file_id):
                 - {"error": str(e)}, status=500 (Catches any exception from `db_get_file_info`).
     """
     try:
-        file_info = db_get_file_info(request.username_from_token, file_id)
+        username = request.username_from_token
+        file_info = db_get_file_info(username, file_id)
         return JsonResponse({"status": "success", "file_info": file_info})
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
@@ -1271,7 +1285,8 @@ def upload_to_s3(request):
     Uploads a file to an Amazon S3 bucket and stores metadata in MongoDB.
     See the upload_file_to_s3 function documentation for details.
     """
-    return upload_file_to_s3(request, request.username_from_token)
+    username = request.username_from_token
+    return upload_file_to_s3(request, username)
 
 
 @csrf_exempt
@@ -1287,7 +1302,8 @@ def get_s3_files(request):
     Returns:
         JsonResponse: A list of files stored in S3 for the user
     """
-    result = list_s3_files(request.username_from_token)
+    username = request.username_from_token
+    result = list_s3_files(username)
     
     if "error" in result:
         return JsonResponse({"error": result["error"]}, status=result.get("status_code", 500))
@@ -1311,6 +1327,5 @@ def download_s3_file_view(request, file_id):
         or
         JsonResponse: Error details if download fails
     """
-    return download_s3_file(request.username_from_token, file_id)
-
-
+    username = request.username_from_token
+    return download_s3_file(username, file_id)

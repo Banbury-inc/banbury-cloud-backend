@@ -1,6 +1,6 @@
 from pymongo.mongo_client import MongoClient
 
-def get_files_info(request):
+def get_files_info(username):
     """
     Retrieves information for all files associated with all devices belonging to a user.
 
@@ -21,7 +21,7 @@ def get_files_info(request):
     file_collection = db["files"]
 
     # Find the user by username
-    user = user_collection.find_one({"username": request.username_from_token})
+    user = user_collection.find_one({"username": username})
 
     if not user:
         return {"error": "Please login first."}

@@ -5,7 +5,7 @@ from pymongo.mongo_client import MongoClient
 from django.http import HttpResponse, JsonResponse
 from bson.objectid import ObjectId
 
-def download_s3_file(request, file_id):
+def download_s3_file(username, file_id):
     """
     Downloads a file from S3 for a specific user.
     
@@ -25,7 +25,7 @@ def download_s3_file(request, file_id):
         file_collection = db["files"]
         
         # Find the user by username
-        user = user_collection.find_one({"username": request.username_from_token})
+        user = user_collection.find_one({"username": username})
         if not user:
             return JsonResponse({"error": "User not found"}, status=404)
         

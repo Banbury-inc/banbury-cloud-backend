@@ -22,8 +22,9 @@ def delete_notification(request, notification_id):
                      a dictionary with a failure message if the notification is not found,
                      or the string "User not found" if the user doesn't exist.
     """
+    username = request.username_from_token
     # Find the user by username
-    user = user_collection.find_one({'username': request.username_from_token})
+    user = user_collection.find_one({'username': username})
     if not user:
         response = "User not found"
         return response
