@@ -12,4 +12,8 @@ urlpatterns = [
     path("auth/callback/", views.google_callback, name="google_callback"),
     path("validate-token/", views.validate_token, name="validate_token"),
     path("refresh-token/", views.refresh_token, name="refresh_token"),
+    path('api-key/generate/', views.generate_user_api_key, name='generate_api_key'),
+    path('api-key/validate/', views.validate_user_api_key, name='validate_api_key'),
+    path('api-key/list/', views.list_api_keys, name='list_api_keys'),
+    path('api-key/delete/', views.delete_user_api_key, name='delete_api_key'),
 ]

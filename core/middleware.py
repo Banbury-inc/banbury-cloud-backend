@@ -3,6 +3,7 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from rest_framework_simplejwt.tokens import AccessToken
 from django.urls import resolve
+from django.conf import settings
 
 class AuthenticationTokenMiddleware:
     def __init__(self, get_response):
@@ -28,6 +29,17 @@ class AuthenticationTokenMiddleware:
             if request.path.startswith(path.rstrip('/')):
                 return self.get_response(request)
 
+        # Validate API key
+        api_key = request.headers.get('X-API-Key')
+        if not hasattr(settings, 'API_KEYS') or not settings.API_KEYS:
+            # Skip API key validation if API_KEYS is not configured
+            pass
+        elif not api_key:
+            return JsonResponse({'detail': 'API key required'}, status=401)
+        elif api_key not in settings.API_KEYS:
+            return JsonResponse({'detail': 'Invalid API key'}, status=401)
+
+        # Validate JWT token
         auth_header = request.headers.get('Authorization')
         if not auth_header:
             return JsonResponse({'detail': 'Not authorized'}, status=401)

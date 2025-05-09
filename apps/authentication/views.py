@@ -8,7 +8,7 @@ from ..forms import LoginForm
 import requests as http_requests
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
-from rest_framework.decorators import permission_classes, authentication_classes
+from rest_framework.decorators import permission_classes, authentication_classes, api_view
 import pymongo
 from datetime import datetime, timedelta
 import json
@@ -22,6 +22,8 @@ import jwt
 from rest_framework_simplejwt.tokens import AccessToken
 from django.conf import settings
 from rest_framework.response import Response
+from .utils import generate_api_key, validate_api_key, register_api_key
+from django.views.decorators.csrf import csrf_exempt
 
 load_dotenv()
 
@@ -455,5 +457,211 @@ def add_site_visitor_info(request):
 
     # Return the result
     return JsonResponse({"result": result})
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def generate_user_api_key(request):
+    """
+    Generate a new API key for the authenticated user
+    Only authenticated users can generate API keys
+    """
+    try:
+        # Get authenticated user information
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or ' ' not in auth_header:
+            return JsonResponse({'message': 'Authentication required'}, status=401)
+        
+        auth_type, token = auth_header.split(' ', 1)
+        if auth_type.lower() != 'bearer':
+            return JsonResponse({'message': 'Invalid authentication type'}, status=401)
+            
+        # Validate token and get username
+        try:
+            validated = AccessToken(token)
+            username = validated.payload.get('username')
+            
+            if not username:
+                return JsonResponse({'message': 'Invalid token'}, status=401)
+                
+        except Exception as e:
+            return JsonResponse({'message': str(e)}, status=401)
+        
+        # Get the user document from MongoDB to get the _id
+        uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+        client = MongoClient(uri)
+        db = client["NeuraNet"]
+        user_collection = db["users"]
+        
+        # Find the user by username
+        user = user_collection.find_one({"username": username})
+        if not user:
+            return JsonResponse({'message': 'User not found'}, status=404)
+        
+        # Extract the MongoDB _id
+        user_id = str(user.get('_id'))
+        
+        # Parse request body
+        data = json.loads(request.body) if request.body else {}
+        role = data.get('role', 'user')  # Default role is 'user'
+        
+        # Generate and register the API key
+        new_api_key = generate_api_key()
+        register_api_key(new_api_key, user_id=user_id, role=role)
+        
+        return JsonResponse({
+            'api_key': new_api_key,
+            'username': username,
+            'user_id': user_id,
+            'role': role,
+            'message': 'Your new API key has been generated. Keep it secure - it will not be shown again.'
+        })
+    except Exception as e:
+        return JsonResponse({'message': f'Error: {str(e)}'}, status=500)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def validate_user_api_key(request):
+    """
+    Validate an API key
+    """
+    try:
+        data = json.loads(request.body)
+        api_key = data.get('api_key')
+        if not api_key:
+            return JsonResponse({'valid': False, 'message': 'No API key provided'}, status=400)
+        
+        is_valid = validate_api_key(api_key)
+        
+        # Get additional details if valid
+        details = None
+        if is_valid:
+            details = get_api_key_details(api_key)
+        
+        return JsonResponse({
+            'valid': is_valid,
+            'message': 'API key is valid' if is_valid else 'Invalid API key',
+            'details': details
+        })
+    except json.JSONDecodeError:
+        return JsonResponse({'valid': False, 'message': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        return JsonResponse({'valid': False, 'message': f'Error: {str(e)}'}, status=500)
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def list_api_keys(request):
+    """
+    List all API keys for the authenticated user
+    """
+    try:
+        # Get authenticated user information
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or ' ' not in auth_header:
+            return JsonResponse({'message': 'Authentication required'}, status=401)
+        
+        auth_type, token = auth_header.split(' ', 1)
+        if auth_type.lower() != 'bearer':
+            return JsonResponse({'message': 'Invalid authentication type'}, status=401)
+            
+        # Validate token and get username
+        try:
+            validated = AccessToken(token)
+            username = validated.payload.get('username')
+            
+            if not username:
+                return JsonResponse({'message': 'Invalid token'}, status=401)
+                
+        except Exception as e:
+            return JsonResponse({'message': str(e)}, status=401)
+        
+        # Get the user document from MongoDB to get the _id
+        uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+        client = MongoClient(uri)
+        db = client["NeuraNet"]
+        user_collection = db["users"]
+        
+        # Find the user by username
+        user = user_collection.find_one({"username": username})
+        if not user:
+            return JsonResponse({'message': 'User not found'}, status=404)
+        
+        # Extract the MongoDB _id
+        user_id = str(user.get('_id'))
+        
+        # Get all keys for the user
+        keys = list_user_api_keys(user_id)
+        
+        return JsonResponse({
+            'username': username,
+            'user_id': user_id,
+            'api_keys': keys
+        })
+    except Exception as e:
+        return JsonResponse({'message': f'Error: {str(e)}'}, status=500)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def delete_user_api_key(request):
+    """
+    Delete an API key
+    """
+    try:
+        # Get authenticated user information
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or ' ' not in auth_header:
+            return JsonResponse({'message': 'Authentication required'}, status=401)
+        
+        auth_type, token = auth_header.split(' ', 1)
+        if auth_type.lower() != 'bearer':
+            return JsonResponse({'message': 'Invalid authentication type'}, status=401)
+            
+        # Validate token and get username
+        try:
+            validated = AccessToken(token)
+            username = validated.payload.get('username')
+            
+            if not username:
+                return JsonResponse({'message': 'Invalid token'}, status=401)
+                
+        except Exception as e:
+            return JsonResponse({'message': str(e)}, status=401)
+        
+        # Get the user document from MongoDB to get the _id
+        uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+        client = MongoClient(uri)
+        db = client["NeuraNet"]
+        user_collection = db["users"]
+        
+        # Find the user by username
+        user = user_collection.find_one({"username": username})
+        if not user:
+            return JsonResponse({'message': 'User not found'}, status=404)
+        
+        # Extract the MongoDB _id
+        user_id = str(user.get('_id'))
+        
+        # Parse request body
+        data = json.loads(request.body)
+        api_key = data.get('api_key')
+        
+        if not api_key:
+            return JsonResponse({'message': 'No API key provided'}, status=400)
+        
+        # Check that the API key belongs to the user
+        details = get_api_key_details(api_key)
+        if not details or details.get('user_id') != user_id:
+            return JsonResponse({'message': 'API key not found or not authorized'}, status=403)
+        
+        # Delete the API key
+        deleted = delete_api_key(api_key)
+        
+        return JsonResponse({
+            'success': deleted,
+            'message': 'API key deleted successfully' if deleted else 'Failed to delete API key'
+        })
+    except json.JSONDecodeError:
+        return JsonResponse({'message': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        return JsonResponse({'message': f'Error: {str(e)}'}, status=500)
 
 
