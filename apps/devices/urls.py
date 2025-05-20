@@ -3,7 +3,7 @@ from . import views
 
 urlpatterns = [
 
-    path("add_device/<str:device_name>/", views.add_device, name="add_device"),
+    path("add_device/<str:device_name>/", views.add_device_view, name="add_device"),
     path("delete_device/", views.delete_device, name="delete_device"),
     path("update_device_configurations/", views.update_device_configuration_preferences, name="update_devices"),
     path("getdeviceinfo/", views.getdeviceinfo, name="getdeviceinfo"),

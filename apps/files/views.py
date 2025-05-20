@@ -715,8 +715,6 @@ def search_file(request):
     }, status=200)
 
 
-
-@csrf_exempt
 @require_http_methods(["POST"])
 def add_scanned_folder(request):
     """

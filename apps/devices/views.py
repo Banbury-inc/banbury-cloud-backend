@@ -26,7 +26,7 @@ def add_device_view(request, device_name):
     Returns:
         JsonResponse: A JSON response indicating success or failure.
     """
-    username = request.username_from_token
+    username = getattr(request, 'username_from_token', None)
     return add_device(request, username, device_name)
 
 
@@ -441,3 +441,13 @@ def add_downloaded_model(request):
             "result": "fail",
             "message": str(e)
         }, status=500)
+
+@require_http_methods(["GET"])
+def get_single_device_info_with_device_name(request, device_name):
+    username = request.username_from_token
+    result = db_get_single_device_info_with_device_name(username, device_name)
+    response_data = {   
+        "result": "success",
+        "data": result,
+    }
+    return JsonResponse(response_data)

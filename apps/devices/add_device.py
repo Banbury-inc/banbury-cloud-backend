@@ -21,8 +21,8 @@ def add_device(request, username, device_name):
                       On success, includes the username.
     """
     try:
+        print(request)
         data = json.loads(request.body)
-        device_name = data.get("device_name")
         device_type = data.get("device_type")
         storage_capacity_gb = data.get("storage_capacity_gb")
         sync_storage_capacity_gb = data.get("sync_storage_capacity_gb")
