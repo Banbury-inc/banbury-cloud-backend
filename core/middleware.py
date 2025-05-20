@@ -16,6 +16,7 @@ class AuthenticationTokenMiddleware:
             return self.get_response(request)
             
         excluded_paths = [
+            '/',
             '/authentication/login/',
             '/authentication/register/',
             '/authentication/new_register/',
