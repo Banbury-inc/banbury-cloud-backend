@@ -27,7 +27,10 @@ class AuthenticationTokenMiddleware:
         
         # Check if the current path starts with any of the excluded paths
         for path in excluded_paths:
-            if request.path.startswith(path.rstrip('/')):
+            if path == '/':
+                if request.path == '/':
+                    return self.get_response(request)
+            elif request.path.startswith(path.rstrip('/')):
                 return self.get_response(request)
 
         # Validate API key
