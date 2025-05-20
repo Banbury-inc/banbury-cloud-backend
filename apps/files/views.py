@@ -168,6 +168,7 @@ def add_files(request):
     try:
         # Parse the JSON body
         data = json.loads(request.body)
+        username = request.username_from_token
         # Extract specific data from the JSON
         files = data.get("files")
         device_name = data.get("device_name")
@@ -715,6 +716,7 @@ def search_file(request):
     }, status=200)
 
 
+@csrf_exempt
 @require_http_methods(["POST"])
 def add_scanned_folder(request):
     """

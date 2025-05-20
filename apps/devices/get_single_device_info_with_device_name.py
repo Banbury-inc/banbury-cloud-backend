@@ -1,5 +1,4 @@
 from pymongo.mongo_client import MongoClient
-from django.views.decorators.http import require_http_methods
 
 
 def get_single_device_info_with_device_name(username, device_name):
