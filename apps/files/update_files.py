@@ -59,7 +59,8 @@ def update_files(username, device_name, files):
                 "file_priority": file_data.get('file_priority'),
                 "file_parent": file_data.get('file_parent'),
                 "original_device": file_data.get('original_device'),
-                "kind": file_data.get('kind')
+                "kind": file_data.get('kind'),
+                "file_preview": file_data.get('file_preview')
             }
         }
 

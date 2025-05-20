@@ -42,7 +42,7 @@ class DeleteFilesTest(unittest.TestCase):
         mock_file_collection.delete_many.return_value = mock_delete_result
         
         # Test the function
-        result = delete_files('testuser', 'testdevice', [{'file_name': 'file1.txt'}, {'file_name': 'file2.txt'}])
+        result = delete_files('testdevice', [{'file_name': 'file1.txt'}, {'file_name': 'file2.txt'}])
         
         # Assert results
         self.assertEqual(result, 'success')
@@ -62,7 +62,7 @@ class DeleteFilesTest(unittest.TestCase):
         mock_device_collection.find_one.return_value = None
         
         # Test the function
-        result = delete_files('testuser', 'nonexistentdevice', [{'file_name': 'file1.txt'}])
+        result = delete_files('nonexistentdevice', [{'file_name': 'file1.txt'}])
         
         # Assert results
         self.assertEqual(result, 'device_not_found')
@@ -98,7 +98,7 @@ class GetFileInfoTest(unittest.TestCase):
         mock_file_collection.find_one.return_value = mock_file
         
         # Test the function
-        result = get_file_info('testuser', '60b6e4b5f429d53a5d7e346a')
+        result = get_file_info('60b6e4b5f429d53a5d7e346a')
         
         # Assert results
         self.assertEqual(result['file_name'], 'test_file.txt')
@@ -119,7 +119,7 @@ class GetFileInfoTest(unittest.TestCase):
         mock_file_collection.find_one.return_value = None
         
         # Test the function
-        result = get_file_info('testuser', '60b6e4b5f429d53a5d7e346a')
+        result = get_file_info('60b6e4b5f429d53a5d7e346a')
         
         # Assert results
         self.assertIsNone(result)
@@ -165,7 +165,7 @@ class DownloadFileTest(unittest.TestCase):
         mock_file_collection.find_one.return_value = None
         
         # Test the function
-        result = download_file('testuser', 'nonexistent_file_id', False)
+        result = download_file('nonexistent_file_id', False)
         
         # Assert results
         self.assertEqual(result, 'file_not_found')
@@ -218,9 +218,10 @@ class ViewTests(unittest.TestCase):
             data=json.dumps(file_data),
             content_type='application/json'
         )
+        request.username_from_token = 'testuser'
         
         # Test the view
-        response = add_file(request, 'testuser')
+        response = add_file(request)
         
         # Assert response
         self.assertEqual(response.status_code, 200)
@@ -297,11 +298,12 @@ class TestFilesIntegration:
             }),
             content_type='application/json'
         )
+        add_request.username_from_token = 'testuser'
         
         # Test the add_file view, make sure device returns device not found if device is not found
         with patch('apps.files.views.broadcast_new_file') as mock_broadcast:
             mock_broadcast.return_value = True
-            add_response = add_file(add_request, 'testuser')
+            add_response = add_file(add_request)
             assert add_response.status_code == 200
             add_data = json.loads(add_response.content)
             assert add_data['result'] == 'device_not_found'

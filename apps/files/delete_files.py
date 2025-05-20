@@ -1,6 +1,6 @@
 from pymongo import MongoClient
 
-def delete_files(username, device_name, files):
+def delete_files(device_name, files):
     """
     Deletes specified files associated with a device belonging to a user.
 

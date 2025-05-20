@@ -2,7 +2,6 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.http import JsonResponse
 from pymongo.mongo_client import MongoClient
-from rest_framework.decorators import api_view
 from bson import ObjectId
 from .remove_device import remove_device
 from .get_online_devices import get_online_devices
@@ -15,7 +14,7 @@ import json
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
-def add_device_view(request, username, device_name):
+def add_device_view(request, device_name):
     """
     View function that handles the add_device request.
     
@@ -27,6 +26,7 @@ def add_device_view(request, username, device_name):
     Returns:
         JsonResponse: A JSON response indicating success or failure.
     """
+    username = getattr(request, 'username_from_token', None)
     return add_device(request, username, device_name)
 
 
@@ -35,8 +35,7 @@ def add_device_view(request, username, device_name):
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
-@api_view(["POST"])
-def delete_device(request, username):
+def delete_device(request):
     """
     Deletes a device associated with a specific user.
 
@@ -53,6 +52,7 @@ def delete_device(request, username):
     try:
         data = json.loads(request.body)
         device_name = data.get("device_name")
+        username = request.username_from_token
         response = remove_device(username, device_name)
         print('response', response)
         if response == "success":
@@ -74,8 +74,7 @@ def delete_device(request, username):
 
 @csrf_exempt
 @require_http_methods(["GET", "POST"])
-@api_view(["GET", "POST"])
-def update_device_configuration_preferences(request, username):
+def update_device_configuration_preferences(request):
     """
     Updates the configuration preferences for a specific device.
 
@@ -91,6 +90,7 @@ def update_device_configuration_preferences(request, username):
     """
     data = json.loads(request.body)
     device_name = data.get("device_name")
+    username = request.username_from_token
     device_configurations = {
         "use_device_in_file_sync": data.get("use_device_in_file_sync"),
         "use_predicted_cpu_usage": data.get("use_predicted_cpu_usage"),
@@ -110,8 +110,9 @@ def update_device_configuration_preferences(request, username):
 
 
 
-@api_view(["GET"])
-def getdeviceinfo(request, username):
+@csrf_exempt
+@require_http_methods(["GET"])
+def getdeviceinfo(request):
     """
     Retrieves information for all devices associated with a specific user.
 
@@ -131,6 +132,7 @@ def getdeviceinfo(request, username):
     db = client["NeuraNet"]
     user_collection = db["users"]
     device_collection = db["devices"]
+    username = request.username_from_token
 
     # Find the user by username
     user = user_collection.find_one({"username": username})
@@ -182,8 +184,7 @@ def getdeviceinfo(request, username):
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
-@api_view(["POST"])
-def handle_get_online_devices(request, username):
+def handle_get_online_devices(request):
     """
     Retrieves a list of online devices for a specific user.
 
@@ -202,6 +203,7 @@ def handle_get_online_devices(request, username):
     try:
         # Parse the JSON body
         data = json.loads(request.body)
+        username = data.get("username")
 
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
@@ -220,8 +222,7 @@ def handle_get_online_devices(request, username):
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
-@api_view(["POST"])
-def declare_device_online(request, username):
+def declare_device_online(request):
     """
     Marks a specific device as online in the database.
 
@@ -238,6 +239,7 @@ def declare_device_online(request, username):
     try:
         data = json.loads(request.body)
         device_name = data.get("device_name")
+        username = request.username_from_token
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
 
@@ -283,8 +285,7 @@ def declare_device_online(request, username):
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
-@api_view(["POST"])
-def declare_device_offline(request, username):
+def declare_device_offline(request):
     """
     Marks a specific device as offline in the database.
 
@@ -301,6 +302,7 @@ def declare_device_offline(request, username):
     try:
         data = json.loads(request.body)
         device_name = data.get("device_name")
+        username = request.username_from_token
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
 
@@ -340,8 +342,9 @@ def declare_device_offline(request, username):
     return JsonResponse(user_data)
 
 
-@api_view(["GET"])
-def get_single_device_info(request, username, device_id):
+
+@require_http_methods(["POST"])
+def get_single_device_info(request, device_id):
     """
     Retrieves detailed information for a single device using its database ID.
 
@@ -355,13 +358,13 @@ def get_single_device_info(request, username, device_id):
     Returns:
         JsonResponse: A JSON response containing the device information.
     """
+    username = request.username_from_token
 
     device_info = db_get_single_device_info(username, device_id)
 
     return JsonResponse(device_info)
 
-@api_view(["GET"])
-def get_single_device_info_with_device_name(request, username, device_name):
+def get_single_device_info_with_device_name(request, device_name):
     """
     Retrieves detailed information for a single device using its name.
 
@@ -375,6 +378,7 @@ def get_single_device_info_with_device_name(request, username, device_name):
     Returns:
         JsonResponse: A JSON response containing the device information.
     """
+    username = request.username_from_token
     device_info = db_get_single_device_info_with_device_name(username, device_name)
     return JsonResponse(device_info)
 
@@ -382,8 +386,7 @@ def get_single_device_info_with_device_name(request, username, device_name):
 
 @csrf_exempt
 @require_http_methods(["POST"])
-@api_view(["POST"])
-def add_downloaded_model(request, username):
+def add_downloaded_model(request):
     """
     Adds a record indicating a model has been downloaded to a specific device.
 
@@ -400,6 +403,7 @@ def add_downloaded_model(request, username):
     """
     try:
         data = json.loads(request.body)
+        username = request.username_from_token
         device_id = data.get("device_id")
         model_name = data.get("model_name")
         
@@ -437,3 +441,13 @@ def add_downloaded_model(request, username):
             "result": "fail",
             "message": str(e)
         }, status=500)
+
+@require_http_methods(["GET"])
+def get_single_device_info_with_device_name(request, device_name):
+    username = request.username_from_token
+    result = db_get_single_device_info_with_device_name(username, device_name)
+    response_data = {   
+        "result": "success",
+        "data": result,
+    }
+    return JsonResponse(response_data)

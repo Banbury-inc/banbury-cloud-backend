@@ -1,7 +1,7 @@
 from pymongo.mongo_client import MongoClient
 from bson.objectid import ObjectId
 
-def get_file_info(username, file_id):
+def get_file_info(file_id):
     """
     Retrieves detailed information for a specific file based on its ObjectId.
 

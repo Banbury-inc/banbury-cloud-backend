@@ -26,7 +26,6 @@ def get_device_info(username):
         print(f"Error connecting to MongoDB: {e}")
         return {"error": "Failed to connect to MongoDB"}
 
-
     # Find the user by username
     user = user_collection.find_one({"username": username})
 

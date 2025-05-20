@@ -2,7 +2,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.http import JsonResponse
 from pymongo.mongo_client import MongoClient
-from rest_framework.decorators import api_view
+from rest_framework.decorators import authentication_classes
 from .delete_files import delete_files
 from .get_files_from_filepath import get_files_from_filepath as db_get_files_from_filepath
 from .update_files import update_files
@@ -17,14 +17,15 @@ import re
 import boto3
 from django.core.files.uploadedfile import UploadedFile
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from botocore.exceptions import ClientError
+import jwt
 
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
-@api_view(["POST"])
-def add_file(request, username):
+@authentication_classes([])
+def add_file(request):
     """
     Adds metadata for a single file to the database for a given user and device.
 
@@ -53,6 +54,7 @@ def add_file(request, username):
                 - If DB insert fails (prints error, returns success response but DB might be inconsistent).
     """
     try:
+        username = request.username_from_token
         # Parse the JSON body
         data = json.loads(request.body)
 
@@ -114,6 +116,7 @@ def add_file(request, username):
         print(f"Error sending to device: {e}")
     result = "success"
 
+    username = request.username_from_token
     user_data = {
         "result": result,
         "username": username,  # Return username if success, None if fail
@@ -127,7 +130,7 @@ def add_file(request, username):
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
-def add_files(request, username):
+def add_files(request):
     """
     Adds metadata for multiple files to the database for a given user and device.
 
@@ -165,6 +168,7 @@ def add_files(request, username):
     try:
         # Parse the JSON body
         data = json.loads(request.body)
+        username = request.username_from_token
         # Extract specific data from the JSON
         files = data.get("files")
         device_name = data.get("device_name")
@@ -251,8 +255,7 @@ def add_files(request, username):
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
-@api_view(["POST"])
-def handle_delete_files(request, username):
+def handle_delete_files(request):
     """
     Handles the deletion of metadata for multiple files associated with a user and device.
 
@@ -283,6 +286,7 @@ def handle_delete_files(request, username):
             return JsonResponse({"error": "Missing files or device_name"}, status=400)
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
+    username = request.username_from_token
     response = delete_files(username, device_name, files)
     if response == "device_not_found":
         return JsonResponse({
@@ -304,8 +308,7 @@ def handle_delete_files(request, username):
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
-@api_view(["POST"])
-def handle_update_files(request, username):
+def handle_update_files(request):
     """
     Handles the update of metadata for multiple files associated with a user and device.
 
@@ -341,6 +344,7 @@ def handle_update_files(request, username):
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
 
+    username = request.username_from_token
     response = update_files(username, device_name, files)
 
     if response == "device_not_found":
@@ -362,8 +366,7 @@ def handle_update_files(request, username):
 
 
 
-@api_view(["GET"])
-def getfileinfo(request, username):
+def getfileinfo(request):
     """
     Retrieves metadata for all files associated with all devices for a given user.
 
@@ -390,6 +393,7 @@ def getfileinfo(request, username):
     file_collection = db["files"]
 
     # Find the user by username
+    username = request.username_from_token
     user = user_collection.find_one({"username": username})
 
     if not user:
@@ -430,8 +434,7 @@ def getfileinfo(request, username):
 
 @csrf_exempt
 @require_http_methods(["POST"])
-@api_view(["POST"])
-def get_files_from_filepath(request, username):
+def get_files_from_filepath(request):
     """
     Retrieves files located under a specific 'global_file_path' for a user.
 
@@ -469,6 +472,7 @@ def get_files_from_filepath(request, username):
         if filepath is None:
             filepath = ""  # or "Core" depending on your default behavior
         
+        username = request.username_from_token
         response = db_get_files_from_filepath(username, filepath)
         
         # Check if response is a JsonResponse object
@@ -504,8 +508,7 @@ def get_files_from_filepath(request, username):
 
 @csrf_exempt
 @require_http_methods(["POST"])
-@api_view(["POST"])
-def paginated_get_files_info(request, username):
+def paginated_get_files_info(request):
     """
     Retrieves paginated file information for a user.
 
@@ -533,14 +536,14 @@ def paginated_get_files_info(request, username):
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
     
+    username = request.username_from_token
     return paginated_get_files_info(username, page=page, items_per_page=items_per_page)
 
 
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
-@api_view(["POST"])
-def get_partial_file_info(request, username):
+def get_partial_file_info(request):
     """
     Retrieves file metadata within a specified folder path up to a maximum depth.
 
@@ -581,6 +584,7 @@ def get_partial_file_info(request, username):
     file_collection = db["files"]
 
     # Find the user by username
+    username = request.username_from_token
     user = user_collection.find_one({"username": username})
 
     if not user:
@@ -628,8 +632,7 @@ def get_partial_file_info(request, username):
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
-@api_view(["POST"])
-def search_file(request, username):
+def search_file(request):
     """
     Searches for a specific file by name on a specific device for a user.
 
@@ -713,11 +716,9 @@ def search_file(request, username):
     }, status=200)
 
 
-
 @csrf_exempt
 @require_http_methods(["POST"])
-@api_view(["POST"])
-def add_scanned_folder(request, username):
+def add_scanned_folder(request):
     """
     Adds a folder path to the list of scanned folders for a specific user's device.
 
@@ -756,6 +757,7 @@ def add_scanned_folder(request, username):
     device_collection = db["devices"]
 
     # Find the user by username
+    username = request.username_from_token
     user = user_collection.find_one({"username": username})
     if not user:
         return JsonResponse({"error": "User not found."}, status=404)
@@ -787,6 +789,7 @@ def add_scanned_folder(request, username):
         return JsonResponse({"error": "Failed to update device status."}, status=500)
 
     # Return success response
+    username = request.username_from_token
     user_data = {"result": "success", "username": username}
 
     return JsonResponse(user_data)
@@ -795,8 +798,7 @@ def add_scanned_folder(request, username):
 
 @csrf_exempt
 @require_http_methods(["POST"])
-@api_view(["POST"])
-def remove_scanned_folder(request, username):
+def remove_scanned_folder(request):
     """
     Removes a folder path from the list of scanned folders for a specific user's device.
 
@@ -834,6 +836,7 @@ def remove_scanned_folder(request, username):
     device_collection = db["devices"]
 
     # Find the user by username
+    username = request.username_from_token
     user = user_collection.find_one({"username": username})
     if not user:
         return JsonResponse({"error": "User not found."}, status=404)
@@ -868,8 +871,7 @@ def remove_scanned_folder(request, username):
 
 @csrf_exempt
 @require_http_methods(["POST"])
-@api_view(["POST"])
-def get_scanned_folders(request, username):
+def get_scanned_folders(request):
     """
     Retrieves the list of scanned folders for a specific user's device.
 
@@ -893,6 +895,7 @@ def get_scanned_folders(request, username):
     """
     try:
         data = json.loads(request.body)
+
         device_name = data.get("device_name")
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
@@ -905,6 +908,7 @@ def get_scanned_folders(request, username):
     device_collection = db["devices"]
 
     # Find the user by username
+    username = request.username_from_token
     user = user_collection.find_one({"username": username})
     if not user:
         return JsonResponse({"error": "User not found."}, status=404)
@@ -925,7 +929,6 @@ def get_scanned_folders(request, username):
 
 @csrf_exempt
 @require_http_methods(["POST"])
-@api_view(["POST"])
 def share_file(request):
     """
     Shares a file owned by 'username' with 'friend_username'.
@@ -999,7 +1002,6 @@ def share_file(request):
 
 @csrf_exempt
 @require_http_methods(["POST"])
-@api_view(["POST"])
 def make_file_public(request):
     """
     Sets the 'is_public' flag to True for a specific file associated with a user's device.
@@ -1075,7 +1077,6 @@ def make_file_public(request):
 
 @csrf_exempt
 @require_http_methods(["POST"])
-@api_view(["POST"])
 def make_file_private(request):
     """
     Sets the 'is_public' flag to False for a specific file associated with a user's device.
@@ -1141,7 +1142,6 @@ def make_file_private(request):
 
 @csrf_exempt
 @require_http_methods(["POST"])
-@api_view(["POST"])
 def get_shared_files(request):
     """
     Retrieves metadata for files shared with the specified user.
@@ -1170,7 +1170,6 @@ def get_shared_files(request):
 
 @csrf_exempt
 @require_http_methods(["POST"])
-@api_view(["POST"])
 def get_shared_files_from_filepath(request):
     """
     Retrieves shared files under a specific filepath for the specified user.
@@ -1202,8 +1201,7 @@ def get_shared_files_from_filepath(request):
 
 @csrf_exempt
 @require_http_methods(["GET"])
-@api_view(["GET"])
-def download_file(request, username, file_id, is_file_sync):
+def download_file(request, file_id, is_file_sync):
     """
     Initiates a file download process.
 
@@ -1225,6 +1223,7 @@ def download_file(request, username, file_id, is_file_sync):
                 - NameError if `download_file` is not defined.
     """
     try:
+        username = request.username_from_token
         download_file(username, file_id, is_file_sync)
         return JsonResponse({"status": "success", "message": "File downloaded successfully"})
     except Exception as e:
@@ -1234,8 +1233,7 @@ def download_file(request, username, file_id, is_file_sync):
 
 @csrf_exempt
 @require_http_methods(["GET"])
-@api_view(["GET"])
-def get_file_info(request, username, file_id):
+def get_file_info(request, file_id):
     """
     Retrieves detailed metadata information for a specific file by its ID.
 
@@ -1254,6 +1252,7 @@ def get_file_info(request, username, file_id):
                 - {"error": str(e)}, status=500 (Catches any exception from `db_get_file_info`).
     """
     try:
+        username = request.username_from_token
         file_info = db_get_file_info(username, file_id)
         return JsonResponse({"status": "success", "file_info": file_info})
     except Exception as e:
@@ -1262,21 +1261,20 @@ def get_file_info(request, username, file_id):
 
 @csrf_exempt
 @require_http_methods(["POST"])
-@api_view(["POST"])
-def upload_to_s3(request, username):
+def upload_to_s3(request):
     """
     Wrapper for the upload_file_to_s3 function in upload_to_s3.py.
     
     Uploads a file to an Amazon S3 bucket and stores metadata in MongoDB.
     See the upload_file_to_s3 function documentation for details.
     """
+    username = request.username_from_token
     return upload_file_to_s3(request, username)
 
 
 @csrf_exempt
 @require_http_methods(["GET"])
-@api_view(["GET"])
-def get_s3_files(request, username):
+def get_s3_files(request):
     """
     Retrieves all S3 files for a specific user.
     
@@ -1286,6 +1284,7 @@ def get_s3_files(request, username):
     Returns:
         JsonResponse: A list of files stored in S3 for the user
     """
+    username = request.username_from_token
     result = list_s3_files(username)
     
     if "error" in result:
@@ -1296,8 +1295,7 @@ def get_s3_files(request, username):
 
 @csrf_exempt
 @require_http_methods(["GET"])
-@api_view(["GET"])
-def download_s3_file_view(request, username, file_id):
+def download_s3_file_view(request, file_id):
     """
     Downloads a file from S3 for a specific user.
     
@@ -1310,6 +1308,5 @@ def download_s3_file_view(request, username, file_id):
         or
         JsonResponse: Error details if download fails
     """
+    username = request.username_from_token
     return download_s3_file(username, file_id)
-
-

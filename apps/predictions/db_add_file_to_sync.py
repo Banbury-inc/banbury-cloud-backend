@@ -120,12 +120,3 @@ def db_add_file_to_sync(username, device_name, file_name):
 
     return "success"
 
-
-def main():
-
-
-    result = process_file_sync("mmills", "michael-ubuntu", "/home/mmills/BCloud/374-656-726_96j8_382.jpg")
-    print(result)
-
-if __name__ == "__main__":
-    main()

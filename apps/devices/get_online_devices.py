@@ -48,7 +48,7 @@ def get_online_devices(username):
     response = {
         "result": "success",
         "online_devices": online_device_list,
-        "username": username
+        "username": username,
     }
     return response
 

@@ -1,11 +1,11 @@
 from pymongo import MongoClient
 
-def getUserFriends(username):
+def getUserFriends(request):
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
     db = client["NeuraNet"]
     user_collection = db["users"]
-    user = user_collection.find_one({"username": username})
+    user = user_collection.find_one({"username": request.username_from_token})
     friends = user.get("friends", [])
     
     # Get full user info for each friend

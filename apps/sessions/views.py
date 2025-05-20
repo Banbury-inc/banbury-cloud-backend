@@ -4,13 +4,11 @@ from django.shortcuts import render
 from django.http import JsonResponse
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
-from rest_framework.decorators import api_view
 import pymongo
 import json
 
 
-@api_view(["GET"])
-def dashboard(request, username):
+def dashboard(request):
     """Renders the dashboard page for a given user."""
     # Render the dashboard template with the username
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
@@ -18,7 +16,7 @@ def dashboard(request, username):
     db = client["myDatabase"]
     user_collection = db["users"]
 
-    user = user_collection.find_one({"username": username})
+    user = user_collection.find_one({"username": request.username_from_token})
     first_name = user.get(
         "first_name", "User"
     )  # Default to 'User' if first name is not set
@@ -30,7 +28,7 @@ def dashboard(request, username):
         request,
         "dashboard.html",
         {
-            "username": username,
+            "username": request.username_from_token,
             "first_name": first_name,
             "files": files,
             "devices": devices,
@@ -41,13 +39,12 @@ def dashboard(request, username):
 
 @csrf_exempt
 @require_http_methods(["POST"])
-@api_view(["POST"])
-def get_session(request, username):
+def get_session(request):
     """Retrieves all sessions associated with a given username."""
     # Parse the JSON body
     data = json.loads(request.body)
 
-    if not username:
+    if not request.username_from_token:
         return JsonResponse(
             {"result": "no_username_provided", "message": "No username provided."},
             status=400,
@@ -62,7 +59,7 @@ def get_session(request, username):
         return JsonResponse({"error": "Can't find session collection"})
 
     sessions = session_collection.find({
-        "username": username,
+        "username": request.username_from_token,
     })
 
     all_sessions_data = []
@@ -88,8 +85,7 @@ def get_session(request, username):
 
 @csrf_exempt
 @require_http_methods(["GET", "POST"])
-@api_view(["GET", "POST"])
-def get_recent_session(request, username):
+def get_recent_session(request):
     """Retrieves the most recent sessions for a user, filtered by device."""
     # Parse the JSON body
     data = json.loads(request.body)
@@ -100,7 +96,7 @@ def get_recent_session(request, username):
             {"result": "no_device_provided", "message": "No device provided."},
             status=400,
         )
-    if not username:
+    if not request.username_from_token:
         return JsonResponse(
             {"result": "no_username_provided", "message": "No username provided."},
             status=400,
@@ -115,7 +111,7 @@ def get_recent_session(request, username):
         return JsonResponse({"error": "Can't find session collection"})
 
     sessions = session_collection.find({
-        "username": username,
+        "username": request.username_from_token,
         "task_device": task_device,
     })
 

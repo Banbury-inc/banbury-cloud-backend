@@ -2,7 +2,6 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.http import JsonResponse
 from pymongo.mongo_client import MongoClient
-from rest_framework.decorators import api_view
 import json
 from datetime import datetime
 from bson.objectid import ObjectId
@@ -15,8 +14,7 @@ device_collection = db["devices"]
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
-@api_view(["POST"])
-def add_task(request, username):
+def add_task(request):
     """Adds a new task for a given user."""
     try:
         data = json.loads(request.body)
@@ -47,7 +45,7 @@ def add_task(request, username):
 
     new_task = {
         "device_id": device_id,
-        "username": username,
+        "username": request.username_from_token,
         "task_name": task_name,
         "task_type": task_type,
         "task_device": task_device,
@@ -61,7 +59,7 @@ def add_task(request, username):
         result = session_collection.insert_one(new_task)
         return JsonResponse({
             "result": "success",
-            "username": username,
+            "username": request.username_from_token,
             "task_id": str(result.inserted_id)  # Return the task ID
         })
     except Exception as e:
@@ -71,8 +69,7 @@ def add_task(request, username):
 
 @csrf_exempt
 @require_http_methods(["POST"])
-@api_view(["POST"])
-def update_task(request, username):
+def update_task(request):
     """Updates an existing task for a given user."""
     try:
         data = json.loads(request.body)
@@ -113,8 +110,7 @@ def update_task(request, username):
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
-@api_view(["POST"])
-def fail_task(request, username):
+def fail_task(request):
     """Marks a task as failed for a given user."""
     try:
         # Parse the JSON body

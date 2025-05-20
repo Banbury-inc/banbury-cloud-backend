@@ -7,7 +7,7 @@ client = MongoClient(uri)
 db = client['NeuraNet']
 notifications_collection = db['notifications']
 
-def mark_notification_as_read(notification_id):
+def mark_notification_as_read(request, notification_id):
     """Marks a specific notification as read.
 
     Args:

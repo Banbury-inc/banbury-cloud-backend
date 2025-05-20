@@ -1,6 +1,7 @@
 import json
 from pymongo import MongoClient
 
+
 def remove_downloaded_model(username, device_name, model_name):
     """
     Removes a model name from the list of downloaded models for a specific device.
@@ -58,6 +59,7 @@ def remove_downloaded_model(username, device_name, model_name):
     # Return success response
     return {"result": "success", "username": username, "status": 200}
 
+
 def main():
     """
     Provides a simple test case for the remove_downloaded_model function.
@@ -69,11 +71,13 @@ def main():
     username = "mmills"
     device_name = "michael-mills-ubuntu"
     model_name = "model_1"
-    
-    print(f"Testing with username: {username}, device: {device_name}, model: {model_name}")
+
+    print(f"Testing with username: {username}, device: {
+          device_name}, model: {model_name}")
     response = remove_downloaded_model(username, device_name, model_name)
     print(f"\nResponse:")
     print(json.dumps(response, indent=2))
+
 
 if __name__ == "__main__":
     main()

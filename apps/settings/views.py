@@ -2,7 +2,6 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.http import JsonResponse
 from pymongo.mongo_client import MongoClient
-from rest_framework.decorators import api_view
 from .get_settings import get_settings as db_get_settings
 import json
 from bson.json_util import dumps
@@ -11,11 +10,10 @@ from bson.json_util import dumps
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
-@api_view(["POST"])
-def get_settings(request, username):
+def get_settings(request):
     """Retrieves settings for a given username."""
     try:
-        response = db_get_settings(username)
+        response = db_get_settings()
         return JsonResponse(response)
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
@@ -24,8 +22,7 @@ def get_settings(request, username):
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
-@api_view(["POST"])
-def update_settings(request, username):
+def update_settings(request):
     """Updates settings for a given username."""
     try:
         data = json.loads(request.body)
@@ -45,7 +42,7 @@ def update_settings(request, username):
     settings_collection = db["settings"]
 
     # Find the user by username
-    user = user_collection.find_one({"username": username})
+    user = user_collection.find_one({"username": request.username_from_token})
     if not user:
         return JsonResponse({"error": "User not found."}, status=404)
 
@@ -84,7 +81,7 @@ def update_settings(request, username):
         return JsonResponse({
             "result": "success",
             "message": message,
-            "username": username
+            "username": request.username.from_token,
         })
 
     except Exception as e:
@@ -98,8 +95,7 @@ def update_settings(request, username):
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
 @require_http_methods(["POST"])
-@api_view(["POST"])
-def delete_account(request, username):
+def delete_account(request):
     """Deletes a user's account."""
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
@@ -114,7 +110,7 @@ def delete_account(request, username):
     try:
 
         # Delete user from users collection
-        user = user_collection.find_one({"username": username})
+        user = user_collection.find_one({"username": request.username_from_token})
         if not user:
             return JsonResponse({"error": "User not found."}, status=404)
         
@@ -140,13 +136,13 @@ def delete_account(request, username):
         deleted_file_sync_count = file_sync_result.deleted_count
         
         # Delete user's settings
-        settings_collection.delete_one({"username": username})
+        settings_collection.delete_one({"username": request.username_from_token})
 
         # Delete user's devices
         device_collection.delete_one({"user_id": user["_id"]})
         
         # Finally delete the user
-        user_collection.delete_one({"username": username})
+        user_collection.delete_one({"username": request.username_from_token})
 
         # Create response data
         response_data = {

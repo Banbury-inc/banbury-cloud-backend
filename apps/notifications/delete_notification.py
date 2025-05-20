@@ -10,7 +10,7 @@ db = client['NeuraNet']
 user_collection = db['users']
 notifications_collection = db['notifications']
 
-def delete_notification(username, notification_id):
+def delete_notification(request, notification_id):
     """Deletes a specific notification for a user and sends a WebSocket update.
 
     Args:
@@ -22,6 +22,7 @@ def delete_notification(username, notification_id):
                      a dictionary with a failure message if the notification is not found,
                      or the string "User not found" if the user doesn't exist.
     """
+    username = request.username_from_token
     # Find the user by username
     user = user_collection.find_one({'username': username})
     if not user:
