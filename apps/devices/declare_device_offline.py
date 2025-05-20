@@ -53,7 +53,7 @@ def declare_device_offline(username, device_name):
     # Return success response
     response = {
         "result": "success",
-        "username": request.username_from_token,
+        "username": username,
     }
 
     return response

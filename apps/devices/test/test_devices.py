@@ -2,7 +2,7 @@ import pytest
 import json
 from unittest.mock import patch, MagicMock
 from bson import ObjectId
-from django.test import Client
+from django.test import Client, RequestFactory
 from django.urls import reverse
 from pymongo.results import UpdateResult, DeleteResult
 
@@ -82,52 +82,43 @@ def sample_user_data():
 @pytest.mark.django_db
 class TestDevices:
     @patch('apps.devices.views.remove_device')
-    def test_delete_device_success(self, mock_remove_device, client, test_data):
-        """Test successfully deleting a device"""
-        # Mock successful device removal
+    def test_delete_device_success(self, mock_remove_device, test_data):
+        factory = RequestFactory()
         mock_remove_device.return_value = "success"
-        
-        # Delete request data
         data = {'device_name': test_data['device_name']}
-        
-        # Make request with correct URL
-        response = client.post(
+        request = factory.post(
             f'/devices/delete_device/{test_data["username"]}/',
             data=json.dumps(data),
             content_type='application/json'
         )
-        
-        # Check response
+        request.username_from_token = test_data['username']
+        from apps.devices.views import delete_device
+        response = delete_device(request)
         assert response.status_code == 200
-        assert response.json() == {'result': 'success', 'message': 'Device deleted successfully.'}
-        
-        # Verify call to remove_device
+        data = json.loads(response.content)
+        assert data == {'result': 'success', 'message': 'Device deleted successfully.'}
         mock_remove_device.assert_called_once_with(test_data['username'], test_data['device_name'])
-        
+
     @patch('apps.devices.views.remove_device')
-    def test_delete_device_failure(self, mock_remove_device, client, test_data):
-        """Test failure when deleting a device"""
-        # Mock failed device removal
+    def test_delete_device_failure(self, mock_remove_device, test_data):
+        factory = RequestFactory()
         mock_remove_device.return_value = "error"
-        
-        # Delete request data
         data = {'device_name': test_data['device_name']}
-        
-        # Make request with correct URL
-        response = client.post(
+        request = factory.post(
             f'/devices/delete_device/{test_data["username"]}/',
             data=json.dumps(data),
             content_type='application/json'
         )
-        
-        # Check response
+        request.username_from_token = test_data['username']
+        from apps.devices.views import delete_device
+        response = delete_device(request)
         assert response.status_code == 200
-        assert response.json() == {'result': 'fail', 'message': 'error'}
-        
+        data = json.loads(response.content)
+        assert data == {'result': 'fail', 'message': 'error'}
+
     @patch('apps.devices.views.db_update_device_configuration_preferences')
-    def test_update_device_configuration_preferences(self, mock_update_config, client, test_data):
-        """Test updating device configuration preferences"""
-        # Mock successful update with returned data
+    def test_update_device_configuration_preferences(self, mock_update_config, test_data):
+        factory = RequestFactory()
         mock_update_config.return_value = {
             'device_name': test_data['device_name'],
             'configurations': {
@@ -141,8 +132,6 @@ class TestDevices:
                 'use_files_available_for_download': True
             }
         }
-        
-        # Configuration data
         data = {
             'device_name': test_data['device_name'],
             'use_device_in_file_sync': True,
@@ -154,17 +143,17 @@ class TestDevices:
             'use_files_needed': False,
             'use_files_available_for_download': True
         }
-        
-        # Make request with correct URL
-        response = client.post(
+        request = factory.post(
             f'/devices/update_device_configurations/{test_data["username"]}/',
             data=json.dumps(data),
             content_type='application/json'
         )
-        
-        # Check response
+        request.username_from_token = test_data['username']
+        from apps.devices.views import update_device_configuration_preferences
+        response = update_device_configuration_preferences(request)
         assert response.status_code == 200
-        assert response.json() == {
+        data = json.loads(response.content)
+        assert data == {
             'result': 'success',
             'data': {
                 'device_name': test_data['device_name'],
@@ -180,11 +169,9 @@ class TestDevices:
                 }
             }
         }
-        
-        # Verify call to update function
         mock_update_config.assert_called_once_with(
-            test_data['username'], 
-            test_data['device_name'], 
+            test_data['username'],
+            test_data['device_name'],
             {
                 'use_device_in_file_sync': True,
                 'use_predicted_cpu_usage': True,
