@@ -1,4 +1,6 @@
 import bcrypt
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
 from django.http import HttpResponse, JsonResponse
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
@@ -196,6 +198,8 @@ def getuserinfo4(request, username, password):
 
 
 
+@csrf_exempt
+@require_http_methods(["POST"])
 def update_user_profile(request):
     """Updates the user profile based on the provided data."""
     try:
@@ -272,6 +276,8 @@ def update_user_profile(request):
 
 
 
+@csrf_exempt
+@require_http_methods(["POST"])
 def change_profile(request, password, first_name, last_name, email):
     """Updates user profile information, including optional password change."""
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
@@ -323,6 +329,8 @@ def change_profile(request, password, first_name, last_name, email):
     }
     return JsonResponse(user_data)
 
+@csrf_exempt
+@require_http_methods(["GET"])
 def get_profile_picture(request):
     """Retrieves the profile picture for a given user."""
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
@@ -397,6 +405,8 @@ def typeahead(request, search):
         
     return JsonResponse(response)
 
+@csrf_exempt
+@require_http_methods(["POST"])
 def send_friend_request(request):
     """Sends a friend request from one user to another."""
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
@@ -453,6 +463,8 @@ def send_friend_request(request):
     return JsonResponse({"result": "success", "message": "Friend request sent successfully"})
 
 
+@csrf_exempt
+@require_http_methods(["POST"])
 def remove_friend(request):
     """Removes a friend connection between two users."""
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
@@ -508,6 +520,8 @@ def remove_friend(request):
     return JsonResponse({"result": "success", "message": "Friend removed successfully"})
 
 
+@csrf_exempt
+@require_http_methods(["POST"])
 def get_friends(request):
     """Retrieves the list of friends for a given user."""
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
@@ -530,6 +544,8 @@ def get_friends(request):
     return JsonResponse({"result": "success", "friends": friend_list})
 
 
+@csrf_exempt
+@require_http_methods(["POST"])
 def get_friend_requests(request):
     """Retrieves the list of pending friend requests for a given user."""
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
@@ -551,6 +567,8 @@ def get_friend_requests(request):
     return JsonResponse({"result": "success", "friend_requests": friend_requests_list})
 
 
+@csrf_exempt
+@require_http_methods(["POST"])
 def accept_friend_request(request):
     """Accepts a pending friend request."""
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
@@ -607,6 +625,8 @@ def accept_friend_request(request):
     return JsonResponse({"result": "success", "message": "Friend request accepted successfully"})
 
 
+@csrf_exempt
+@require_http_methods(["POST"])
 def reject_friend_request(request):
     """Rejects a pending friend request."""
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
@@ -664,6 +684,8 @@ def reject_friend_request(request):
 
 
 
+@csrf_exempt
+@require_http_methods(["GET"])
 def get_user_friends(request):
     """Retrieves the list of friends for a given user using the helper function."""
     friends = getUserFriends(request.username_from_token)
