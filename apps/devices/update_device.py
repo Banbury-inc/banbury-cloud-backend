@@ -2,6 +2,23 @@ from pymongo.mongo_client import MongoClient
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
 import json
+from datetime import datetime
+
+def parse_timestamp(ts):
+    if isinstance(ts, datetime):
+        return ts
+    if isinstance(ts, (int, float)):
+        return datetime.utcfromtimestamp(ts)
+    if isinstance(ts, str):
+        try:
+            return datetime.fromisoformat(ts)
+        except Exception:
+            pass
+        try:
+            return datetime.utcfromtimestamp(float(ts))
+        except Exception:
+            pass
+    return datetime.utcnow()
 
 def update_device_info(username, sending_device_name, device_info):
     """
@@ -50,37 +67,28 @@ def update_device_info(username, sending_device_name, device_info):
         print("Error: device_info is None. Not inserting.")
         return "error: device_info is None"
     try:
-        # Prepare the $push update for time-series fields
-        push_update = {
-            "timestamp": device_info.get('current_time'),
+        doc = {
+            "timestamp": parse_timestamp(device_info.get('current_time')),
+            "metadata": {
+                "device_id": device["_id"],
+                "username": username,
+                "device_name": sending_device_name,
+            },
             "storage_capacity_gb": device_info.get('storage_capacity_gb'),
             "battery_status": device_info.get('battery_status'),
             "battery_time_remaining": device_info.get('battery_time_remaining'),
             "cpu_usage": device_info.get('cpu_usage'),
-            "cpu_info_speed": device_info.get('cpu_info_speed'),
             "gpu_usage": device_info.get('gpu_usage'),
             "ram_usage": device_info.get('ram_usage'),
             "ram_total": device_info.get('ram_total'),
             "ram_free": device_info.get('ram_free'),
             "upload_speed": device_info.get('upload_speed'),
             "download_speed": device_info.get('download_speed'),
+            # Add other fields as needed
         }
-        # Prepare the $set update for static fields
-        set_update = {
-            "device_id": device["_id"],
-            "username": username,
-            "device_name": sending_device_name,
-        }
-        print("Attempting to update device info arrays for device_id:", device["_id"])
-        result = device_info_collection.update_one(
-            {"device_id": device["_id"]},
-            {
-                "$push": {k: v for k, v in push_update.items() if v is not None},
-                "$set": {k: v for k, v in set_update.items() if v is not None},
-            },
-            upsert=True
-        )
-        print("Update successful, matched_count:", result.matched_count, "modified_count:", result.modified_count)
+        print("Inserting time series device info:", doc)
+        result = device_info_collection.insert_one(doc)
+        print("Insert successful, inserted_id:", result.inserted_id)
         return "success"
     except Exception as e:
         print(f"Error updating device status: {e}")

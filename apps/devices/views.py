@@ -467,3 +467,34 @@ def update_device_info(request):
         "data": result,
     }
     return JsonResponse(response_data)
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def get_device_timeseries_data(request, device_id):
+    """
+    Returns all timeseries data for a given device_id from the device_info collection.
+    Args:
+        request: The Django HttpRequest object.
+        device_id (str): The MongoDB ObjectId of the device as a string.
+    Returns:
+        JsonResponse: A JSON response containing a list of timeseries data documents.
+    """
+    from bson import ObjectId
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client["NeuraNet"]
+    device_info_collection = db["device_info"]
+    try:
+        device_obj_id = ObjectId(device_id)
+    except Exception:
+        return JsonResponse({"error": "Invalid device_id format."}, status=400)
+    # Query all timeseries data for this device_id
+    timeseries_docs = list(device_info_collection.find({"metadata.device_id": device_obj_id}))
+    # Convert ObjectId and datetime fields to strings for JSON serialization
+    for doc in timeseries_docs:
+        doc["_id"] = str(doc["_id"])
+        if "timestamp" in doc and hasattr(doc["timestamp"], "isoformat"):
+            doc["timestamp"] = doc["timestamp"].isoformat()
+        if "metadata" in doc and "device_id" in doc["metadata"]:
+            doc["metadata"]["device_id"] = str(doc["metadata"]["device_id"])
+    return JsonResponse({"result": "success", "data": timeseries_docs})
