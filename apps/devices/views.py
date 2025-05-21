@@ -10,6 +10,7 @@ from .get_single_device_info import get_single_device_info as db_get_single_devi
 from .get_single_device_info_with_device_name import get_single_device_info_with_device_name as db_get_single_device_info_with_device_name
 from .add_downloaded_model import add_downloaded_model as db_add_downloaded_model
 from .add_device import add_device
+from .update_device import update_device_info as db_update_device_info
 import json
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
@@ -446,6 +447,21 @@ def add_downloaded_model(request):
 def get_single_device_info_with_device_name(request, device_name):
     username = request.username_from_token
     result = db_get_single_device_info_with_device_name(username, device_name)
+    response_data = {   
+        "result": "success",
+        "data": result,
+    }
+    return JsonResponse(response_data)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def update_device_info(request):
+    data = json.loads(request.body)
+    username = request.username_from_token
+    device_info = data.get("device_info")
+    sending_device_name = data.get("sending_device_name")
+    print("View received username:", username, "sending_device_name:", sending_device_name, "device_info:", device_info, flush=True)
+    result = db_update_device_info(username, sending_device_name, device_info)
     response_data = {   
         "result": "success",
         "data": result,

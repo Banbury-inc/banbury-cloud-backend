@@ -1,6 +1,9 @@
 from pymongo.mongo_client import MongoClient
+from django.views.decorators.csrf import csrf_exempt
+from django.http import JsonResponse
+import json
 
-def update_device(username, sending_device_name, requesting_device_name, device_info):
+def update_device_info(username, sending_device_name, device_info):
     """
     Updates the information for a specific device based on received data.
 
@@ -11,7 +14,6 @@ def update_device(username, sending_device_name, requesting_device_name, device_
     Args:
         username (str): The username of the device owner.
         sending_device_name (str): The name of the device whose info is being updated.
-        requesting_device_name (str): The name of the device that requested the info (currently unused).
         device_info (dict): A dictionary containing the new device details.
                             Expected keys include static info (like manufacturer,
                             model, capacity) and time-series data points (like
@@ -23,12 +25,12 @@ def update_device(username, sending_device_name, requesting_device_name, device_
              "device not found" if the sending device does not exist for that user.
              "error" if an exception occurred during the database update.
     """
-    # MongoDB connection
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
     db = client["NeuraNet"]
     user_collection = db["users"]
     device_collection = db["devices"]
+    device_info_collection = db["device_info"]
 
     # Find the user by username
     user = user_collection.find_one({"username": username})
@@ -43,44 +45,57 @@ def update_device(username, sending_device_name, requesting_device_name, device_
     if not device:
         return "device not found"
 
-    # Prepare update data
-    update_data = {
-        "storage_capacity_gb": device_info['storage_capacity_gb'],
-        "device_manufacturer": device_info['device_manufacturer'],
-        "device_model": device_info['device_model'],
-        "device_version": device_info['device_version'],
-        "cpu_info_manufacturer": device_info['cpu_info_manufacturer'],
-        "cpu_info_brand": device_info['cpu_info_brand'],
-        "cpu_info_speed": device_info['cpu_info_speed'],
-        "cpu_info_cores": device_info['cpu_info_cores'],
-        "cpu_info_physical_cores": device_info['cpu_info_physical_cores'],
-        "cpu_info_processors": device_info['cpu_info_processors'],
-        "ip_address": device_info['ip_address'],
-        "mac_address": device_info['mac_address'],
-        "battery_status": device_info['battery_status'],
-        "battery_time_remaining": device_info['battery_time_remaining'],
-        "bluetooth_status": device_info['bluetooth_status'],
-    }
-
-    # Update the device information
+    # Instead of inserting a new document, append time-series data to arrays in a single document per device_id
+    if device_info is None:
+        print("Error: device_info is None. Not inserting.")
+        return "error: device_info is None"
     try:
-        device_collection.update_one(
-            {"_id": device["_id"]},
+        # Prepare the $push update for time-series fields
+        push_update = {
+            "timestamp": device_info.get('current_time'),
+            "storage_capacity_gb": device_info.get('storage_capacity_gb'),
+            "battery_status": device_info.get('battery_status'),
+            "battery_time_remaining": device_info.get('battery_time_remaining'),
+            "cpu_usage": device_info.get('cpu_usage'),
+            "cpu_info_speed": device_info.get('cpu_info_speed'),
+            "gpu_usage": device_info.get('gpu_usage'),
+            "ram_usage": device_info.get('ram_usage'),
+            "ram_total": device_info.get('ram_total'),
+            "ram_free": device_info.get('ram_free'),
+            "upload_speed": device_info.get('upload_speed'),
+            "download_speed": device_info.get('download_speed'),
+        }
+        # Prepare the $set update for static fields
+        set_update = {
+            "device_id": device["_id"],
+            "username": username,
+            "device_name": sending_device_name,
+        }
+        print("Attempting to update device info arrays for device_id:", device["_id"])
+        result = device_info_collection.update_one(
+            {"device_id": device["_id"]},
             {
-                "$set": update_data,
-                "$push": {
-                    "current_time": device_info['current_time'],
-                    "cpu_usage": device_info['cpu_usage'],
-                    "gpu_usage": device_info['gpu_usage'],
-                    "ram_usage": device_info['ram_usage'],
-                    "ram_total": device_info['ram_total'],
-                    "ram_free": device_info['ram_free'],
-                    "upload_speed": device_info['upload_speed'],
-                    "download_speed": device_info['download_speed'],
-                }
-            }
+                "$push": {k: v for k, v in push_update.items() if v is not None},
+                "$set": {k: v for k, v in set_update.items() if v is not None},
+            },
+            upsert=True
         )
+        print("Update successful, matched_count:", result.matched_count, "modified_count:", result.modified_count)
         return "success"
     except Exception as e:
         print(f"Error updating device status: {e}")
         return "error"
+
+def update_device_info_view(request):
+    data = json.loads(request.body)
+    username = request.username_from_token
+    device_info = data.get("device_info")
+    sending_device_name = data.get("sending_device_name")
+    print("View received username:", username, "sending_device_name:", sending_device_name, "device_info:", device_info, flush=True)
+    result = update_device_info(username, sending_device_name, device_info)
+    response_data = {   
+        "result": "success",
+        "data": result,
+    }
+    return JsonResponse(response_data)
+
