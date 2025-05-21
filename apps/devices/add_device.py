@@ -42,16 +42,7 @@ def add_device(request, username, device_name):
         optimization_status = data.get("optimization_status", False)
         online = data.get("online", True)
         date_added = data.get("date_added")
-        # Legacy/optional fields
         sync_storage_capacity_gb = data.get("sync_storage_capacity_gb")
-        # Arrays for time-series data
-        gpu_usage = data.get("gpu_usage", [])
-        cpu_usage = data.get("cpu_usage", [])
-        ram_usage = data.get("ram_usage", [])
-        ram_total = data.get("ram_total", [])
-        ram_free = data.get("ram_free", [])
-        upload_network_speed = data.get("upload_network_speed", [])
-        download_network_speed = data.get("download_network_speed", [])
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
 
