@@ -23,17 +23,35 @@ def add_device(request, username, device_name):
     try:
         print(request)
         data = json.loads(request.body)
-        device_type = data.get("device_type")
-        storage_capacity_gb = data.get("storage_capacity_gb")
-        sync_storage_capacity_gb = data.get("sync_storage_capacity_gb")
+        # Map frontend camelCase fields to backend snake_case
+        device_name = data.get("device_name", device_name)
+        storage_capacity_gb = data.get("storageCapacityGB")
+        max_storage_capacity_gb = data.get("maxStorageCapacityGB")
+        device_manufacturer = data.get("device_manufacturer")
+        device_model = data.get("device_model")
+        device_version = data.get("device_version")
+        services = data.get("services")
+        cpu_info_brand = data.get("cpu_info_brand")
+        cpu_info_cores = data.get("cpu_info_cores")
+        cpu_info_processors = data.get("cpu_info_processors")
+        cpu_info_physical_cores = data.get("cpu_info_physicalCores")
+        ip_address = data.get("ip_address")
+        mac_address = data.get("mac_address")
+        device_priority = data.get("device_priority", 1)
+        sync_status = data.get("sync_status", False)
+        optimization_status = data.get("optimization_status", False)
+        online = data.get("online", True)
         date_added = data.get("date_added")
-        upload_network_speed = data.get("upload_network_speed")
-        download_network_speed = data.get("download_network_speed")
-        gpu_usage = data.get("gpu_usage")
-        cpu_usage = data.get("cpu_usage")
-        ram_usage = data.get("ram_usage")
-        ram_total = data.get("ram_total")
-        ram_free = data.get("ram_free")
+        # Legacy/optional fields
+        sync_storage_capacity_gb = data.get("sync_storage_capacity_gb")
+        # Arrays for time-series data
+        gpu_usage = data.get("gpu_usage", [])
+        cpu_usage = data.get("cpu_usage", [])
+        ram_usage = data.get("ram_usage", [])
+        ram_total = data.get("ram_total", [])
+        ram_free = data.get("ram_free", [])
+        upload_network_speed = data.get("upload_network_speed", [])
+        download_network_speed = data.get("download_network_speed", [])
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
 
@@ -65,19 +83,26 @@ def add_device(request, username, device_name):
     new_device = {
         "user_id": user_id,
         "device_name": device_name,
-        "device_type": device_type,
         "storage_capacity_gb": storage_capacity_gb,
+        "max_storage_capacity_gb": max_storage_capacity_gb,
+        "device_manufacturer": device_manufacturer,
+        "device_model": device_model,
+        "device_version": device_version,
+        "services": services,
+        "cpu_info_brand": cpu_info_brand,
+        "cpu_info_cores": cpu_info_cores,
+        "cpu_info_processors": cpu_info_processors,
+        "cpu_info_physical_cores": cpu_info_physical_cores,
+        "ip_address": ip_address,
+        "mac_address": mac_address,
+        "device_priority": device_priority,
+        "sync_status": sync_status,
+        "optimization_status": optimization_status,
+        "online": online,
+        "date_added": date_added,
         "sync_storage_capacity_gb": sync_storage_capacity_gb,
-        "date_added": [],
-        "upload_network_speed": [],
-        "download_network_speed": [],
-        "gpu_usage": [],
-        "cpu_usage": [],
-        "ram_usage": [],
-        "ram_total": [],
-        "ram_free": [],
-        "sync_status": False,
-        "online": True,
+        "scanned_folders": [],
+        "downloaded_models": [],
     }
 
     try:
@@ -88,22 +113,7 @@ def add_device(request, username, device_name):
         # Update the user collection to add the device_id to the user's list of devices
         user_collection.update_one({"_id": user_id}, {"$push": {"devices": device_id}})
 
-        # Append all usage data and other arrays in the device document
-        device_collection.update_one(
-            {"_id": device_id},
-            {
-                "$push": {
-                    "gpu_usage": gpu_usage,
-                    "cpu_usage": cpu_usage,
-                    "ram_usage": ram_usage,
-                    "ram_total": ram_total,
-                    "ram_free": ram_free,
-                    "download_network_speed": download_network_speed,
-                    "upload_network_speed": upload_network_speed,
-                    "date_added": date_added,
-                }
-            },
-        )
+        # No need to $push usage arrays if they're empty or not provided
 
     except Exception as e:
         print(f"Error sending to device: {e}")
