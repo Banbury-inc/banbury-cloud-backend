@@ -4,7 +4,7 @@ uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retr
 client = MongoClient(uri)
 db = client["NeuraNet"]
 
-collection_name = "device_info"
+collection_name = "device_info_predictions"
 
 def create_timeseries_collection():
     try:

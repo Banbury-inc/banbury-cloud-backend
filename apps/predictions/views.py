@@ -11,6 +11,9 @@ from .get_file_sync import get_file_sync as db_get_file_sync
 from .update_file_priority import update_file_priority as db_update_file_priority
 from .db_remove_file_from_sync import db_remove_file_from_sync as db_remove_file_from_sync
 import json
+from pymongo import MongoClient
+import datetime
+from bson import ObjectId
 
 
 @csrf_exempt
@@ -311,3 +314,79 @@ def get_device_prediction_data(request):
         "data": result,
     }
     return JsonResponse(response_data)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def store_device_predictions(request):
+    """
+    Stores device predictions in the device_info_predictions MongoDB collection.
+    Expects a JSON body with predictions.
+    """
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client["NeuraNet"]
+    collection = db["device_info_predictions"]
+
+    try:
+        data = json.loads(request.body)
+        predictions = data.get("predictions", [])
+        for doc in predictions:
+            # Convert ISO string to Python datetime for MongoDB
+            if "timestamp" in doc and isinstance(doc["timestamp"], str):
+                try:
+                    doc["timestamp"] = datetime.datetime.fromisoformat(doc["timestamp"].replace("Z", "+00:00"))
+                except Exception:
+                    pass  # If conversion fails, leave as is
+            # Convert metadata.device_id to ObjectId
+            if "metadata" in doc and isinstance(doc["metadata"], dict):
+                device_id = doc["metadata"].get("device_id")
+                if device_id and isinstance(device_id, str):
+                    try:
+                        doc["metadata"]["device_id"] = ObjectId(device_id)
+                    except Exception:
+                        pass  # If conversion fails, leave as is
+        result = collection.insert_many(predictions)
+        return JsonResponse({"result": "success", "inserted_ids": [str(_id) for _id in result.inserted_ids]})
+    except Exception as e:
+        return JsonResponse({"result": "error", "message": str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def get_device_timeseries_prediction_data(request, device_id):
+    """
+    Retrieves all timeseries data for a given device_id from the device_info_predictions collection.
+    Expects a JSON body with 'device_id'.
+    Authenticates using request.username_from_token.
+    Returns all documents for the user and device_id.
+    """
+    try:
+        if not device_id:
+            return JsonResponse({"result": "error", "message": "Missing device_id"}, status=400)
+        username = request.username_from_token
+        uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+        client = MongoClient(uri)
+        db = client["NeuraNet"]
+        user_collection = db["users"]
+        device_info_predictions_collection = db["device_info_predictions"]
+        user = user_collection.find_one({"username": username})
+
+        device_obj_id = ObjectId(device_id)
+        if not user:
+            return JsonResponse({"result": "error", "message": "User not found"}, status=401)
+        # Query for all timeseries docs for this user and device_id
+
+        timeseries_docs = list(device_info_predictions_collection.find({"metadata.device_id": device_obj_id}))
+        # Convert ObjectId and datetime fields to strings for JSON serialization
+        for doc in timeseries_docs:
+            doc["_id"] = str(doc["_id"])
+            if "timestamp" in doc and hasattr(doc["timestamp"], "isoformat"):
+                doc["timestamp"] = doc["timestamp"].isoformat()
+            if "metadata" in doc and "device_id" in doc["metadata"]:
+                doc["metadata"]["device_id"] = str(doc["metadata"]["device_id"])
+        return JsonResponse({"result": "success", "data": timeseries_docs})
+    except json.JSONDecodeError:
+        return JsonResponse({"result": "error", "message": "Invalid JSON"}, status=400)
+    except Exception as e:
+        return JsonResponse({"result": "error", "message": str(e)}, status=500)
