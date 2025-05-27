@@ -88,10 +88,39 @@ flow = Flow.from_client_config(
 
 def google(request):
     """Initiates the Google OAuth2 authentication flow."""
-    flow.redirect_uri = REDIRECT_URI
+    # Allow the frontend to specify the redirect URI
+    frontend_redirect_uri = request.GET.get('redirect_uri', REDIRECT_URI)
+    
+    # Validate the redirect URI for security
+    allowed_redirect_uris = [
+        'http://localhost:3000/authentication/auth/callback',
+        'http://localhost:3001/authentication/auth/callback',
+        'http://localhost:3002/authentication/auth/callback',
+        REDIRECT_URI  # Keep the original environment variable as fallback
+    ]
+    
+    if frontend_redirect_uri not in allowed_redirect_uris:
+        return JsonResponse({
+            "error": "Invalid redirect URI"
+        }, status=400)
+    
+    # Create a new flow instance with the correct redirect URI
+    flow_instance = Flow.from_client_config(
+        {
+            "web": {
+                "client_id": GOOGLE_CLIENT_ID,
+                "client_secret": GOOGLE_CLIENT_SECRET,
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
+                "redirect_uris": [frontend_redirect_uri],
+            }
+        },
+        scopes=SCOPES
+    )
+    flow_instance.redirect_uri = frontend_redirect_uri
     
     # Generate the authorization URL without state
-    authorization_url, _ = flow.authorization_url(
+    authorization_url, _ = flow_instance.authorization_url(
         access_type='offline',
         include_granted_scopes='true',
         prompt='consent'
@@ -112,14 +141,50 @@ def google_callback(request):
         }, status=400)
     
     try:
-        # Reset the flow with the same scopes
-        flow.redirect_uri = REDIRECT_URI
+        # Determine which redirect URI was used based on the referrer or a parameter
+        # For now, we'll try the most common ones
+        possible_redirect_uris = [
+            'http://localhost:3000/authentication/auth/callback',
+            'http://localhost:3001/authentication/auth/callback',
+            'http://localhost:3002/authentication/auth/callback',
+            REDIRECT_URI
+        ]
         
-        # Exchange the authorization code for credentials
-        flow.fetch_token(code=code)
+        credentials = None
+        used_redirect_uri = None
         
-        # Get the ID token from credentials
-        credentials = flow.credentials
+        # Try each possible redirect URI until one works
+        for redirect_uri in possible_redirect_uris:
+            try:
+                # Create a new flow instance for this redirect URI
+                flow_instance = Flow.from_client_config(
+                    {
+                        "web": {
+                            "client_id": GOOGLE_CLIENT_ID,
+                            "client_secret": GOOGLE_CLIENT_SECRET,
+                            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                            "token_uri": "https://oauth2.googleapis.com/token",
+                            "redirect_uris": [redirect_uri],
+                        }
+                    },
+                    scopes=SCOPES
+                )
+                flow_instance.redirect_uri = redirect_uri
+                
+                # Try to exchange the code for credentials
+                flow_instance.fetch_token(code=code)
+                credentials = flow_instance.credentials
+                used_redirect_uri = redirect_uri
+                break
+            except Exception as e:
+                # This redirect URI didn't work, try the next one
+                continue
+        
+        if not credentials:
+            return JsonResponse({
+                "success": False,
+                "error": "Failed to exchange authorization code for credentials"
+            }, status=400)
         
         # Verify the ID token
         id_info = id_token.verify_oauth2_token(
@@ -137,10 +202,81 @@ def google_callback(request):
             "picture": id_info.get("picture")
         }
         
+        # Now handle user authentication/creation and token generation
+        email = user_info.get("email")
+        if not email:
+            return JsonResponse({
+                "success": False,
+                "error": "No email provided by Google"
+            }, status=400)
+        
+        # Connect to MongoDB
+        uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+        client = MongoClient(uri)
+        db = client["NeuraNet"]
+        user_collection = db["users"]
+        
+        # Check if user exists by email
+        user = user_collection.find_one({"email": email})
+        
+        if not user:
+            # Create new user for Google OAuth
+            # Download and convert the profile picture if available
+            profile_picture = None
+            if user_info.get("picture"):
+                try:
+                    response = http_requests.get(user_info["picture"], verify=True)
+                    if response.status_code == 200:
+                        image_base64 = base64.b64encode(response.content).decode('utf-8')
+                        profile_picture = {
+                            'data': image_base64,
+                            'content_type': response.headers.get('content-type', 'image/jpeg'),
+                            'source': 'google_oauth',
+                            'size': len(response.content)
+                        }
+                except Exception as e:
+                    print(f"Error downloading profile picture: {e}")
+                    profile_picture = user_info.get("picture")  # Store URL as fallback
+            
+            new_user = {
+                "username": email,  # Use email as username for Google OAuth users
+                "email": email,
+                "first_name": user_info.get("first_name"),
+                "last_name": user_info.get("last_name"),
+                "picture": profile_picture,
+                "phone_number": None,
+                "password": None,  # No password for OAuth users
+                "auth_method": "google_oauth",
+                "devices": [],
+            }
+            
+            try:
+                user_collection.insert_one(new_user)
+                user = new_user
+            except Exception as e:
+                print(f"Error creating user: {e}")
+                return JsonResponse({
+                    "success": False,
+                    "error": "Failed to create user"
+                }, status=500)
+        
+        # Generate a JWT token for the user
+        access = AccessToken()
+        access["username"] = user.get("username") or email
+        # Set token expiry to 7 days
+        access.set_exp(lifetime=timedelta(days=7))
+        token = str(access)
+        
         return JsonResponse({
             "success": True,
-            "user": user_info,
-            "id_info": id_info,
+            "user": {
+                "email": email,
+                "username": user.get("username") or email,
+                "first_name": user.get("first_name"),
+                "last_name": user.get("last_name"),
+                "picture": user.get("picture")
+            },
+            "token": token,
             "message": "Successfully authenticated with Google"
         })
         
