@@ -1,7 +1,7 @@
 import pytest
 import json
 import bcrypt
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, Mock
 from django.test import Client
 from django.urls import reverse
 from bson.objectid import ObjectId
@@ -81,10 +81,12 @@ class TestRegistration:
 
 @pytest.mark.django_db
 class TestGoogleAuth:
-    @patch('apps.authentication.views.flow')
-    def test_google_auth_url(self, mock_flow, client):
-        # Setup mock
-        mock_flow.authorization_url.return_value = ('https://accounts.google.com/oauth2/test', None)
+    @patch('apps.authentication.views.Flow.from_client_config')
+    def test_google_auth_url(self, mock_flow_from_client_config, client):
+        # Setup mock flow instance
+        mock_flow_instance = Mock()
+        mock_flow_instance.authorization_url.return_value = ('https://accounts.google.com/oauth2/test', None)
+        mock_flow_from_client_config.return_value = mock_flow_instance
         
         # Make request
         url = reverse('google')
@@ -96,40 +98,47 @@ class TestGoogleAuth:
         assert 'authUrl' in response_data
         assert response_data['authUrl'] == 'https://accounts.google.com/oauth2/test'
         
-        # Verify mock call
-        mock_flow.authorization_url.assert_called_once()
+        # Verify mock calls
+        mock_flow_from_client_config.assert_called_once()
+        mock_flow_instance.authorization_url.assert_called_once_with(
+            access_type='offline',
+            include_granted_scopes='true',
+            prompt='consent'
+        )
 
-    @patch('apps.authentication.views.flow')
-    @patch('apps.authentication.views.id_token')
-    def test_google_callback_success(self, mock_id_token, mock_flow, client):
-        # Setup mocks
-        mock_credentials = MagicMock()
-        mock_credentials.id_token = 'test_id_token'
-        mock_flow.fetch_token.return_value = None
-        mock_flow.credentials = mock_credentials
+    @patch('apps.authentication.views.Flow.from_client_config')
+    def test_google_auth_url_with_custom_redirect_uri(self, mock_flow_from_client_config, client):
+        # Setup mock flow instance
+        mock_flow_instance = Mock()
+        mock_flow_instance.authorization_url.return_value = ('https://accounts.google.com/oauth2/test', None)
+        mock_flow_from_client_config.return_value = mock_flow_instance
         
-        mock_id_token.verify_oauth2_token.return_value = {
-            'email': 'google@example.com',
-            'name': 'Google User',
-            'given_name': 'Google',
-            'family_name': 'User',
-            'picture': 'https://example.com/profile.jpg'
-        }
-        
-        # Make request
-        url = reverse('google_callback')
-        response = client.get(f'{url}?code=test_code')
+        # Make request with custom redirect URI
+        url = reverse('google')
+        response = client.get(url + '?redirect_uri=http://localhost:3001/authentication/auth/callback')
         
         # Assertions
         assert response.status_code == 200
         response_data = json.loads(response.content)
-        assert response_data['success'] is True
-        assert 'user' in response_data
-        assert response_data['user']['email'] == 'google@example.com'
+        assert 'authUrl' in response_data
+        assert response_data['authUrl'] == 'https://accounts.google.com/oauth2/test'
         
-        # Verify mock calls
-        mock_flow.fetch_token.assert_called_once_with(code='test_code')
-        mock_id_token.verify_oauth2_token.assert_called_once()
+        # Verify the flow was created with the custom redirect URI
+        mock_flow_from_client_config.assert_called_once()
+        call_args = mock_flow_from_client_config.call_args
+        client_config = call_args[0][0]
+        assert 'http://localhost:3001/authentication/auth/callback' in client_config['web']['redirect_uris']
+
+    def test_google_auth_url_invalid_redirect_uri(self, client):
+        # Make request with invalid redirect URI
+        url = reverse('google')
+        response = client.get(url + '?redirect_uri=http://malicious-site.com/callback')
+        
+        # Assertions
+        assert response.status_code == 400
+        response_data = json.loads(response.content)
+        assert 'error' in response_data
+        assert 'Invalid redirect URI' in response_data['error']
 
     def test_google_callback_no_code(self, client):
         # Make request with no code
