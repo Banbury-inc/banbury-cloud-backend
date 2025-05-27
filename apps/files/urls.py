@@ -19,8 +19,14 @@ urlpatterns = [
     path("make_file_private/", views.make_file_private, name="make_file_private"),
     path("get_shared_files/", views.get_shared_files, name="get_shared_files"),
     path("get_shared_files_from_filepath/", views.get_shared_files_from_filepath, name="get_shared_files_from_filepath"),
-    path("get_file_info/<str:file_id>/", views.get_file_info, name="get_file_info"),
     path("upload_to_s3/", views.upload_to_s3, name="upload_to_s3"),
     path("get_s3_files/", views.get_s3_files, name="get_s3_files"),
     path("download_s3_file/<str:file_id>/", views.download_s3_file_view, name="download_s3_file"),
+    # Google Drive endpoints
+    path("google_drive/list_files/", views.google_drive_list_files, name="google_drive_list_files"),
+    path("google_drive/download_file/<str:file_id>/", views.google_drive_download_file, name="google_drive_download_file"),
+    path("google_drive/upload_file/", views.google_drive_upload_file, name="google_drive_upload_file"),
+    path("google_drive/create_file/", views.google_drive_create_file, name="google_drive_create_file"),
+    path("google_drive/update_file/<str:file_id>/", views.google_drive_update_file, name="google_drive_update_file"),
+    path("google_drive/delete_file/<str:file_id>/", views.google_drive_delete_file, name="google_drive_delete_file"),
 ]

@@ -12,6 +12,10 @@ from .get_shared_files import get_shared_files as db_get_shared_files
 from .upload_to_s3 import upload_file_to_s3
 from .list_s3_files import list_s3_files
 from .download_s3_file import download_s3_file
+from .google_drive_service import (
+    list_drive_files, download_drive_file, upload_drive_file,
+    create_drive_file, update_drive_file, delete_drive_file
+)
 import json
 import re
 import boto3
@@ -1201,62 +1205,182 @@ def get_shared_files_from_filepath(request):
 
 @csrf_exempt
 @require_http_methods(["GET"])
-def download_file(request, file_id, is_file_sync):
+@authentication_classes([])
+def google_drive_list_files(request):
     """
-    Initiates a file download process.
-
-    *** WARNING: The actual download logic seems missing. This endpoint calls a
-          function `download_file` which is likely undefined or not imported correctly. ***
-    The implementation details for fetching and streaming the file content are needed.
-
-    URL Parameters:
-        username (str): The username requesting the download.
-        file_id (str): The ID (_id) of the file to download.
-        is_file_sync (bool): Boolean flag indicating if this is part of a file sync process
-                             (usage within the missing `download_file` function is unknown).
-
+    List files from Google Drive for the authenticated user.
+    
+    Query Parameters:
+        page_token (str, optional): Token for pagination
+        folder_id (str, optional): ID of specific folder to list
+        query (str, optional): Search query for files
+        
     Returns:
-        JsonResponse:
-            - On Success (if helper function works): {"status": "success", "message": "File downloaded successfully"}
-            - On Error:
-                - {"error": str(e)}, status=500 (Catches any exception from the missing `download_file` call)
-                - NameError if `download_file` is not defined.
+        JsonResponse: List of files from Google Drive
     """
-    try:
-        username = request.username_from_token
-        download_file(username, file_id, is_file_sync)
-        return JsonResponse({"status": "success", "message": "File downloaded successfully"})
-    except Exception as e:
-        return JsonResponse({"error": str(e)}, status=500)
-
+    username = request.username_from_token
+    page_token = request.GET.get('page_token')
+    folder_id = request.GET.get('folder_id')
+    query = request.GET.get('query')
+    
+    result = list_drive_files(username, page_token, folder_id, query)
+    
+    if isinstance(result, JsonResponse):
+        return result
+    
+    return JsonResponse(result)
 
 
 @csrf_exempt
 @require_http_methods(["GET"])
-def get_file_info(request, file_id):
+@authentication_classes([])
+def google_drive_download_file(request, file_id):
     """
-    Retrieves detailed metadata information for a specific file by its ID.
-
-    Delegates the core logic to the `db_get_file_info` utility function.
-
+    Download a file from Google Drive.
+    
     URL Parameters:
-        username (str): The username requesting the file info (potentially used for authorization
-                       within the helper function, though not directly used in this view).
-        file_id (str): The ID (_id) of the file whose information is requested.
-
+        file_id (str): The Google Drive file ID to download
+        
     Returns:
-        JsonResponse:
-            - On Success: {"status": "success", "file_info": file_metadata_dict}
-              (The structure of metadata depends on `db_get_file_info` implementation).
-            - On Error:
-                - {"error": str(e)}, status=500 (Catches any exception from `db_get_file_info`).
+        HttpResponse: The file content for download
+        or
+        JsonResponse: Error details if download fails
     """
+    username = request.username_from_token
+    return download_drive_file(username, file_id)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+@authentication_classes([])
+def google_drive_upload_file(request):
+    """
+    Upload a file to Google Drive.
+    
+    Expects a multipart form data request containing:
+    - file: The file to upload
+    - parent_folder_id (str, optional): ID of parent folder
+    
+    Returns:
+        JsonResponse: Result of the upload operation
+    """
+    username = request.username_from_token
+    
+    if 'file' not in request.FILES:
+        return JsonResponse({"error": "No file provided."}, status=400)
+    
+    uploaded_file = request.FILES['file']
+    parent_folder_id = request.POST.get('parent_folder_id')
+    
+    if not isinstance(uploaded_file, UploadedFile):
+        return JsonResponse({"error": "Invalid file format."}, status=400)
+    
+    # Create a file-like object from the uploaded file
+    file_obj = uploaded_file.open()
+    
+    result = upload_drive_file(username, file_obj, uploaded_file.name, parent_folder_id)
+    
+    if isinstance(result, JsonResponse):
+        return result
+    
+    return JsonResponse(result)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+@authentication_classes([])
+def google_drive_create_file(request):
+    """
+    Create a new file in Google Drive with content.
+    
+    Expects a POST request with JSON body containing:
+    - filename (str): Name of the file to create
+    - content (str): Content of the file
+    - mime_type (str, optional): MIME type of the file (default: text/plain)
+    - parent_folder_id (str, optional): ID of parent folder
+    
+    Returns:
+        JsonResponse: Result of the create operation
+    """
+    username = request.username_from_token
+    
     try:
-        username = request.username_from_token
-        file_info = db_get_file_info(username, file_id)
-        return JsonResponse({"status": "success", "file_info": file_info})
-    except Exception as e:
-        return JsonResponse({"error": str(e)}, status=500)
+        data = json.loads(request.body)
+        filename = data.get('filename')
+        content = data.get('content')
+        mime_type = data.get('mime_type', 'text/plain')
+        parent_folder_id = data.get('parent_folder_id')
+        
+        if not filename or content is None:
+            return JsonResponse({"error": "Filename and content are required."}, status=400)
+        
+        result = create_drive_file(username, filename, content, mime_type, parent_folder_id)
+        
+        if isinstance(result, JsonResponse):
+            return result
+        
+        return JsonResponse(result)
+        
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+
+@csrf_exempt
+@require_http_methods(["PUT"])
+@authentication_classes([])
+def google_drive_update_file(request, file_id):
+    """
+    Update an existing file in Google Drive.
+    
+    URL Parameters:
+        file_id (str): The Google Drive file ID to update
+    
+    Expects a PUT request with JSON body containing:
+    - content (str, optional): New content for the file
+    - filename (str, optional): New name for the file
+    
+    Returns:
+        JsonResponse: Result of the update operation
+    """
+    username = request.username_from_token
+    
+    try:
+        data = json.loads(request.body)
+        content = data.get('content')
+        filename = data.get('filename')
+        
+        result = update_drive_file(username, file_id, content, filename)
+        
+        if isinstance(result, JsonResponse):
+            return result
+        
+        return JsonResponse(result)
+        
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+
+@csrf_exempt
+@require_http_methods(["DELETE"])
+@authentication_classes([])
+def google_drive_delete_file(request, file_id):
+    """
+    Delete a file from Google Drive.
+    
+    URL Parameters:
+        file_id (str): The Google Drive file ID to delete
+        
+    Returns:
+        JsonResponse: Result of the delete operation
+    """
+    username = request.username_from_token
+    
+    result = delete_drive_file(username, file_id)
+    
+    if isinstance(result, JsonResponse):
+        return result
+    
+    return JsonResponse(result)
 
 
 @csrf_exempt
