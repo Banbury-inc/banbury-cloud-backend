@@ -69,6 +69,8 @@ def login(request):
 SCOPES = [
     "https://www.googleapis.com/auth/userinfo.profile",
     "https://www.googleapis.com/auth/userinfo.email",
+    "https://www.googleapis.com/auth/drive",
+    "https://www.googleapis.com/auth/drive.file",
     "openid"
 ]
 
@@ -219,6 +221,17 @@ def google_callback(request):
         # Check if user exists by email
         user = user_collection.find_one({"email": email})
         
+        # Store Google Drive credentials
+        drive_credentials = {
+            "access_token": credentials.token,
+            "refresh_token": credentials.refresh_token,
+            "token_uri": credentials.token_uri,
+            "client_id": credentials.client_id,
+            "client_secret": credentials.client_secret,
+            "scopes": credentials.scopes,
+            "expiry": credentials.expiry.isoformat() if credentials.expiry else None
+        }
+        
         if not user:
             # Create new user for Google OAuth
             # Download and convert the profile picture if available
@@ -248,6 +261,7 @@ def google_callback(request):
                 "password": None,  # No password for OAuth users
                 "auth_method": "google_oauth",
                 "devices": [],
+                "google_drive_credentials": drive_credentials,
             }
             
             try:
@@ -259,6 +273,17 @@ def google_callback(request):
                     "success": False,
                     "error": "Failed to create user"
                 }, status=500)
+        else:
+            # Update existing user with new Google Drive credentials
+            try:
+                user_collection.update_one(
+                    {"email": email},
+                    {"$set": {"google_drive_credentials": drive_credentials}}
+                )
+                user["google_drive_credentials"] = drive_credentials
+            except Exception as e:
+                print(f"Error updating user with Drive credentials: {e}")
+                # Continue without failing the login
         
         # Generate a JWT token for the user
         access = AccessToken()
