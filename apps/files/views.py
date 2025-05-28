@@ -12,6 +12,7 @@ from .get_shared_files import get_shared_files as db_get_shared_files
 from .upload_to_s3 import upload_file_to_s3
 from .list_s3_files import list_s3_files
 from .download_s3_file import download_s3_file
+from .delete_s3_file import delete_s3_file, delete_multiple_s3_files
 from .google_drive_service import (
     list_drive_files, download_drive_file, upload_drive_file,
     create_drive_file, update_drive_file, delete_drive_file
@@ -291,7 +292,7 @@ def handle_delete_files(request):
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
     username = request.username_from_token
-    response = delete_files(username, device_name, files)
+    response = delete_files(device_name, files)
     if response == "device_not_found":
         return JsonResponse({
             "result": "device_not_found",
@@ -302,11 +303,32 @@ def handle_delete_files(request):
             "result": "device_id_not_found",
             "message": "Device id not found.",
         })
+    if response == "invalid_files":
+        return JsonResponse({
+            "result": "invalid_files",
+            "message": "Invalid files format.",
+        })
+    if response == "no_files_to_delete":
+        return JsonResponse({
+            "result": "no_files_to_delete",
+            "message": "No files to delete.",
+        })
+    if response == "no_files_deleted":
+        return JsonResponse({
+            "result": "no_files_deleted",
+            "message": "No files were deleted.",
+        })
     if response == "success":
         return JsonResponse({
             "result": "success",
             "message": "Files deleted successfully.",
         })
+    
+    # Handle any unexpected responses
+    return JsonResponse({
+        "result": "error",
+        "message": f"Unexpected response: {response}",
+    })
 
 
 
@@ -1434,3 +1456,56 @@ def download_s3_file_view(request, file_id):
     """
     username = request.username_from_token
     return download_s3_file(username, file_id)
+
+
+@csrf_exempt
+@require_http_methods(["DELETE"])
+def delete_s3_file_view(request, file_id):
+    """
+    Deletes a file from S3 and removes its metadata from MongoDB.
+    
+    URL Parameters:
+        file_id (str): The ID of the file to delete
+        
+    Returns:
+        JsonResponse: Result of the delete operation
+    """
+    username = request.username_from_token
+    result = delete_s3_file(username, file_id)
+    
+    if "error" in result:
+        return JsonResponse({"error": result["error"]}, status=result.get("status_code", 500))
+    
+    return JsonResponse(result)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def delete_multiple_s3_files_view(request):
+    """
+    Deletes multiple files from S3 and removes their metadata from MongoDB.
+    
+    Expects a POST request with JSON body containing:
+    - file_ids (list): List of file IDs to delete
+        
+    Returns:
+        JsonResponse: Result of the delete operations
+    """
+    username = request.username_from_token
+    
+    try:
+        data = json.loads(request.body)
+        file_ids = data.get("file_ids")
+        
+        if not file_ids or not isinstance(file_ids, list):
+            return JsonResponse({"error": "Missing or invalid file_ids"}, status=400)
+        
+        result = delete_multiple_s3_files(username, file_ids)
+        
+        if result["result"] == "error":
+            return JsonResponse({"error": result["message"]}, status=500)
+        
+        return JsonResponse(result)
+        
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
