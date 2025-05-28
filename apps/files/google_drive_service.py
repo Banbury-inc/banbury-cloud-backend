@@ -117,7 +117,7 @@ def list_drive_files(username, page_token=None, folder_id=None, query=None):
         
         # Call the Drive v3 API
         results = service.files().list(
-            pageSize=50,
+            pageSize=1000,
             fields="nextPageToken, files(id, name, mimeType, size, modifiedTime, createdTime, parents, webViewLink, thumbnailLink)",
             q=q,
             pageToken=page_token

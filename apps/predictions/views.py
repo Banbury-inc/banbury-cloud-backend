@@ -14,6 +14,7 @@ import json
 from pymongo import MongoClient
 import datetime
 from bson import ObjectId
+import os
 
 
 @csrf_exempt
@@ -88,8 +89,11 @@ def remove_file_from_sync(request):
     device_name = data.get("device_name")
     file_path = data.get("file_path")
     username = request.username_from_token
-    response = db_remove_file_from_sync(username, device_name, file_path)
-    username = request.username_from_token
+    
+    # Extract file name from file path
+    file_name = os.path.basename(file_path) if file_path else None
+    
+    response = db_remove_file_from_sync(device_name, file_name)
 
     user_data = {
         "result": response,
