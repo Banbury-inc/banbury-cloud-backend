@@ -15,7 +15,8 @@ from .download_s3_file import download_s3_file
 from .delete_s3_file import delete_s3_file, delete_multiple_s3_files
 from .google_drive_service import (
     list_drive_files, download_drive_file, upload_drive_file,
-    create_drive_file, update_drive_file, delete_drive_file
+    create_drive_file, update_drive_file, delete_drive_file,
+    check_user_drive_credentials, remove_user_drive_credentials, update_user_drive_credentials
 )
 import json
 import re
@@ -1509,3 +1510,109 @@ def delete_multiple_s3_files_view(request):
         
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+@authentication_classes([])
+def google_drive_check_credentials(request):
+    """
+    Check if the user has Google Drive credentials stored.
+    
+    Returns:
+        JsonResponse: Status of user's Google Drive credentials
+    """
+    username = request.username_from_token
+    result = check_user_drive_credentials(username)
+    return JsonResponse(result)
+
+
+@csrf_exempt
+@require_http_methods(["DELETE"])
+@authentication_classes([])
+def google_drive_remove_credentials(request):
+    """
+    Remove Google Drive credentials for the authenticated user.
+    
+    Returns:
+        JsonResponse: Result of the credential removal operation
+    """
+    username = request.username_from_token
+    result = remove_user_drive_credentials(username)
+    return JsonResponse(result)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+@authentication_classes([])
+def google_drive_oauth_callback(request):
+    """
+    Handle Google Drive OAuth callback specifically for integration (not login).
+    This is separate from the main login OAuth flow.
+    """
+    code = request.GET.get("code")
+    
+    if not code:
+        return JsonResponse({
+            "success": False,
+            "error": "No authorization code provided"
+        }, status=400)
+    
+    try:
+        # Get the username from the token in the request
+        username = request.username_from_token
+        
+        if not username:
+            return JsonResponse({
+                "success": False,
+                "error": "Authentication required"
+            }, status=401)
+        
+        # Get Google OAuth configuration
+        from apps.authentication.views import GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
+        from google_auth_oauthlib.flow import Flow
+        
+        # Define the Google Drive scopes
+        DRIVE_SCOPES = [
+            "https://www.googleapis.com/auth/userinfo.profile",
+            "https://www.googleapis.com/auth/userinfo.email",
+            "https://www.googleapis.com/auth/drive",
+            "https://www.googleapis.com/auth/drive.file",
+            "openid"
+        ]
+        
+        # Use a consistent redirect URI (match what frontend sends)
+        redirect_uri = 'http://localhost:3000/files/google_drive/oauth_callback'
+        
+        # Create OAuth flow
+        flow_instance = Flow.from_client_config(
+            {
+                "web": {
+                    "client_id": GOOGLE_CLIENT_ID,
+                    "client_secret": GOOGLE_CLIENT_SECRET,
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                    "redirect_uris": [redirect_uri],
+                }
+            },
+            scopes=DRIVE_SCOPES
+        )
+        flow_instance.redirect_uri = redirect_uri
+        
+        # Exchange the authorization code for credentials
+        flow_instance.fetch_token(code=code)
+        credentials = flow_instance.credentials
+        
+        # Store the credentials for the authenticated user
+        update_user_drive_credentials(username, credentials)
+        
+        return JsonResponse({
+            "success": True,
+            "message": "Google Drive integration enabled successfully"
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            "success": False,
+            "error": str(e)
+        }, status=400)
