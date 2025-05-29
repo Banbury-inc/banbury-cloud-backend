@@ -69,6 +69,7 @@ def get_single_device_info_with_device_name(username, device_name):
         "sync_status": device.get("sync_status", ""),
         "online": device.get("online", ""),
         "scanned_folders": device.get("scanned_folders", ""),
+        "downloaded_models": device.get("downloaded_models", ""),
     }
 
     device_data = {
