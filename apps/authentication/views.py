@@ -98,6 +98,9 @@ def google(request):
         'http://localhost:3000/authentication/auth/callback',
         'http://localhost:3001/authentication/auth/callback',
         'http://localhost:3002/authentication/auth/callback',
+        'http://localhost:3000/files/google_drive/oauth_callback',
+        'http://localhost:3001/files/google_drive/oauth_callback',
+        'http://localhost:3002/files/google_drive/oauth_callback',
         REDIRECT_URI  # Keep the original environment variable as fallback
     ]
     
@@ -276,11 +279,23 @@ def google_callback(request):
         else:
             # Update existing user with new Google Drive credentials
             try:
-                user_collection.update_one(
+                # For existing users, update by both email and username (in case they differ)
+                # First try to update by email
+                result = user_collection.update_one(
                     {"email": email},
                     {"$set": {"google_drive_credentials": drive_credentials}}
                 )
+                
+                # Also update by username if the user has username set to email (common for Google OAuth users)
+                if email:
+                    user_collection.update_one(
+                        {"username": email},
+                        {"$set": {"google_drive_credentials": drive_credentials}}
+                    )
+                
                 user["google_drive_credentials"] = drive_credentials
+                print(f"Successfully updated Google Drive credentials for user: {email}")
+                
             except Exception as e:
                 print(f"Error updating user with Drive credentials: {e}")
                 # Continue without failing the login

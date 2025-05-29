@@ -60,6 +60,11 @@ def update_user_drive_credentials(username, credentials):
         db = client["NeuraNet"]
         user_collection = db["users"]
         
+        # First, check if the user exists
+        user = user_collection.find_one({"username": username})
+        if not user:
+            return
+        
         drive_credentials = {
             "access_token": credentials.token,
             "refresh_token": credentials.refresh_token,
@@ -70,13 +75,15 @@ def update_user_drive_credentials(username, credentials):
             "expiry": credentials.expiry.isoformat() if credentials.expiry else None
         }
         
-        user_collection.update_one(
+        result = user_collection.update_one(
             {"username": username},
             {"$set": {"google_drive_credentials": drive_credentials}}
         )
         
     except Exception as e:
-        print(f"Error updating user Drive credentials: {e}")
+        print(f"ERROR: Exception in update_user_drive_credentials: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 def get_drive_service(username):
@@ -343,4 +350,55 @@ def delete_drive_file(username, file_id):
         
     except HttpError as error:
         print(f'An error occurred: {error}')
-        return JsonResponse({"error": f"Drive API error: {error}"}, status=500) 
+        return JsonResponse({"error": f"Drive API error: {error}"}, status=500)
+
+
+def check_user_drive_credentials(username):
+    """Check if user has Google Drive credentials stored (without making API calls)."""
+    try:
+        credentials = get_user_drive_credentials(username)
+        return {
+            "result": "success",
+            "has_credentials": credentials is not None,
+            "message": "Credentials found" if credentials is not None else "No credentials found"
+        }
+    except Exception as e:
+        print(f"Error checking user Drive credentials: {e}")
+        return {
+            "result": "error", 
+            "has_credentials": False,
+            "message": f"Error checking credentials: {str(e)}"
+        }
+
+
+def remove_user_drive_credentials(username):
+    """Remove Google Drive credentials from user's MongoDB document."""
+    try:
+        uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+        client = MongoClient(uri)
+        db = client["NeuraNet"]
+        user_collection = db["users"]
+        
+        # Remove the google_drive_credentials field from the user document
+        result = user_collection.update_one(
+            {"username": username},
+            {"$unset": {"google_drive_credentials": ""}}
+        )
+        
+        if result.modified_count > 0:
+            return {
+                "result": "success",
+                "message": "Google Drive credentials removed successfully"
+            }
+        else:
+            return {
+                "result": "success",
+                "message": "No Google Drive credentials found to remove"
+            }
+        
+    except Exception as e:
+        print(f"Error removing user Drive credentials: {e}")
+        return {
+            "result": "error",
+            "message": f"Error removing credentials: {str(e)}"
+        } 

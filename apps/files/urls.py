@@ -26,6 +26,9 @@ urlpatterns = [
     path("delete_multiple_s3_files/", views.delete_multiple_s3_files_view, name="delete_multiple_s3_files"),
     # Google Drive endpoints
     path("google_drive/list_files/", views.google_drive_list_files, name="google_drive_list_files"),
+    path("google_drive/check_credentials/", views.google_drive_check_credentials, name="google_drive_check_credentials"),
+    path("google_drive/oauth_callback/", views.google_drive_oauth_callback, name="google_drive_oauth_callback"),
+    path("google_drive/remove_credentials/", views.google_drive_remove_credentials, name="google_drive_remove_credentials"),
     path("google_drive/download_file/<str:file_id>/", views.google_drive_download_file, name="google_drive_download_file"),
     path("google_drive/upload_file/", views.google_drive_upload_file, name="google_drive_upload_file"),
     path("google_drive/create_file/", views.google_drive_create_file, name="google_drive_create_file"),
