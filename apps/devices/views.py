@@ -10,7 +10,7 @@ from .get_single_device_info import get_single_device_info as db_get_single_devi
 from .get_single_device_info_with_device_name import get_single_device_info_with_device_name as db_get_single_device_info_with_device_name
 from .add_downloaded_model import add_downloaded_model as db_add_downloaded_model
 from .add_device import add_device
-from .update_device import update_device_info as db_update_device_info
+from .update_device import update_device_info as db_update_device_info, add_downloaded_model_view, remove_downloaded_model_view
 import json
 
 @csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
@@ -405,6 +405,7 @@ def add_downloaded_model(request):
     try:
         data = json.loads(request.body)
         username = request.username_from_token
+        print("request.body", request)
         device_id = data.get("device_id")
         model_name = data.get("model_name")
         
