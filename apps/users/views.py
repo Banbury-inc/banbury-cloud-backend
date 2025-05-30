@@ -337,17 +337,18 @@ def get_profile_picture(request):
     client = MongoClient(uri)
     db = client["NeuraNet"]
     user_collection = db["users"]
+    username = request.username_from_token
     
-    user = user_collection.find_one({"username": request.username_from_token})
+    user = user_collection.find_one({"username": username})
     if not user:
         return HttpResponse(status=400)  # User not found
         
     if 'picture' not in user:
-        return HttpResponse(status=400)  # No picture available
+        return HttpResponse(status=200)  # No picture available
         
     picture_data = user['picture']
     if not isinstance(picture_data, dict) or 'data' not in picture_data:
-        return HttpResponse(status=400)  # Invalid picture data format
+        return HttpResponse(status=200)  # Invalid picture data format
         
     try:
         # Try to decode the base64 data
@@ -355,7 +356,7 @@ def get_profile_picture(request):
         content_type = picture_data.get('content_type', 'image/jpeg')
         return HttpResponse(image_bytes, content_type=content_type)
     except Exception as e:
-        print(f"Error decoding image for user {request.username_from_token}: {e}")
+        print(f"Error decoding image for user {username}: {e}")
         return HttpResponse(status=404)  # Error decoding image
 
 def typeahead(request, search):
@@ -521,7 +522,7 @@ def remove_friend(request):
 
 
 @csrf_exempt
-@require_http_methods(["POST"])
+@require_http_methods(["GET"])
 def get_friends(request):
     """Retrieves the list of friends for a given user."""
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
@@ -545,7 +546,7 @@ def get_friends(request):
 
 
 @csrf_exempt
-@require_http_methods(["POST"])
+@require_http_methods(["GET"])
 def get_friend_requests(request):
     """Retrieves the list of pending friend requests for a given user."""
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"

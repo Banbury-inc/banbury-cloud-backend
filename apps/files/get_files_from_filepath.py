@@ -86,6 +86,7 @@ def get_files_from_filepath(username, filepath):
                     "$ifNull": ["$is_public", "$$REMOVE"]
                 },
                 "date_uploaded": 1,
+                "date_modified": 1,
                 "kind": 1,
                 "device_name": {"$arrayElemAt": ["$device.device_name", 0]},
                 "device_id": {"$toString": "$device_id"},
@@ -117,6 +118,7 @@ def get_files_from_filepath(username, filepath):
                     "$ifNull": ["$is_public", "$$REMOVE"]
                 },
                 "date_uploaded": 1,
+                "date_modified": 1,
                 "kind": 1,
                 "device_name": {"$arrayElemAt": ["$device.device_name", 0]},
                 "device_id": {"$toString": "$device_id"},
@@ -190,6 +192,7 @@ def get_files_from_filepath(username, filepath):
                     "$ifNull": ["$is_public", "$$REMOVE"]
                 },
                 "date_uploaded": 1,
+                "date_modified": 1,
                 "kind": 1,
                 "device_name": {"$arrayElemAt": ["$device.device_name", 0]},
                 "device_id": {"$toString": "$device_id"},
