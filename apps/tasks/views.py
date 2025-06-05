@@ -5,6 +5,7 @@ from pymongo.mongo_client import MongoClient
 import json
 from datetime import datetime
 from bson.objectid import ObjectId
+from bson.errors import InvalidId
 
 uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
 client = MongoClient(uri)
@@ -37,10 +38,13 @@ def add_task(request):
 
     try:
         device_id = device["_id"]  # Get the ObjectId for the device
-    except:
+        # Ensure device_id is a valid ObjectId
+        if not isinstance(device_id, ObjectId):
+            device_id = ObjectId(device_id)
+    except (KeyError, InvalidId, TypeError):
         return JsonResponse({
-            "result": "object_id_not_found",
-            "message": "Device id not found.",
+            "result": "invalid_device_id",
+            "message": "Device ID is invalid or not found.",
         })
 
     new_task = {
@@ -57,10 +61,12 @@ def add_task(request):
 
     try:
         result = session_collection.insert_one(new_task)
+        new_task["_id"] = str(result.inserted_id)
+        new_task["device_id"] = str(new_task["device_id"])  # Convert ObjectId to string
         return JsonResponse({
             "result": "success",
             "username": request.username_from_token,
-            "task_id": str(result.inserted_id)  # Return the task ID
+            "task_info": new_task
         })
     except Exception as e:
         return JsonResponse({"result": "error", "message": str(e)})
@@ -80,6 +86,12 @@ def update_task(request):
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
 
+    # Validate and convert task_id to ObjectId
+    try:
+        task_object_id = ObjectId(task_id)
+    except (InvalidId, TypeError):
+        return JsonResponse({"error": "Invalid task_id format"}, status=400)
+
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
     db = client["NeuraNet"]
@@ -94,7 +106,7 @@ def update_task(request):
         update_fields["task_name"] = task_name
 
     update_result = session_collection.update_one(
-        {"_id": ObjectId(task_id)},  # Use task_id to find the task
+        {"_id": task_object_id},  # Use the validated ObjectId
         {"$set": update_fields}
     )
 
