@@ -1,8 +1,9 @@
 import json
 from pymongo import MongoClient
+from bson import ObjectId
 
 
-def remove_downloaded_model(username, device_name, model_name):
+def remove_downloaded_model(username, device_id, model_name):
     """
     Removes a model name from the list of downloaded models for a specific device.
 
@@ -11,7 +12,7 @@ def remove_downloaded_model(username, device_name, model_name):
 
     Args:
         username (str): The username of the device owner.
-        device_name (str): The name of the device.
+        device_id (str): The id of the device as a string.
         model_name (str): The name of the model to remove.
 
     Returns:
@@ -30,10 +31,16 @@ def remove_downloaded_model(username, device_name, model_name):
     if not user:
         return {"error": "User not found.", "status": 404}
 
-    # Find the device belonging to the user by device_name
+    # Convert device_id string to ObjectId
+    try:
+        device_object_id = ObjectId(device_id)
+    except Exception as e:
+        return {"error": "Invalid device ID format.", "status": 400}
+
+    # Find the device belonging to the user by device_id
     device = device_collection.find_one({
         "user_id": user["_id"],
-        "device_name": device_name,
+        "_id": device_object_id,
     })
     if not device:
         return {"error": "Device not found.", "status": 404}
@@ -59,25 +66,3 @@ def remove_downloaded_model(username, device_name, model_name):
     # Return success response
     return {"result": "success", "username": username, "status": 200}
 
-
-def main():
-    """
-    Provides a simple test case for the remove_downloaded_model function.
-
-    Uses predefined test data to call remove_downloaded_model and prints
-    the JSON response.
-    """
-    # Test the function
-    username = "mmills"
-    device_name = "michael-mills-ubuntu"
-    model_name = "model_1"
-
-    print(f"Testing with username: {username}, device: {
-          device_name}, model: {model_name}")
-    response = remove_downloaded_model(username, device_name, model_name)
-    print(f"\nResponse:")
-    print(json.dumps(response, indent=2))
-
-
-if __name__ == "__main__":
-    main()
