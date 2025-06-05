@@ -13,6 +13,7 @@ urlpatterns = [
     path("get_single_device_info/<str:device_id>/", views.get_single_device_info, name="get_single_device_info"),
     path("get_single_device_info_with_device_name/<str:device_name>/", views.get_single_device_info_with_device_name, name="get_single_device_info_with_device_name"),
     path("add_downloaded_model/", views.add_downloaded_model, name="add_downloaded_model"),
+    path("remove_downloaded_model/", views.remove_downloaded_model, name="remove_downloaded_model"),
     path("update_device_info/", views.update_device_info, name="update_device_info"),
     path("get_device_timeseries_data/<str:device_id>/", views.get_device_timeseries_data, name="get_device_timeseries_data"),
 

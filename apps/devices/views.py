@@ -9,6 +9,7 @@ from .update_device_configuration_preferences import update_device_configuration
 from .get_single_device_info import get_single_device_info as db_get_single_device_info
 from .get_single_device_info_with_device_name import get_single_device_info_with_device_name as db_get_single_device_info_with_device_name
 from .add_downloaded_model import add_downloaded_model as db_add_downloaded_model
+from .remove_downloaded_model import remove_downloaded_model as db_remove_downloaded_model
 from .add_device import add_device
 from .update_device import update_device_info as db_update_device_info
 import json
@@ -414,20 +415,65 @@ def add_downloaded_model(request):
                 "result": "fail",
                 "message": "Device ID is required",
             }, status=400)
-        try:
-            device_id_obj = ObjectId(device_id)
-        except:
-            return JsonResponse({
-                "result": "fail",
-                "message": "Invalid device ID format",
-            }, status=400)
             
-        response = db_add_downloaded_model(username, device_id_obj, model_name)
+        response = db_add_downloaded_model(username, device_id, model_name)
         
         if response.get("status") == 200:
             return JsonResponse({
                 "result": "success",
                 "message": response.get("message", "Model added successfully"),
+            })
+        else:
+            return JsonResponse({
+                "result": "fail",
+                "message": response.get("error", "Failed to add model"),
+            }, status=response.get("status", 500))
+            
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+    except Exception as e:
+        return JsonResponse({
+            "result": "fail",
+            "message": str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def remove_downloaded_model(request):
+    """
+    Adds a record indicating a model has been downloaded to a specific device.
+
+    Retrieves the device ID (as string) and model name from the POST request body.
+    Updates the device record for the specified user.
+
+    Args:
+        request: The Django HttpRequest object.
+        username (str): The username of the owner of the device.
+
+    Returns:
+        JsonResponse: A JSON response indicating success or failure, including
+                      appropriate status codes and messages.
+    """
+    try:
+        data = json.loads(request.body)
+        username = request.username_from_token
+        device_id = data.get("device_id")
+        model_name = data.get("model_name")
+        
+        # Convert string device_id to ObjectId
+        if device_id == "":
+            return JsonResponse({
+                "result": "fail",
+                "message": "Device ID is required",
+            }, status=400)
+            
+        response = db_remove_downloaded_model(username, device_id, model_name)
+        
+        if response.get("status") == 200:
+            return JsonResponse({
+                "result": "success",
+                "message": response.get("message", "Model removed successfully"),
             })
         else:
             return JsonResponse({

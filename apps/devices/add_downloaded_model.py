@@ -13,7 +13,7 @@ def add_downloaded_model(username, device_id, model_name):
 
     Args:
         username (str): The username of the device owner.
-        device_id (ObjectId): The MongoDB ObjectId of the device.
+        device_id (str): The id of the device as a string.
         model_name (str): The name of the model to add.
 
     Returns:
@@ -32,10 +32,16 @@ def add_downloaded_model(username, device_id, model_name):
     if not user:
         return {"error": "User not found.", "status": 404}
 
+    # Convert device_id string to ObjectId
+    try:
+        device_object_id = ObjectId(device_id)
+    except Exception as e:
+        return {"error": "Invalid device ID format.", "status": 400}
+
     # Find the device belonging to the user by device_id
     device = device_collection.find_one({
         "user_id": user["_id"],
-        "_id": device_id,  # Using ObjectId directly
+        "_id": device_object_id,
     })
     if not device:
         return {"error": "Device not found.", "status": 404}
@@ -81,7 +87,7 @@ def main():
     model_name = "model_1"
     
     print(f"Testing with username: {username}, device: {device_id}, model: {model_name}")
-    response = add_downloaded_model(username, ObjectId(device_id), model_name)
+    response = add_downloaded_model(username, device_id, model_name)
     print(f"\nResponse:")
     print(json.dumps(response, indent=2))
 
