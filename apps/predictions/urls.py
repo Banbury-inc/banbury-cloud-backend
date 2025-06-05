@@ -13,4 +13,5 @@ urlpatterns = [
     path("remove_file_from_sync/", views.remove_file_from_sync, name="remove_file_from_sync"),
     path("store_device_predictions/", views.store_device_predictions, name="store_device_predictions"),
     path("get_device_timeseries_prediction_data/<str:device_id>/", views.get_device_timeseries_prediction_data, name="get_device_timeseries_prediction_data"),
+    path("update_file_sync_proposed_device_ids/", views.update_file_sync_proposed_device_ids, name="update_file_sync_proposed_device_ids"),
 ]

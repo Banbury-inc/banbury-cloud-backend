@@ -13,7 +13,8 @@ from bson.json_util import dumps
 def get_settings(request):
     """Retrieves settings for a given username."""
     try:
-        response = db_get_settings()
+        username = request.username_from_token
+        response = db_get_settings(username)
         return JsonResponse(response)
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)

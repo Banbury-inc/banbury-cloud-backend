@@ -10,6 +10,7 @@ from .pipeline import pipeline
 from .get_file_sync import get_file_sync as db_get_file_sync
 from .update_file_priority import update_file_priority as db_update_file_priority
 from .db_remove_file_from_sync import db_remove_file_from_sync as db_remove_file_from_sync
+from .update_file_sync_proposed_device_ids import update_file_sync_proposed_device_ids as db_update_file_sync_proposed_device_ids
 import json
 from pymongo import MongoClient
 import datetime
@@ -390,6 +391,26 @@ def get_device_timeseries_prediction_data(request, device_id):
             if "metadata" in doc and "device_id" in doc["metadata"]:
                 doc["metadata"]["device_id"] = str(doc["metadata"]["device_id"])
         return JsonResponse({"result": "success", "data": timeseries_docs})
+    except json.JSONDecodeError:
+        return JsonResponse({"result": "error", "message": "Invalid JSON"}, status=400)
+    except Exception as e:
+        return JsonResponse({"result": "error", "message": str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def update_file_sync_proposed_device_ids(request):
+    """
+    Updates the proposed device IDs for a specific file in the user's synchronization list.
+    Expects a JSON body with 'file_id' and 'proposed_device_ids'.
+    """
+    try:
+        username = request.username_from_token
+        data = json.loads(request.body)
+        file_id = data.get("file_id")
+        proposed_device_ids = data.get("proposed_device_ids")
+        response = db_update_file_sync_proposed_device_ids(username, file_id, proposed_device_ids)
+        return JsonResponse({"result": "success", "message": "Proposed device IDs updated successfully", "response": response})
     except json.JSONDecodeError:
         return JsonResponse({"result": "error", "message": "Invalid JSON"}, status=400)
     except Exception as e:
