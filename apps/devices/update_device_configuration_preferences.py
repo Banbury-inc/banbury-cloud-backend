@@ -58,14 +58,14 @@ def update_device_configuration_preferences(username, device_name, device_config
     
     # Add the new boolean flag fields
     boolean_fields = {
-        'use_device_in_file_sync': False,
-        'use_predicted_upload_speed': False,
-        'use_predicted_download_speed': False,
-        'use_predicted_gpu_usage': False,
-        'use_predicted_cpu_usage': False,
-        'use_predicted_ram_usage': False,
-        'use_files_needed': False,
-        'use_files_available_for_download': False
+        'use_device_in_file_sync': True,
+        'use_predicted_upload_speed': True,
+        'use_predicted_download_speed': True,
+        'use_predicted_gpu_usage': True,
+        'use_predicted_cpu_usage': True,
+        'use_predicted_ram_usage': True,
+        'use_files_needed': True,
+        'use_files_available_for_download': True,
     }
     
     # If document doesn't exist, include all boolean fields with defaults

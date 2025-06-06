@@ -2,6 +2,7 @@ from django.http import JsonResponse
 from pymongo.mongo_client import MongoClient
 import json
 from django.views.decorators.csrf import csrf_exempt
+from .update_device_configuration_preferences import update_device_configuration_preferences
 
 @csrf_exempt
 def add_device(request, username, device_name):
@@ -105,6 +106,11 @@ def add_device(request, username, device_name):
         user_collection.update_one({"_id": user_id}, {"$push": {"devices": device_id}})
 
         # No need to $push usage arrays if they're empty or not provided
+
+        device_configurations = {
+            "device_id": device_id,
+        }
+        update_device_configuration_preferences(username, device_name, device_configurations=device_configurations)
 
     except Exception as e:
         print(f"Error sending to device: {e}")
