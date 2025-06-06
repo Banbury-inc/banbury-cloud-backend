@@ -1,7 +1,7 @@
 from pymongo.mongo_client import MongoClient
 from datetime import datetime
 
-def update_device_configuration_preferences(username, device_name, device_configurations):
+def update_device_configuration_preferences(username, device_id, device_configurations):
     """
     Updates or creates the prediction configuration preferences for a specific device.
 
@@ -40,10 +40,10 @@ def update_device_configuration_preferences(username, device_name, device_config
 
     # Find the device belonging to the user by device_name
     device = device_collection.find_one({
-        "device_name": device_name,
+        "_id": device_id,
     })
     if not device:
-        return f"device not found: {device_name}"
+        return f"device not found: {device_id}"
 
     # First check if a prediction document exists
     existing_config = predictions_collection.find_one({
@@ -56,8 +56,8 @@ def update_device_configuration_preferences(username, device_name, device_config
         "updated_at": datetime.utcnow(),
     }
     
-    # Add the new boolean flag fields
-    boolean_fields = {
+    # Add the new fields
+    fields = {
         'use_device_in_file_sync': True,
         'use_predicted_upload_speed': True,
         'use_predicted_download_speed': True,
@@ -66,14 +66,18 @@ def update_device_configuration_preferences(username, device_name, device_config
         'use_predicted_ram_usage': True,
         'use_files_needed': True,
         'use_files_available_for_download': True,
+        'files_needed': [],
+        'files_available_for_download': [],
+        'sync_storage_capacity_gb': 100,
+        'score': 100,
     }
     
     # If document doesn't exist, include all boolean fields with defaults
     if not existing_config:
-        configuration_data.update(boolean_fields)
+        configuration_data.update(fields)
     
     # Update with any provided configurations
-    for key in boolean_fields.keys():
+    for key in fields.keys():
         if key in device_configurations:
             configuration_data[key] = device_configurations[key]
 

@@ -40,14 +40,8 @@ def get_device_predictions(username):
     predictions_data = []
     for prediction in device_predictions:
         predictions_data.append({
-            "device_id": str(prediction.get("_id")),  # Convert ObjectId to string
-            "device_name": prediction.get("device_name"),
-            "sync_storage_capacity_gb": prediction.get("sync_storage_capacity_gb"),
-            "predicted_upload_speed": prediction.get("predicted_upload_speed"),
-            "predicted_download_speed": prediction.get("predicted_download_speed"),
-            "predicted_gpu_usage": prediction.get("predicted_gpu_usage"),
-            "predicted_cpu_usage": prediction.get("predicted_cpu_usage"),
-            "predicted_ram_usage": prediction.get("predicted_ram_usage"),
+            "_id": str(prediction.get("_id")),
+            "device_id": str(prediction.get("device_id")),  # Convert ObjectId to string
             "use_device_in_file_sync": prediction.get("use_device_in_file_sync"),
             "use_predicted_upload_speed": prediction.get("use_predicted_upload_speed"),
             "use_predicted_download_speed": prediction.get("use_predicted_download_speed"),
@@ -61,6 +55,7 @@ def get_device_predictions(username):
             "score": prediction.get("score"),
             "files_needed": prediction.get("files_needed"),
             "files_available_for_download": prediction.get("files_available_for_download"),
+            "sync_storage_capacity_gb": prediction.get("sync_storage_capacity_gb"),
         })
 
     response_data = {
