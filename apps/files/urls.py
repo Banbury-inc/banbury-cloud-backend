@@ -34,4 +34,11 @@ urlpatterns = [
     path("google_drive/create_file/", views.google_drive_create_file, name="google_drive_create_file"),
     path("google_drive/update_file/<str:file_id>/", views.google_drive_update_file, name="google_drive_update_file"),
     path("google_drive/delete_file/<str:file_id>/", views.google_drive_delete_file, name="google_drive_delete_file"),
+    # Gmail endpoints
+    path("gmail/search", views.gmail_search, name="gmail_search"),
+    path("gmail/message/<str:message_id>", views.gmail_get_message, name="gmail_get_message"),
+    path("gmail/thread/<str:thread_id>", views.gmail_get_thread, name="gmail_get_thread"),
+    path("gmail/draft", views.gmail_create_draft, name="gmail_create_draft"),
+    path("gmail/send", views.gmail_send_message, name="gmail_send_message"),
+    path("gmail/check_access", views.gmail_check_access, name="gmail_check_access"),
 ]

@@ -1572,12 +1572,13 @@ def google_drive_oauth_callback(request):
         from apps.authentication.views import GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
         from google_auth_oauthlib.flow import Flow
         
-        # Define the Google Drive scopes
+        # Define the Google Drive and Gmail scopes
         DRIVE_SCOPES = [
             "https://www.googleapis.com/auth/userinfo.profile",
             "https://www.googleapis.com/auth/userinfo.email",
             "https://www.googleapis.com/auth/drive",
             "https://www.googleapis.com/auth/drive.file",
+            "https://www.googleapis.com/auth/gmail.modify",
             "openid"
         ]
         
@@ -1616,3 +1617,152 @@ def google_drive_oauth_callback(request):
             "success": False,
             "error": str(e)
         }, status=400)
+
+
+# =============================================================================
+# Gmail API Views
+# =============================================================================
+
+@csrf_exempt
+@require_http_methods(["GET"])
+@authentication_classes([])
+def gmail_search(request):
+    """
+    Search for emails using Gmail API.
+    
+    Query Parameters:
+        q: Gmail search query
+        maxResults: Maximum number of results (default: 10)
+    """
+    username = request.username_from_token
+    query = request.GET.get('q', '')
+    max_results = int(request.GET.get('maxResults', 10))
+    
+    if not query:
+        return JsonResponse({
+            "error": "Search query is required"
+        }, status=400)
+    
+    from .gmail_service import search_emails
+    result = search_emails(username, query, max_results)
+    return JsonResponse(result)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+@authentication_classes([])
+def gmail_get_message(request, message_id):
+    """
+    Get a specific email message by ID.
+    """
+    username = request.username_from_token
+    
+    from .gmail_service import get_message
+    result = get_message(username, message_id)
+    return JsonResponse(result)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+@authentication_classes([])
+def gmail_get_thread(request, thread_id):
+    """
+    Get an email thread by ID.
+    """
+    username = request.username_from_token
+    
+    from .gmail_service import get_thread
+    result = get_thread(username, thread_id)
+    return JsonResponse(result)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+@authentication_classes([])
+def gmail_create_draft(request):
+    """
+    Create a draft email.
+    
+    Expected JSON payload:
+    {
+        "to": "recipient@example.com",
+        "subject": "Email subject",
+        "body": "Email body content",
+        "cc": "cc@example.com" (optional),
+        "bcc": "bcc@example.com" (optional)
+    }
+    """
+    username = request.username_from_token
+    
+    try:
+        data = json.loads(request.body)
+        to = data.get('to')
+        subject = data.get('subject')
+        body = data.get('body')
+        cc = data.get('cc')
+        bcc = data.get('bcc')
+        
+        if not to or not subject or not body:
+            return JsonResponse({
+                "error": "Missing required fields: to, subject, body"
+            }, status=400)
+        
+        from .gmail_service import create_draft
+        result = create_draft(username, to, subject, body, cc, bcc)
+        return JsonResponse(result)
+        
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+@authentication_classes([])
+def gmail_send_message(request):
+    """
+    Send an email message.
+    
+    Expected JSON payload:
+    {
+        "to": "recipient@example.com",
+        "subject": "Email subject",
+        "body": "Email body content",
+        "cc": "cc@example.com" (optional),
+        "bcc": "bcc@example.com" (optional)
+    }
+    """
+    username = request.username_from_token
+    
+    try:
+        data = json.loads(request.body)
+        to = data.get('to')
+        subject = data.get('subject')
+        body = data.get('body')
+        cc = data.get('cc')
+        bcc = data.get('bcc')
+        
+        if not to or not subject or not body:
+            return JsonResponse({
+                "error": "Missing required fields: to, subject, body"
+            }, status=400)
+        
+        from .gmail_service import send_message
+        result = send_message(username, to, subject, body, cc, bcc)
+        return JsonResponse(result)
+        
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+@authentication_classes([])
+def gmail_check_access(request):
+    """
+    Check if user has Gmail access through existing Google credentials.
+    """
+    username = request.username_from_token
+    
+    from .gmail_service import check_gmail_access
+    result = check_gmail_access(username)
+    return JsonResponse(result)

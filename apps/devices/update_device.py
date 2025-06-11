@@ -86,9 +86,7 @@ def update_device_info(username, sending_device_name, device_info):
             "download_speed": device_info.get('download_speed'),
             # Add other fields as needed
         }
-        print("Inserting time series device info:", doc)
         result = device_info_collection.insert_one(doc)
-        print("Insert successful, inserted_id:", result.inserted_id)
         return "success"
     except Exception as e:
         print(f"Error updating device status: {e}")
@@ -99,7 +97,6 @@ def update_device_info_view(request):
     username = request.username_from_token
     device_info = data.get("device_info")
     sending_device_name = data.get("sending_device_name")
-    print("View received username:", username, "sending_device_name:", sending_device_name, "device_info:", device_info, flush=True)
     result = update_device_info(username, sending_device_name, device_info)
     response_data = {   
         "result": "success",
