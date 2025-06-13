@@ -1572,13 +1572,14 @@ def google_drive_oauth_callback(request):
         from apps.authentication.views import GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
         from google_auth_oauthlib.flow import Flow
         
-        # Define the Google Drive and Gmail scopes
+        # Define the Google Drive, Gmail, and Calendar scopes
         DRIVE_SCOPES = [
             "https://www.googleapis.com/auth/userinfo.profile",
             "https://www.googleapis.com/auth/userinfo.email",
             "https://www.googleapis.com/auth/drive",
             "https://www.googleapis.com/auth/drive.file",
             "https://www.googleapis.com/auth/gmail.modify",
+            "https://www.googleapis.com/auth/calendar",
             "openid"
         ]
         
@@ -1765,4 +1766,160 @@ def gmail_check_access(request):
     
     from .gmail_service import check_gmail_access
     result = check_gmail_access(username)
+    return JsonResponse(result)
+
+
+# =============================================================================
+# Google Calendar API Views
+# =============================================================================
+
+@csrf_exempt
+@require_http_methods(["GET"])
+@authentication_classes([])
+def google_calendar_check_access(request):
+    """
+    Check if user has Google Calendar access through existing Google credentials.
+    """
+    username = request.username_from_token
+    
+    from .google_calendar_service import check_calendar_access
+    result = check_calendar_access(username)
+    return JsonResponse(result)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+@authentication_classes([])
+def google_calendar_list_events(request):
+    """
+    List calendar events from Google Calendar.
+    
+    Query Parameters:
+        timeMin: Lower bound for event start time (RFC3339 timestamp)
+        timeMax: Upper bound for event start time (RFC3339 timestamp)
+        maxResults: Maximum number of events to return (default: 50)
+        q: Free text search terms
+        calendarId: Calendar identifier (default: 'primary')
+    """
+    username = request.username_from_token
+    
+    calendar_id = request.GET.get('calendarId', 'primary')
+    time_min = request.GET.get('timeMin')
+    time_max = request.GET.get('timeMax')
+    max_results = int(request.GET.get('maxResults', 50))
+    q = request.GET.get('q')
+    
+    from .google_calendar_service import list_calendar_events
+    result = list_calendar_events(username, calendar_id, time_min, time_max, max_results, q)
+    return JsonResponse(result)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+@authentication_classes([])
+def google_calendar_get_event(request, calendar_id, event_id):
+    """
+    Get details of a specific calendar event.
+    """
+    username = request.username_from_token
+    
+    from .google_calendar_service import get_calendar_event
+    result = get_calendar_event(username, event_id, calendar_id)
+    return JsonResponse(result)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+@authentication_classes([])
+def google_calendar_create_event(request):
+    """
+    Create a new calendar event.
+    
+    Expected JSON payload:
+    {
+        "summary": "Event title",
+        "start": {"dateTime": "2024-01-01T10:00:00-07:00"},
+        "end": {"dateTime": "2024-01-01T11:00:00-07:00"},
+        "description": "Event description" (optional),
+        "location": "Event location" (optional),
+        "attendees": [{"email": "attendee@example.com"}] (optional),
+        "calendarId": "primary" (optional)
+    }
+    """
+    username = request.username_from_token
+    
+    try:
+        data = json.loads(request.body)
+        
+        # Validate required fields
+        if not data.get('summary'):
+            return JsonResponse({
+                "error": "Missing required field: summary"
+            }, status=400)
+        
+        if not data.get('start') or not data.get('end'):
+            return JsonResponse({
+                "error": "Missing required fields: start and end times"
+            }, status=400)
+        
+        from .google_calendar_service import create_calendar_event
+        result = create_calendar_event(username, data)
+        return JsonResponse(result)
+        
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+
+@csrf_exempt
+@require_http_methods(["PUT"])
+@authentication_classes([])
+def google_calendar_update_event(request):
+    """
+    Update an existing calendar event.
+    
+    Expected JSON payload:
+    {
+        "eventId": "event_id_to_update",
+        "calendarId": "primary" (optional),
+        "summary": "Updated event title" (optional),
+        "start": {"dateTime": "2024-01-01T10:00:00-07:00"} (optional),
+        "end": {"dateTime": "2024-01-01T11:00:00-07:00"} (optional),
+        "description": "Updated event description" (optional),
+        "location": "Updated event location" (optional),
+        "attendees": [{"email": "attendee@example.com"}] (optional)
+    }
+    """
+    username = request.username_from_token
+    
+    try:
+        data = json.loads(request.body)
+        
+        event_id = data.get('eventId')
+        if not event_id:
+            return JsonResponse({
+                "error": "Missing required field: eventId"
+            }, status=400)
+        
+        # Remove eventId from data as it's passed separately
+        event_data = {k: v for k, v in data.items() if k != 'eventId'}
+        
+        from .google_calendar_service import update_calendar_event
+        result = update_calendar_event(username, event_id, event_data)
+        return JsonResponse(result)
+        
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+
+@csrf_exempt
+@require_http_methods(["DELETE"])
+@authentication_classes([])
+def google_calendar_delete_event(request, calendar_id, event_id):
+    """
+    Delete a calendar event.
+    """
+    username = request.username_from_token
+    
+    from .google_calendar_service import delete_calendar_event
+    result = delete_calendar_event(username, event_id, calendar_id)
     return JsonResponse(result)

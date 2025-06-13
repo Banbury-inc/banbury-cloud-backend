@@ -41,4 +41,11 @@ urlpatterns = [
     path("gmail/draft", views.gmail_create_draft, name="gmail_create_draft"),
     path("gmail/send", views.gmail_send_message, name="gmail_send_message"),
     path("gmail/check_access", views.gmail_check_access, name="gmail_check_access"),
+    # Google Calendar endpoints
+    path("google_calendar/check_access", views.google_calendar_check_access, name="google_calendar_check_access"),
+    path("google_calendar/events", views.google_calendar_list_events, name="google_calendar_list_events"),
+    path("google_calendar/event/<str:calendar_id>/<str:event_id>", views.google_calendar_get_event, name="google_calendar_get_event"),
+    path("google_calendar/event", views.google_calendar_create_event, name="google_calendar_create_event"),
+    path("google_calendar/event", views.google_calendar_update_event, name="google_calendar_update_event"),
+    path("google_calendar/event/<str:calendar_id>/<str:event_id>", views.google_calendar_delete_event, name="google_calendar_delete_event"),
 ]
