@@ -27,7 +27,6 @@ def upload_file_to_s3(request, username):
             - On Error:
                 - {"error": "No file provided."}, status=400
                 - {"error": "Invalid file format."}, status=400
-                - {"error": "Device not found."}, status=404
                 - {"error": "User not found."}, status=404
                 - {"error": "Failed to upload file: ..."}, status=500
     """
@@ -63,15 +62,14 @@ def upload_file_to_s3(request, username):
     if not user:
         return JsonResponse({"error": "User not found."}, status=404)
     
-    # Find the device by device_name for the user
+    # Find the device by device_name for the user (optional)
     device = device_collection.find_one({
         "user_id": user["_id"],
         "device_name": device_name
     })
-    if not device:
-        return JsonResponse({"error": "Device not found."}, status=404)
     
-    device_id = device["_id"]
+    # Use device_id if device exists, otherwise use None or a default value
+    device_id = device["_id"] if device else None
     
     # Configure S3 client
     s3_client = boto3.client(
