@@ -1,3 +1,91 @@
+# --- OS / Editor ---
+.DS_Store
+Thumbs.db
+.idea/
+*.iml
+.vscode/
+.history/
+*.swp
+*.swo
+*.orig
+
+# --- Environment / Secrets ---
+.env
+.env.*
+*.env
+.python-version
+
+# --- Logs / PIDs ---
+logs/
+*.log
+*.pid
+
+# --- Python bytecode ---
+__pycache__/
+*.py[cod]
+*$py.class
+
+# --- Python packaging / build ---
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+MANIFEST
+
+# --- Virtual environments ---
+.venv/
+venv/
+ENV/
+env/
+testvenv/
+
+# --- Testing / Coverage ---
+.pytest_cache/
+.tox/
+.nox/
+.hypothesis/
+.coverage
+.coverage.*
+coverage.xml
+coverage/
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# --- Django ---
+local_settings.py
+db.sqlite3
+*.sqlite3
+media/
+staticfiles/
+static_root/
+celerybeat-schedule
+
+# --- Node / Frontend assets in backend repo ---
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# --- Deno (keep lockfile tracked) ---
+deno_dir/
+
+# --- Misc ---
+*.bak
+*.tmp
+tmp/
 node_modules
 venv
 venv312

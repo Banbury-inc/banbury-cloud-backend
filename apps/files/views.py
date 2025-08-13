@@ -84,6 +84,12 @@ def add_file(request):
     db = client["NeuraNet"]
     file_collection = db["files"]
     device_collection = db["devices"]
+    user_collection = db["users"]
+
+    # Find the user by username
+    user = user_collection.find_one({"username": username})
+    if not user:
+        return JsonResponse({"error": "User not found"}, status=404)
 
     # Find the device_id based on device_name
     device = device_collection.find_one({"device_name": original_device})
@@ -102,6 +108,7 @@ def add_file(request):
         })
 
     new_file = {
+        "user_id": user["_id"],
         "device_id": device_id,
         "file_type": file_type,
         "file_name": file_name,
@@ -221,6 +228,7 @@ def add_files(request):
             )
         # Prepare new file data for insertion
         new_file = {
+            "user_id": user["_id"],
             "device_id": device_id,
             "file_type": file_data.get("file_type"),
             "file_name": file_data.get("file_name"),

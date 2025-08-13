@@ -106,6 +106,7 @@ def upload_file_to_s3(request, username):
         
         # Prepare file metadata
         file_metadata = {
+            "user_id": user["_id"],
             "device_id": device_id,
             "file_type": os.path.splitext(file_name)[1],
             "file_name": file_name,

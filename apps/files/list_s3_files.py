@@ -26,8 +26,11 @@ def list_s3_files(username):
         if not user:
             return {"error": "User not found", "status_code": 404}
         
-        # Find all files with s3_url field (indicating they're stored in S3)
-        s3_files = list(file_collection.find({"s3_url": {"$exists": True}}))
+        # Find all files with s3_url field that belong to the user
+        s3_files = list(file_collection.find({
+            "s3_url": {"$exists": True},
+            "user_id": user["_id"]
+        }))
         
         # Transform the results
         files_data = []
