@@ -11,6 +11,7 @@ urlpatterns = [
     path("change_profile/<str:password>/<str:first_name>/<str:last_name>/<str:email>/",views.change_profile, name="change_profile"),
     path("get_profile_picture/", views.get_profile_picture, name="get_profile_picture"),
     path("typeahead/<str:search>/", views.typeahead, name="typeahead"),
+    path("list_all_users/", views.list_all_users, name="list_all_users"),
     path("send_friend_request/", views.send_friend_request, name="send_friend_request"),
     path("remove_friend/", views.remove_friend, name="remove_friend"),
     path("get_friends/", views.get_friends, name="get_friends"),

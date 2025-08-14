@@ -38,8 +38,10 @@ urlpatterns = [
     path("gmail/search", views.gmail_search, name="gmail_search"),
     path("gmail/message/<str:message_id>", views.gmail_get_message, name="gmail_get_message"),
     path("gmail/thread/<str:thread_id>", views.gmail_get_thread, name="gmail_get_thread"),
+    path("gmail/threads", views.gmail_list_threads, name="gmail_list_threads"),
     path("gmail/draft", views.gmail_create_draft, name="gmail_create_draft"),
     path("gmail/send", views.gmail_send_message, name="gmail_send_message"),
+    path("gmail/reply", views.gmail_send_reply, name="gmail_send_reply"),
     path("gmail/check_access", views.gmail_check_access, name="gmail_check_access"),
     # Google Calendar endpoints
     path("google_calendar/check_access", views.google_calendar_check_access, name="google_calendar_check_access"),

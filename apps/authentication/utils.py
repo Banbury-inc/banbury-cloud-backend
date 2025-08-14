@@ -11,7 +11,7 @@ def get_mongodb_connection():
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
     db = client["NeuraNet"]
-    return db["api keys"]
+    return db["api_keys"]
 
 def generate_api_key():
     """
@@ -103,11 +103,20 @@ def list_user_api_keys(user_id):
     
     keys = api_keys_collection.find({"user_id": user_id})
     
-    return [{
-        "api_key": k.get("api_key"),
-        "role": k.get("role"),
-        "created_at": k.get("created_at")
-    } for k in keys]
+    result = []
+    for k in keys:
+        created_at = k.get("created_at")
+        # Convert datetime to ISO format string for JSON serialization
+        if hasattr(created_at, 'isoformat'):
+            created_at = created_at.isoformat()
+        
+        result.append({
+            "api_key": k.get("api_key"),
+            "role": k.get("role"),
+            "created_at": created_at
+        })
+    
+    return result
 
 def delete_api_key(api_key):
     """

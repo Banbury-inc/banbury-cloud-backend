@@ -35,6 +35,76 @@ def get_gmail_service(username: str):
         return None
 
 
+def get_thread(username: str, thread_id: str) -> Dict[str, Any]:
+    """Get a specific thread with all its messages."""
+    try:
+        service = get_gmail_service(username)
+        if not service:
+            return {
+                "result": "error",
+                "error": "Gmail service not available"
+            }
+        
+        thread = service.users().threads().get(
+            userId='me',
+            id=thread_id
+        ).execute()
+        
+        return {
+            "result": "success",
+            "thread": thread
+        }
+        
+    except HttpError as e:
+        print(f"Gmail API error in get_thread: {e}")
+        return {
+            "result": "error",
+            "error": f"Gmail API error: {str(e)}"
+        }
+    except Exception as e:
+        print(f"Error getting thread: {e}")
+        return {
+            "result": "error",
+            "error": f"Error getting thread: {str(e)}"
+        }
+
+
+def list_threads(username: str, query: str = None, max_results: int = 10) -> Dict[str, Any]:
+    """List threads with optional query filtering."""
+    try:
+        service = get_gmail_service(username)
+        if not service:
+            return {
+                "result": "error",
+                "error": "Gmail service not available"
+            }
+        
+        request = service.users().threads().list(userId='me', maxResults=max_results)
+        if query:
+            request = request.q(query)
+        
+        threads = request.execute()
+        
+        return {
+            "result": "success",
+            "threads": threads.get('threads', []),
+            "nextPageToken": threads.get('nextPageToken')
+        }
+        
+    except HttpError as e:
+        print(f"Gmail API error in list_threads: {e}")
+        return {
+            "result": "error",
+            "error": f"Gmail API error: {str(e)}"
+        }
+    except Exception as e:
+        print(f"Error listing threads: {e}")
+        return {
+            "result": "error",
+            "error": f"Error listing threads: {str(e)}"
+        }
+
+
 def search_emails(username: str, query: str, max_results: int = 10) -> Dict[str, Any]:
     """Search for emails using Gmail API."""
     try:
@@ -255,8 +325,9 @@ def create_draft(username: str, to: str, subject: str, body: str, cc: str = None
         }
 
 
-def send_message(username: str, to: str, subject: str, body: str, cc: str = None, bcc: str = None) -> Dict[str, Any]:
-    """Send an email message."""
+def send_message(username: str, to: str, subject: str, body: str, cc: str = None, bcc: str = None, 
+                in_reply_to: str = None, references: str = None, thread_id: str = None) -> Dict[str, Any]:
+    """Send an email message with proper threading support."""
     try:
         service = get_gmail_service(username)
         if not service:
@@ -265,8 +336,10 @@ def send_message(username: str, to: str, subject: str, body: str, cc: str = None
                 "error": "Gmail service not available"
             }
         
-        message = create_message(to, subject, body, cc, bcc)
+        # Create message with threading support
+        message = create_message(to, subject, body, cc, bcc, in_reply_to, references, thread_id)
         
+        # Send the message
         sent_message = service.users().messages().send(
             userId='me',
             body=message
@@ -275,6 +348,7 @@ def send_message(username: str, to: str, subject: str, body: str, cc: str = None
         return {
             "result": "success",
             "id": sent_message['id'],
+            "threadId": sent_message.get('threadId'),
             "message": "Email sent successfully"
         }
         
@@ -292,8 +366,74 @@ def send_message(username: str, to: str, subject: str, body: str, cc: str = None
         }
 
 
-def create_message(to: str, subject: str, body: str, cc: str = None, bcc: str = None) -> Dict[str, Any]:
-    """Create a message for Gmail API."""
+def send_reply(username: str, original_message_id: str, to: str, subject: str, body: str, 
+               cc: str = None, bcc: str = None) -> Dict[str, Any]:
+    """Send a reply to an existing message with proper threading."""
+    try:
+        service = get_gmail_service(username)
+        if not service:
+            return {
+                "result": "error",
+                "error": "Gmail service not available"
+            }
+        
+        # Get the original message to extract threading information
+        original_message = service.users().messages().get(
+            userId='me',
+            id=original_message_id,
+            format='metadata',
+            metadataHeaders=['Message-ID', 'Subject', 'Thread-Id', 'References', 'In-Reply-To']
+        ).execute()
+        
+        # Extract headers from original message
+        headers = original_message['payload'].get('headers', [])
+        original_message_id_header = next((h['value'] for h in headers if h['name'].lower() == 'message-id'), None)
+        original_subject = next((h['value'] for h in headers if h['name'].lower() == 'subject'), '')
+        thread_id = original_message.get('threadId')
+        
+        # Build references chain
+        original_references = next((h['value'] for h in headers if h['name'].lower() == 'references'), '')
+        references = original_references
+        if original_message_id_header:
+            if references:
+                references += f" {original_message_id_header}"
+            else:
+                references = original_message_id_header
+        
+        # Ensure subject has Re: prefix if it doesn't already
+        if not subject.lower().startswith('re:'):
+            subject = f"Re: {subject}"
+        
+        # Create and send the reply
+        return send_message(
+            username=username,
+            to=to,
+            subject=subject,
+            body=body,
+            cc=cc,
+            bcc=bcc,
+            in_reply_to=original_message_id_header,
+            references=references,
+            thread_id=thread_id
+        )
+        
+    except HttpError as e:
+        print(f"Gmail API error in send_reply: {e}")
+        return {
+            "result": "error",
+            "error": f"Gmail API error: {str(e)}"
+        }
+    except Exception as e:
+        print(f"Error sending reply: {e}")
+        return {
+            "result": "error",
+            "error": f"Error sending reply: {str(e)}"
+        }
+
+
+def create_message(to: str, subject: str, body: str, cc: str = None, bcc: str = None, 
+                  in_reply_to: str = None, references: str = None, thread_id: str = None) -> Dict[str, Any]:
+    """Create a message for Gmail API with proper threading support."""
     message = email.mime.text.MIMEText(body)
     message['to'] = to
     message['subject'] = subject
@@ -303,9 +443,20 @@ def create_message(to: str, subject: str, body: str, cc: str = None, bcc: str = 
     if bcc:
         message['bcc'] = bcc
     
+    # Add threading headers for proper email threading (RFC 2822 standard)
+    if in_reply_to:
+        message['In-Reply-To'] = in_reply_to
+    if references:
+        message['References'] = references
+    
     raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
     
-    return {'raw': raw_message}
+    # Create the message object with thread ID if provided
+    message_obj = {'raw': raw_message}
+    if thread_id:
+        message_obj['threadId'] = thread_id
+    
+    return message_obj
 
 
 def extract_message_body(payload: Dict[str, Any]) -> str:

@@ -22,8 +22,10 @@ import jwt
 from rest_framework_simplejwt.tokens import AccessToken
 from django.conf import settings
 from rest_framework.response import Response
-from .utils import generate_api_key, validate_api_key, register_api_key
+from .utils import generate_api_key, validate_api_key, register_api_key, list_user_api_keys, delete_api_key
 from django.views.decorators.csrf import csrf_exempt
+import requests
+from urllib.parse import urlencode
 
 load_dotenv()
 
@@ -102,9 +104,11 @@ def google(request):
         'http://localhost:3000/authentication/auth/callback',
         'http://localhost:3001/authentication/auth/callback',
         'http://localhost:3002/authentication/auth/callback',
+        'http://localhost:8080/authentication/auth/callback',
         'http://localhost:3000/files/google_drive/oauth_callback',
         'http://localhost:3001/files/google_drive/oauth_callback',
         'http://localhost:3002/files/google_drive/oauth_callback',
+        'http://localhost:8080/files/google_drive/oauth_callback',
         # Production/Dev HTTPS callbacks
         'https://banbury.io/authentication/auth/callback',
         'https://www.banbury.io/authentication/auth/callback',
@@ -164,6 +168,7 @@ def google_callback(request):
             'http://localhost:3000/authentication/auth/callback',
             'http://localhost:3001/authentication/auth/callback',
             'http://localhost:3002/authentication/auth/callback',
+            'http://localhost:8080/authentication/auth/callback',
             # Production/Dev HTTPS callbacks
             'https://banbury.io/authentication/auth/callback',
             'https://www.banbury.io/authentication/auth/callback',
@@ -868,3 +873,473 @@ def delete_user_api_key(request):
         return JsonResponse({'message': f'Error: {str(e)}'}, status=500)
 
 
+
+# ------------------------
+# Gmail API proxy endpoints
+# ------------------------
+
+def _get_mongo_user_by_username(username: str):
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client["NeuraNet"]
+    user_collection = db["users"]
+    return user_collection.find_one({"username": username})
+
+
+def _refresh_google_access_token_if_needed(credentials: dict, user_doc: dict):
+    """Ensure we have a valid access token; refresh using refresh_token when required.
+
+    Returns a tuple: (access_token: str, updated_credentials: dict or None)
+    If credentials are refreshed, the caller should persist them to Mongo.
+    """
+    access_token = credentials.get("access_token")
+    refresh_token = credentials.get("refresh_token")
+    token_uri = credentials.get("token_uri") or "https://oauth2.googleapis.com/token"
+
+    # Attempt a lightweight token introspection by calling a protected endpoint with the token
+    # We'll treat 401 responses as an indicator to refresh.
+    probe = requests.get(
+        "https://www.googleapis.com/oauth2/v1/tokeninfo",
+        params={"access_token": access_token},
+        timeout=10
+    )
+    if probe.status_code == 200 and access_token:
+        return access_token, None
+
+    # Refresh if we have a refresh token
+    if not refresh_token:
+        return access_token or "", None
+
+    data = {
+        "client_id": GOOGLE_CLIENT_ID,
+        "client_secret": GOOGLE_CLIENT_SECRET,
+        "refresh_token": refresh_token,
+        "grant_type": "refresh_token",
+    }
+    resp = requests.post(token_uri, data=data, timeout=15)
+    if resp.status_code == 200:
+        token_payload = resp.json()
+        new_access_token = token_payload.get("access_token")
+        if new_access_token:
+            updated = dict(credentials)
+            updated["access_token"] = new_access_token
+            # expiry may be returned as seconds; store best-effort
+            if "expires_in" in token_payload:
+                try:
+                    updated["expiry"] = (datetime.utcnow() + timedelta(seconds=int(token_payload["expires_in"])) ).isoformat()
+                except Exception:
+                    pass
+
+            # Persist back to Mongo
+            try:
+                uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+                client = MongoClient(uri)
+                db = client["NeuraNet"]
+                user_collection = db["users"]
+                user_collection.update_one(
+                    {"_id": user_doc.get("_id")},
+                    {"$set": {"google_drive_credentials": updated}}
+                )
+            except Exception:
+                pass
+
+            return new_access_token, updated
+
+    return access_token or "", None
+
+
+def _require_auth_username(request):
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or ' ' not in auth_header:
+        return None
+    try:
+        _type, token = auth_header.split(' ', 1)
+        validated = AccessToken(token)
+        return validated.payload.get('username')
+    except Exception:
+        return None
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def gmail_list_messages(request):
+    """List Gmail messages for the authenticated user. Optional query params: labelIds, maxResults, pageToken, q."""
+    username = _require_auth_username(request)
+    if not username:
+        return JsonResponse({"message": "Authentication required"}, status=401)
+
+    user_doc = _get_mongo_user_by_username(username)
+    if not user_doc:
+        return JsonResponse({"message": "User not found"}, status=404)
+
+    credentials = user_doc.get("google_drive_credentials") or {}
+    access_token, _ = _refresh_google_access_token_if_needed(credentials, user_doc)
+    if not access_token:
+        return JsonResponse({"message": "No Google credentials on file"}, status=400)
+
+    label_ids = request.GET.getlist('labelIds') or request.GET.get('labelIds')
+    if isinstance(label_ids, str):
+        label_ids = [label_ids]
+    max_results = request.GET.get('maxResults', '25')
+    page_token = request.GET.get('pageToken')
+    query = request.GET.get('q')
+
+    params = {"maxResults": max_results}
+    if label_ids:
+        # Gmail API supports repeated labelIds or comma-separated; requests will handle repeated if passed as list of tuples
+        pass
+    if page_token:
+        params["pageToken"] = page_token
+    if query:
+        params["q"] = query
+
+    # Build URL and handle repeated labelIds
+    base_url = "https://gmail.googleapis.com/gmail/v1/users/me/messages"
+    query_items = list(params.items())
+    if label_ids:
+        for lid in label_ids:
+            query_items.append(("labelIds", lid))
+    url = f"{base_url}?{urlencode(query_items)}"
+
+    resp = requests.get(url, headers={"Authorization": f"Bearer {access_token}"}, timeout=20)
+    if resp.status_code != 200:
+        return JsonResponse({"message": "Failed to list messages", "status": resp.status_code, "error": resp.text}, status=resp.status_code)
+    return JsonResponse(resp.json())
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def gmail_get_message(request, message_id):
+    """Get a specific Gmail message (full format)."""
+    username = _require_auth_username(request)
+    if not username:
+        return JsonResponse({"message": "Authentication required"}, status=401)
+
+    user_doc = _get_mongo_user_by_username(username)
+    if not user_doc:
+        return JsonResponse({"message": "User not found"}, status=404)
+
+    credentials = user_doc.get("google_drive_credentials") or {}
+    access_token, _ = _refresh_google_access_token_if_needed(credentials, user_doc)
+    if not access_token:
+        return JsonResponse({"message": "No Google credentials on file"}, status=400)
+
+    url = f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{message_id}?format=full"
+    resp = requests.get(url, headers={"Authorization": f"Bearer {access_token}"}, timeout=20)
+    if resp.status_code != 200:
+        return JsonResponse({"message": "Failed to get message", "status": resp.status_code, "error": resp.text}, status=resp.status_code)
+    return JsonResponse(resp.json())
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def gmail_send_message(request):
+    """Send an email via Gmail. Expects JSON: to, subject, body (HTML allowed), cc?, bcc?"""
+    username = _require_auth_username(request)
+    if not username:
+        return JsonResponse({"message": "Authentication required"}, status=401)
+
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({"message": "Invalid JSON"}, status=400)
+
+    to_addr = payload.get("to")
+    subject = payload.get("subject", "")
+    html_body = payload.get("body", "")
+    cc = payload.get("cc")
+    bcc = payload.get("bcc")
+    is_draft = payload.get("isDraft", False)
+    
+    # For drafts, we don't require a recipient
+    if not is_draft and not to_addr:
+        return JsonResponse({"message": "Recipient 'to' is required"}, status=400)
+
+    user_doc = _get_mongo_user_by_username(username)
+    if not user_doc:
+        return JsonResponse({"message": "User not found"}, status=404)
+
+    credentials = user_doc.get("google_drive_credentials") or {}
+    access_token, _ = _refresh_google_access_token_if_needed(credentials, user_doc)
+    if not access_token:
+        return JsonResponse({"message": "No Google credentials on file"}, status=400)
+
+    # Construct RFC 822 email
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+
+    msg = MIMEMultipart('alternative')
+    if to_addr:
+        msg['To'] = to_addr
+    msg['Subject'] = subject
+    # Best-effort from header: use user's email if available
+    sender_email = (user_doc.get('email') or username)
+    if sender_email:
+        msg['From'] = sender_email
+    if cc:
+        msg['Cc'] = cc
+    if bcc:
+        msg['Bcc'] = bcc
+
+    # Plain text fallback stripped from HTML
+    try:
+        import re
+        text_body = re.sub('<[^<]+?>', '', html_body)
+    except Exception:
+        text_body = html_body
+
+    msg.attach(MIMEText(text_body, 'plain'))
+    msg.attach(MIMEText(html_body, 'html'))
+
+    # Base64url encode
+    raw_bytes = msg.as_bytes()
+    raw_b64 = base64.urlsafe_b64encode(raw_bytes).decode('utf-8')
+    
+    if is_draft:
+        # Create draft
+        draft_url = "https://gmail.googleapis.com/gmail/v1/users/me/drafts"
+        resp = requests.post(
+            draft_url,
+            headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"},
+            json={"message": {"raw": raw_b64}},
+            timeout=20
+        )
+        if resp.status_code not in (200, 201):
+            return JsonResponse({"message": "Failed to create draft", "status": resp.status_code, "error": resp.text}, status=resp.status_code)
+    else:
+        # Send message
+        send_url = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send"
+        resp = requests.post(
+            send_url,
+            headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"},
+            json={"raw": raw_b64},
+            timeout=20
+        )
+        if resp.status_code not in (200, 202):
+            return JsonResponse({"message": "Failed to send message", "status": resp.status_code, "error": resp.text}, status=resp.status_code)
+    
+    return JsonResponse(resp.json())
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def gmail_modify_message(request, message_id):
+    """Modify a Gmail message. Expects JSON: addLabelIds: [], removeLabelIds: []"""
+    username = _require_auth_username(request)
+    if not username:
+        return JsonResponse({"message": "Authentication required"}, status=401)
+
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({"message": "Invalid JSON"}, status=400)
+
+    user_doc = _get_mongo_user_by_username(username)
+    if not user_doc:
+        return JsonResponse({"message": "User not found"}, status=404)
+
+    credentials = user_doc.get("google_drive_credentials") or {}
+    access_token, _ = _refresh_google_access_token_if_needed(credentials, user_doc)
+    if not access_token:
+        return JsonResponse({"message": "No Google credentials on file"}, status=400)
+
+    url = f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{message_id}/modify"
+    resp = requests.post(
+        url,
+        headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"},
+        json={
+            "addLabelIds": payload.get("addLabelIds", []),
+            "removeLabelIds": payload.get("removeLabelIds", []),
+        },
+        timeout=20
+    )
+    if resp.status_code != 200:
+        return JsonResponse({"message": "Failed to modify message", "status": resp.status_code, "error": resp.text}, status=resp.status_code)
+    return JsonResponse(resp.json())
+
+
+@csrf_exempt
+def gmail_get_messages_batch(request):
+    """Get multiple Gmail messages in a single batch request"""
+    print(f"Batch endpoint called with method: {request.method}")
+    
+    if request.method != "POST":
+        return JsonResponse({"error": f"Method {request.method} not allowed. Use POST."}, status=405)
+    
+    username = _require_auth_username(request)
+    if not username:
+        return JsonResponse({"message": "Authentication required"}, status=401)
+
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({"message": "Invalid JSON"}, status=400)
+
+    message_ids = payload.get("messageIds", [])
+    if not message_ids:
+        return JsonResponse({"message": "No message IDs provided"}, status=400)
+
+    user_doc = _get_mongo_user_by_username(username)
+    if not user_doc:
+        return JsonResponse({"message": "User not found"}, status=404)
+
+    credentials = user_doc.get("google_drive_credentials") or {}
+    access_token, _ = _refresh_google_access_token_if_needed(credentials, user_doc)
+    if not access_token:
+        return JsonResponse({"message": "No Google credentials on file"}, status=400)
+
+    # Use concurrent requests for better performance
+    import concurrent.futures
+    
+    messages = {}
+    
+    def fetch_message(message_id):
+        try:
+            url = f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{message_id}"
+            resp = requests.get(
+                url,
+                headers={"Authorization": f"Bearer {access_token}"},
+                timeout=20
+            )
+            if resp.status_code == 200:
+                return message_id, resp.json()
+            else:
+                return message_id, {"error": f"HTTP {resp.status_code}: {resp.text}"}
+        except Exception as e:
+            return message_id, {"error": str(e)}
+    
+    # Use ThreadPoolExecutor for concurrent requests
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        # Submit all requests
+        future_to_id = {executor.submit(fetch_message, msg_id): msg_id for msg_id in message_ids}
+        
+        # Collect results
+        for future in concurrent.futures.as_completed(future_to_id):
+            message_id, result = future.result()
+            messages[message_id] = result
+    
+    return JsonResponse({"messages": messages})
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def gmail_get_attachment(request, message_id, attachment_id):
+    """Get a Gmail message attachment."""
+    username = _require_auth_username(request)
+    if not username:
+        return JsonResponse({"message": "Authentication required"}, status=401)
+
+    user_doc = _get_mongo_user_by_username(username)
+    if not user_doc:
+        return JsonResponse({"message": "User not found"}, status=404)
+
+    credentials = user_doc.get("google_drive_credentials") or {}
+    access_token, _ = _refresh_google_access_token_if_needed(credentials, user_doc)
+    if not access_token:
+        return JsonResponse({"message": "No Google credentials on file"}, status=400)
+
+    url = f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{message_id}/attachments/{attachment_id}"
+    resp = requests.get(url, headers={"Authorization": f"Bearer {access_token}"}, timeout=30)
+    
+    if resp.status_code != 200:
+        return JsonResponse({"message": "Failed to get attachment", "status": resp.status_code, "error": resp.text}, status=resp.status_code)
+    
+    return JsonResponse(resp.json())
+@csrf_exempt
+@require_http_methods(["POST"])
+def gmail_test_batch(request):
+    """Test endpoint for batch functionality"""
+    print("Test batch endpoint called")
+    return JsonResponse({"message": "Test batch endpoint working", "method": request.method})
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def gmail_send_reply(request):
+    """
+    Send a reply to an existing email message with proper threading.
+    
+    Expected JSON payload:
+    {
+        "original_message_id": "message_id_to_reply_to",
+        "to": "recipient@example.com",
+        "subject": "Email subject",
+        "body": "Email body content",
+        "cc": "cc@example.com" (optional),
+        "bcc": "bcc@example.com" (optional)
+    }
+    """
+    username = _require_auth_username(request)
+    if not username:
+        return JsonResponse({"message": "Authentication required"}, status=401)
+
+    try:
+        data = json.loads(request.body)
+        original_message_id = data.get('original_message_id')
+        to = data.get('to')
+        subject = data.get('subject')
+        body = data.get('body')
+        cc = data.get('cc')
+        bcc = data.get('bcc')
+        
+        if not original_message_id or not to or not subject or not body:
+            return JsonResponse({
+                "error": "Missing required fields: original_message_id, to, subject, body"
+            }, status=400)
+        
+        # Import the send_reply function from files app
+        from apps.files.gmail_service import send_reply
+        result = send_reply(username, original_message_id, to, subject, body, cc, bcc)
+        return JsonResponse(result)
+        
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def gmail_get_thread(request):
+    """
+    Get a specific thread with all its messages.
+    
+    Query Parameters:
+        thread_id: The ID of the thread to retrieve
+    """
+    username = _require_auth_username(request)
+    if not username:
+        return JsonResponse({"message": "Authentication required"}, status=401)
+    
+    thread_id = request.GET.get('thread_id')
+    
+    if not thread_id:
+        return JsonResponse({
+            "error": "Missing required parameter: thread_id"
+        }, status=400)
+    
+    # Import the get_thread function from files app
+    from apps.files.gmail_service import get_thread
+    result = get_thread(username, thread_id)
+    return JsonResponse(result)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def gmail_list_threads(request):
+    """
+    List threads with optional query filtering.
+    
+    Query Parameters:
+        q: Search query (optional)
+        maxResults: Maximum number of threads to return (default: 10)
+    """
+    username = _require_auth_username(request)
+    if not username:
+        return JsonResponse({"message": "Authentication required"}, status=401)
+    
+    query = request.GET.get('q')
+    max_results = int(request.GET.get('maxResults', 10))
+    
+    # Import the list_threads function from files app
+    from apps.files.gmail_service import list_threads
+    result = list_threads(username, query, max_results)
+    return JsonResponse(result)

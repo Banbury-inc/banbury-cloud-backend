@@ -1749,6 +1749,9 @@ def gmail_send_message(request):
         body = data.get('body')
         cc = data.get('cc')
         bcc = data.get('bcc')
+        in_reply_to = data.get('in_reply_to')
+        references = data.get('references')
+        thread_id = data.get('thread_id')
         
         if not to or not subject or not body:
             return JsonResponse({
@@ -1756,7 +1759,7 @@ def gmail_send_message(request):
             }, status=400)
         
         from .gmail_service import send_message
-        result = send_message(username, to, subject, body, cc, bcc)
+        result = send_message(username, to, subject, body, cc, bcc, in_reply_to, references, thread_id)
         return JsonResponse(result)
         
     except json.JSONDecodeError:
@@ -1774,6 +1777,90 @@ def gmail_check_access(request):
     
     from .gmail_service import check_gmail_access
     result = check_gmail_access(username)
+    return JsonResponse(result)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+@authentication_classes([])
+def gmail_send_reply(request):
+    """
+    Send a reply to an existing email message with proper threading.
+    
+    Expected JSON payload:
+    {
+        "original_message_id": "message_id_to_reply_to",
+        "to": "recipient@example.com",
+        "subject": "Email subject",
+        "body": "Email body content",
+        "cc": "cc@example.com" (optional),
+        "bcc": "bcc@example.com" (optional)
+    }
+    """
+    username = request.username_from_token
+    
+    try:
+        data = json.loads(request.body)
+        original_message_id = data.get('original_message_id')
+        to = data.get('to')
+        subject = data.get('subject')
+        body = data.get('body')
+        cc = data.get('cc')
+        bcc = data.get('bcc')
+        
+        if not original_message_id or not to or not subject or not body:
+            return JsonResponse({
+                "error": "Missing required fields: original_message_id, to, subject, body"
+            }, status=400)
+        
+        from .gmail_service import send_reply
+        result = send_reply(username, original_message_id, to, subject, body, cc, bcc)
+        return JsonResponse(result)
+        
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+@authentication_classes([])
+def gmail_get_thread(request):
+    """
+    Get a specific thread with all its messages.
+    
+    Query Parameters:
+        thread_id: The ID of the thread to retrieve
+    """
+    username = request.username_from_token
+    thread_id = request.GET.get('thread_id')
+    
+    if not thread_id:
+        return JsonResponse({
+            "error": "Missing required parameter: thread_id"
+        }, status=400)
+    
+    from .gmail_service import get_thread
+    result = get_thread(username, thread_id)
+    return JsonResponse(result)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+@authentication_classes([])
+def gmail_list_threads(request):
+    """
+    List threads with optional query filtering.
+    
+    Query Parameters:
+        q: Search query (optional)
+        maxResults: Maximum number of threads to return (default: 10)
+    """
+    username = request.username_from_token
+    query = request.GET.get('q')
+    max_results = int(request.GET.get('maxResults', 10))
+    
+    from .gmail_service import list_threads
+    result = list_threads(username, query, max_results)
     return JsonResponse(result)
 
 

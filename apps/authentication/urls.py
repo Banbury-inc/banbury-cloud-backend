@@ -17,4 +17,16 @@ urlpatterns = [
     path('api-key/validate/', views.validate_user_api_key, name='validate_api_key'),
     path('api-key/list/', views.list_api_keys, name='list_api_keys'),
     path('api-key/delete/', views.delete_user_api_key, name='delete_api_key'),
+    # Gmail API proxy endpoints
+    path('gmail/list_messages/', views.gmail_list_messages, name='gmail_list_messages'),
+    path('gmail/messages/<str:message_id>/', views.gmail_get_message, name='gmail_get_message'),
+    path('gmail/send_message/', views.gmail_send_message, name='gmail_send_message'),
+    path('gmail/messages/<str:message_id>/modify/', views.gmail_modify_message, name='gmail_modify_message'),
+    path('gmail/messages/batch', views.gmail_get_messages_batch, name='gmail_get_messages_batch'),
+    path('gmail/messages/<str:message_id>/attachments/<str:attachment_id>', views.gmail_get_attachment, name='gmail_get_attachment'),
+    path('gmail/test-batch', views.gmail_test_batch, name='gmail_test_batch'),
+    # Gmail threading endpoints
+    path('gmail/reply/', views.gmail_send_reply, name='gmail_send_reply'),
+    path('gmail/thread/<str:thread_id>/', views.gmail_get_thread, name='gmail_get_thread'),
+    path('gmail/threads/', views.gmail_list_threads, name='gmail_list_threads'),
 ]

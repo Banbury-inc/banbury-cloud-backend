@@ -407,6 +407,78 @@ def typeahead(request, search):
     return JsonResponse(response)
 
 @csrf_exempt
+@require_http_methods(["GET"])
+def list_all_users(request):
+    """Lists all users in the system (admin only)."""
+    try:
+        # Check if user is authenticated and is admin
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or ' ' not in auth_header:
+            return JsonResponse({'message': 'Authentication required'}, status=401)
+        
+        auth_type, token = auth_header.split(' ', 1)
+        if auth_type.lower() != 'bearer':
+            return JsonResponse({'message': 'Invalid authentication type'}, status=401)
+            
+        # Validate token and get username
+        try:
+            from rest_framework_simplejwt.tokens import AccessToken
+            validated = AccessToken(token)
+            username = validated.payload.get('username')
+            
+            if not username:
+                return JsonResponse({'message': 'Invalid token'}, status=401)
+                
+        except Exception as e:
+            return JsonResponse({'message': str(e)}, status=401)
+        
+        # Check if user is admin (mmills or mmills6060@gmail.com)
+        if username not in ['mmills', 'mmills6060@gmail.com']:
+            return JsonResponse({'message': 'Admin access required'}, status=403)
+        
+        # Connect to MongoDB
+        uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+        client = MongoClient(uri)
+        db = client["NeuraNet"]
+        user_collection = db["users"]
+        
+        # Get all users with basic information
+        users = user_collection.find(
+            {},
+            {
+                "_id": 1,
+                "username": 1,
+                "email": 1,
+                "first_name": 1,
+                "last_name": 1,
+                "created_at": 1,
+                "auth_method": 1
+            }
+        )
+        
+        # Convert cursor to list and format the data
+        user_list = []
+        for user in users:
+            user_list.append({
+                "_id": str(user.get("_id")),
+                "username": user.get("username"),
+                "email": user.get("email"),
+                "first_name": user.get("first_name"),
+                "last_name": user.get("last_name"),
+                "created_at": user.get("created_at"),
+                "auth_method": user.get("auth_method", "Email/Password")
+            })
+        
+        return JsonResponse({
+            "result": "success",
+            "users": user_list,
+            "total_count": len(user_list)
+        })
+        
+    except Exception as e:
+        return JsonResponse({'message': f'Error: {str(e)}'}, status=500)
+
+@csrf_exempt
 @require_http_methods(["POST"])
 def send_friend_request(request):
     """Sends a friend request from one user to another."""
