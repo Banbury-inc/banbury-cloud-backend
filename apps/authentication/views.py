@@ -97,13 +97,20 @@ def google(request):
     
     # Validate the redirect URI for security
     allowed_redirect_uris = [
+        # Localhost callbacks
         'http://localhost:3000/authentication/auth/callback',
         'http://localhost:3001/authentication/auth/callback',
         'http://localhost:3002/authentication/auth/callback',
         'http://localhost:3000/files/google_drive/oauth_callback',
         'http://localhost:3001/files/google_drive/oauth_callback',
         'http://localhost:3002/files/google_drive/oauth_callback',
-        REDIRECT_URI  # Keep the original environment variable as fallback
+        # Production/Dev HTTPS callbacks
+        'https://banbury.io/authentication/auth/callback',
+        'https://www.banbury.io/authentication/auth/callback',
+        'https://dev.banbury.io/authentication/auth/callback',
+        'https://www.dev.banbury.io/authentication/auth/callback',
+        # Fallback to configured REDIRECT_URI
+        REDIRECT_URI
     ]
     
     if frontend_redirect_uri not in allowed_redirect_uris:
@@ -151,9 +158,16 @@ def google_callback(request):
         # Determine which redirect URI was used based on the referrer or a parameter
         # For now, we'll try the most common ones
         possible_redirect_uris = [
+            # Localhost callbacks
             'http://localhost:3000/authentication/auth/callback',
             'http://localhost:3001/authentication/auth/callback',
             'http://localhost:3002/authentication/auth/callback',
+            # Production/Dev HTTPS callbacks
+            'https://banbury.io/authentication/auth/callback',
+            'https://www.banbury.io/authentication/auth/callback',
+            'https://dev.banbury.io/authentication/auth/callback',
+            'https://www.dev.banbury.io/authentication/auth/callback',
+            # Fallback to configured REDIRECT_URI
             REDIRECT_URI
         ]
         
