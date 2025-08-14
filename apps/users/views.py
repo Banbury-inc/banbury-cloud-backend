@@ -441,7 +441,41 @@ def list_all_users(request):
         client = MongoClient(uri)
         db = client["NeuraNet"]
         user_collection = db["users"]
+        file_collection = db["files"]
+        ai_usage_collection = db["ai_usage"]
         
+        # Build a map of file counts per user_id
+        try:
+            file_counts_cursor = file_collection.aggregate([
+                {"$group": {"_id": "$user_id", "count": {"$sum": 1}}}
+            ])
+            file_counts_map = {}
+            system_total_files = 0
+            for item in file_counts_cursor:
+                key = str(item.get("_id"))
+                count = int(item.get("count", 0))
+                file_counts_map[key] = count
+                system_total_files += count
+        except Exception:
+            file_counts_map = {}
+            system_total_files = 0
+
+        # Build a map of AI message counts per user_id
+        try:
+            ai_counts_cursor = ai_usage_collection.aggregate([
+                {"$group": {"_id": "$user_id", "count": {"$sum": "$message_count"}}}
+            ])
+            ai_counts_map = {}
+            system_total_ai_messages = 0
+            for item in ai_counts_cursor:
+                key = str(item.get("_id"))
+                count = int(item.get("count", 0))
+                ai_counts_map[key] = count
+                system_total_ai_messages += count
+        except Exception:
+            ai_counts_map = {}
+            system_total_ai_messages = 0
+
         # Get all users with basic information
         users = user_collection.find(
             {},
@@ -459,20 +493,86 @@ def list_all_users(request):
         # Convert cursor to list and format the data
         user_list = []
         for user in users:
+            user_id_str = str(user.get("_id"))
             user_list.append({
-                "_id": str(user.get("_id")),
+                "_id": user_id_str,
                 "username": user.get("username"),
                 "email": user.get("email"),
                 "first_name": user.get("first_name"),
                 "last_name": user.get("last_name"),
                 "created_at": user.get("created_at"),
-                "auth_method": user.get("auth_method", "Email/Password")
+                "auth_method": user.get("auth_method", "Email/Password"),
+                "totalFiles": file_counts_map.get(user_id_str, 0),
+                "aiMessageCount": ai_counts_map.get(user_id_str, 0)
             })
         
         return JsonResponse({
             "result": "success",
             "users": user_list,
-            "total_count": len(user_list)
+            "total_count": len(user_list),
+            "system_total_files": system_total_files,
+            "system_total_ai_messages": system_total_ai_messages
+        })
+
+    except Exception as e:
+        return JsonResponse({'message': f'Error: {str(e)}'}, status=500)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def ai_message_sent(request):
+    """Increment AI message count for the authenticated user and return the new count."""
+    try:
+        # Authenticate via Bearer token
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or ' ' not in auth_header:
+            return JsonResponse({'message': 'Authentication required'}, status=401)
+        auth_type, token = auth_header.split(' ', 1)
+        if auth_type.lower() != 'bearer':
+            return JsonResponse({'message': 'Invalid authentication type'}, status=401)
+
+        try:
+            from rest_framework_simplejwt.tokens import AccessToken
+            validated = AccessToken(token)
+            username = validated.payload.get('username')
+            if not username:
+                return JsonResponse({'message': 'Invalid token'}, status=401)
+        except Exception as e:
+            return JsonResponse({'message': str(e)}, status=401)
+
+        # DB connections
+        uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+        client = MongoClient(uri)
+        db = client["NeuraNet"]
+        user_collection = db["users"]
+        ai_usage_collection = db["ai_usage"]
+
+        # Find user
+        user = user_collection.find_one({"username": username})
+        if not user:
+            return JsonResponse({'message': 'User not found'}, status=404)
+        user_id = user.get('_id')
+
+        # Increment count atomically and upsert
+        from datetime import datetime
+        result = ai_usage_collection.update_one(
+            {"user_id": user_id},
+            {
+                "$inc": {"message_count": 1},
+                "$set": {"last_message_at": datetime.utcnow().isoformat()},
+                "$setOnInsert": {"created_at": datetime.utcnow().isoformat()}
+            },
+            upsert=True
+        )
+
+        # Read back the latest count
+        usage_doc = ai_usage_collection.find_one({"user_id": user_id})
+        count = int(usage_doc.get('message_count', 0)) if usage_doc else 0
+
+        return JsonResponse({
+            'result': 'success',
+            'username': username,
+            'user_id': str(user_id),
+            'aiMessageCount': count
         })
         
     except Exception as e:
