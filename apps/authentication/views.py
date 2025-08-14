@@ -148,6 +148,7 @@ def google(request):
 def google_callback(request):
     """Handles the callback from Google after OAuth2 authentication."""
     code = request.GET.get("code")
+    incoming_redirect_uri = request.GET.get("redirect_uri")
     
     if not code:
         return JsonResponse({
@@ -156,9 +157,9 @@ def google_callback(request):
         }, status=400)
     
     try:
-        # Determine which redirect URI was used based on the referrer or a parameter
-        # For now, we'll try the most common ones
-        possible_redirect_uris = [
+        # Determine which redirect URI was used based on the request parameter or known list
+        # Allowed/known redirect URIs
+        allowed_redirect_uris = [
             # Localhost callbacks
             'http://localhost:3000/authentication/auth/callback',
             'http://localhost:3001/authentication/auth/callback',
@@ -171,6 +172,15 @@ def google_callback(request):
             # Fallback to configured REDIRECT_URI
             REDIRECT_URI
         ]
+
+        # Build a prioritized list: try the incoming redirect_uri first if valid
+        possible_redirect_uris = []
+        if incoming_redirect_uri and incoming_redirect_uri in allowed_redirect_uris:
+            possible_redirect_uris.append(incoming_redirect_uri)
+        # Then extend with the rest, preserving order and avoiding duplicates
+        for uri in allowed_redirect_uris:
+            if uri and uri not in possible_redirect_uris:
+                possible_redirect_uris.append(uri)
         
         credentials = None
         used_redirect_uri = None
