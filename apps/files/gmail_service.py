@@ -434,7 +434,15 @@ def send_reply(username: str, original_message_id: str, to: str, subject: str, b
 def create_message(to: str, subject: str, body: str, cc: str = None, bcc: str = None, 
                   in_reply_to: str = None, references: str = None, thread_id: str = None) -> Dict[str, Any]:
     """Create a message for Gmail API with proper threading support."""
-    message = email.mime.text.MIMEText(body)
+    # Check if body contains HTML tags to determine content type
+    is_html = '<' in body and '>' in body
+    
+    # Create message with appropriate content type
+    if is_html:
+        message = email.mime.text.MIMEText(body, 'html')
+    else:
+        message = email.mime.text.MIMEText(body, 'plain')
+    
     message['to'] = to
     message['subject'] = subject
     
@@ -605,7 +613,14 @@ def send_message_with_signature(username: str, to: str, subject: str, body: str,
         # Add signature if available
         if signature_result["result"] == "success" and signature_result.get("signature"):
             signature = signature_result["signature"]
-            body_with_signature = f"{body}\n\n{signature}"
+            # Check if body contains HTML tags
+            is_html = '<' in body and '>' in body
+            if is_html:
+                # For HTML content, use proper HTML formatting
+                body_with_signature = f"{body}<br><br>{signature}"
+            else:
+                # For plain text, use newlines
+                body_with_signature = f"{body}\n\n{signature}"
         
         # Send the email with signature
         return send_message(username, to, subject, body_with_signature, cc, bcc, is_draft)
