@@ -43,6 +43,8 @@ urlpatterns = [
     path("gmail/send", views.gmail_send_message, name="gmail_send_message"),
     path("gmail/reply", views.gmail_send_reply, name="gmail_send_reply"),
     path("gmail/check_access", views.gmail_check_access, name="gmail_check_access"),
+    path("gmail/signature", views.gmail_get_signature, name="gmail_get_signature"),
+    path("gmail/send_with_signature", views.gmail_send_message_with_signature, name="gmail_send_message_with_signature"),
     # Google Calendar endpoints
     path("google_calendar/check_access", views.google_calendar_check_access, name="google_calendar_check_access"),
     path("google_calendar/events", views.google_calendar_list_events, name="google_calendar_list_events"),

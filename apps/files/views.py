@@ -1864,6 +1864,61 @@ def gmail_list_threads(request):
     return JsonResponse(result)
 
 
+@csrf_exempt
+@require_http_methods(["GET"])
+@authentication_classes([])
+def gmail_get_signature(request):
+    """
+    Get the user's Gmail signature from their account settings.
+    """
+    username = request.username_from_token
+    
+    from .gmail_service import get_email_signature
+    result = get_email_signature(username)
+    return JsonResponse(result)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+@authentication_classes([])
+def gmail_send_message_with_signature(request):
+    """
+    Send an email with the user's signature automatically added.
+    
+    Expected JSON payload:
+    {
+        "to": "recipient@example.com",
+        "subject": "Email subject",
+        "body": "Email body content",
+        "cc": "cc@example.com" (optional),
+        "bcc": "bcc@example.com" (optional),
+        "isDraft": false (optional)
+    }
+    """
+    username = request.username_from_token
+    
+    try:
+        data = json.loads(request.body)
+        to = data.get('to')
+        subject = data.get('subject')
+        body = data.get('body')
+        cc = data.get('cc')
+        bcc = data.get('bcc')
+        is_draft = data.get('isDraft', False)
+        
+        if not is_draft and (not to or not subject or not body):
+            return JsonResponse({
+                "error": "Missing required fields: to, subject, body (unless isDraft is true)"
+            }, status=400)
+        
+        from .gmail_service import send_message_with_signature
+        result = send_message_with_signature(username, to, subject, body, cc, bcc, is_draft)
+        return JsonResponse(result)
+        
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+
 # =============================================================================
 # Google Calendar API Views
 # =============================================================================

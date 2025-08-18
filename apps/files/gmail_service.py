@@ -495,7 +495,8 @@ def check_gmail_access(username: str) -> Dict[str, Any]:
         # Check if Gmail scope is available
         gmail_scopes = [
             'https://www.googleapis.com/auth/gmail.modify',
-            'https://www.googleapis.com/auth/gmail.readonly'
+            'https://www.googleapis.com/auth/gmail.readonly',
+            'https://www.googleapis.com/auth/gmail.settings.basic'
         ]
         
         has_gmail_scope = any(scope in credentials.scopes for scope in gmail_scopes)
@@ -525,4 +526,93 @@ def check_gmail_access(username: str) -> Dict[str, Any]:
             "result": "error",
             "has_access": False,
             "message": f"Error checking Gmail access: {str(e)}"
+        }
+
+
+def get_email_signature(username: str) -> Dict[str, Any]:
+    """Get the user's Gmail signature from their account settings."""
+    try:
+        service = get_gmail_service(username)
+        if not service:
+            return {
+                "result": "error",
+                "error": "Gmail service not available"
+            }
+        
+        # Get the list of send-as identities
+        send_as_list = service.users().settings().sendAs().list(userId='me').execute()
+        send_as_identities = send_as_list.get('sendAs', [])
+        
+        if not send_as_identities:
+            return {
+                "result": "error",
+                "error": "No send-as identities found"
+            }
+        
+        # Get the primary send-as identity (usually the user's main email)
+        primary_send_as = None
+        for send_as in send_as_identities:
+            if send_as.get('isPrimary', False):
+                primary_send_as = send_as
+                break
+        
+        # If no primary found, use the first one
+        if not primary_send_as and send_as_identities:
+            primary_send_as = send_as_identities[0]
+        
+        if not primary_send_as:
+            return {
+                "result": "error",
+                "error": "No valid send-as identity found"
+            }
+        
+        # Get the signature for the primary send-as identity
+        signature_response = service.users().settings().sendAs().get(
+            userId='me',
+            sendAsEmail=primary_send_as['sendAsEmail']
+        ).execute()
+        
+        signature = signature_response.get('signature', '')
+        
+        return {
+            "result": "success",
+            "signature": signature,
+            "send_as_email": primary_send_as['sendAsEmail']
+        }
+        
+    except HttpError as e:
+        print(f"Gmail API error in get_email_signature: {e}")
+        return {
+            "result": "error",
+            "error": f"Gmail API error: {str(e)}"
+        }
+    except Exception as e:
+        print(f"Error getting email signature: {e}")
+        return {
+            "result": "error",
+            "error": f"Error getting email signature: {str(e)}"
+        }
+
+
+def send_message_with_signature(username: str, to: str, subject: str, body: str, 
+                              cc: str = None, bcc: str = None, is_draft: bool = False) -> Dict[str, Any]:
+    """Send an email with the user's signature automatically added."""
+    try:
+        # Get the user's signature first
+        signature_result = get_email_signature(username)
+        body_with_signature = body
+        
+        # Add signature if available
+        if signature_result["result"] == "success" and signature_result.get("signature"):
+            signature = signature_result["signature"]
+            body_with_signature = f"{body}\n\n{signature}"
+        
+        # Send the email with signature
+        return send_message(username, to, subject, body_with_signature, cc, bcc, is_draft)
+        
+    except Exception as e:
+        print(f"Error sending message with signature: {e}")
+        return {
+            "result": "error",
+            "error": f"Error sending message with signature: {str(e)}"
         } 
