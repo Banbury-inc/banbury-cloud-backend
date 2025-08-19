@@ -184,7 +184,7 @@ def google_callback(request):
     incoming_redirect_uri = request.GET.get("redirect_uri")
     
     # Add debugging information
-    print(f"Google callback received - Code: {code[:10]}..., Redirect URI: {incoming_redirect_uri}")
+    print(f"Google callback received - Code: {code[:10] if code else 'None'}..., Redirect URI: {incoming_redirect_uri}")
     print(f"REDIRECT_URI env var: {REDIRECT_URI}")
     
     if not code:
