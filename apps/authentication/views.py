@@ -176,10 +176,16 @@ def google(request):
         "authUrl": authorization_url
     })
 
+@csrf_exempt
+@require_http_methods(["GET"])
 def google_callback(request):
     """Handles the callback from Google after OAuth2 authentication."""
     code = request.GET.get("code")
     incoming_redirect_uri = request.GET.get("redirect_uri")
+    
+    # Add debugging information
+    print(f"Google callback received - Code: {code[:10]}..., Redirect URI: {incoming_redirect_uri}")
+    print(f"REDIRECT_URI env var: {REDIRECT_URI}")
     
     if not code:
         return JsonResponse({
@@ -219,30 +225,43 @@ def google_callback(request):
         
         # Try each possible redirect URI until one works
         for redirect_uri in possible_redirect_uris:
-            try:
-                # Create a new flow instance for this redirect URI
-                flow_instance = Flow.from_client_config(
-                    {
-                        "web": {
-                            "client_id": GOOGLE_CLIENT_ID,
-                            "client_secret": GOOGLE_CLIENT_SECRET,
-                            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                            "token_uri": "https://oauth2.googleapis.com/token",
-                            "redirect_uris": [redirect_uri],
-                        }
-                    },
-                    scopes=MINIMAL_SCOPES
-                )
-                flow_instance.redirect_uri = redirect_uri
-                
-                # Try to exchange the code for credentials
-                flow_instance.fetch_token(code=code)
-                credentials = flow_instance.credentials
-                used_redirect_uri = redirect_uri
+            # Try with different scope combinations
+            # Start with minimal scopes, then try legacy scopes, then try all possible scopes
+            all_possible_scopes = list(set(MINIMAL_SCOPES + LEGACY_SCOPES))
+            scope_sets = [MINIMAL_SCOPES, LEGACY_SCOPES, all_possible_scopes]
+            
+            for scopes in scope_sets:
+                try:
+                    print(f"Trying redirect URI: {redirect_uri} with scopes: {scopes}")
+                    # Create a new flow instance for this redirect URI
+                    flow_instance = Flow.from_client_config(
+                        {
+                            "web": {
+                                "client_id": GOOGLE_CLIENT_ID,
+                                "client_secret": GOOGLE_CLIENT_SECRET,
+                                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                                "token_uri": "https://oauth2.googleapis.com/token",
+                                "redirect_uris": [redirect_uri],
+                            }
+                        },
+                        scopes=scopes
+                    )
+                    flow_instance.redirect_uri = redirect_uri
+                    
+                    # Try to exchange the code for credentials
+                    flow_instance.fetch_token(code=code)
+                    credentials = flow_instance.credentials
+                    used_redirect_uri = redirect_uri
+                    print(f"Successfully exchanged code for credentials using: {redirect_uri} with scopes: {scopes}")
+                    break
+                except Exception as e:
+                    # This scope set didn't work, try the next one
+                    print(f"Failed to exchange code with redirect URI {redirect_uri} and scopes {scopes}: {str(e)}")
+                    continue
+            
+            # If we got credentials, break out of the redirect URI loop
+            if credentials:
                 break
-            except Exception as e:
-                # This redirect URI didn't work, try the next one
-                continue
         
         if not credentials:
             return JsonResponse({
@@ -402,7 +421,12 @@ def login_api(request):
 
         # extract username and password from the JSON data
         username = data.get("username")
-        password = data.get("password").encode("utf-8")
+        password = data.get("password")
+        
+        if not username or not password:
+            return JsonResponse({"error": "Username and password are required"}, status=400)
+        
+        password = password.encode("utf-8")
 
         user = user_collection.find_one({"username": username})
 
