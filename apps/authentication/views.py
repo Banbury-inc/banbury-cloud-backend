@@ -230,6 +230,7 @@ def google_callback(request):
         
         credentials = None
         used_redirect_uri = None
+        attempt_errors = []  # collect debug info for failures
         
         # Try each possible redirect URI until one works
         for redirect_uri in possible_redirect_uris:
@@ -254,8 +255,8 @@ def google_callback(request):
                     )
                     flow_instance.redirect_uri = redirect_uri
                     
-                    # Try to exchange the code for credentials
-                    flow_instance.fetch_token(code=code)
+                    # Try to exchange the code for credentials (explicit redirect_uri)
+                    flow_instance.fetch_token(code=code, redirect_uri=redirect_uri)
                     credentials = flow_instance.credentials
                     used_redirect_uri = redirect_uri
                     print(f"Successfully exchanged code for credentials using: {redirect_uri} with scopes: {scopes}")
@@ -263,6 +264,11 @@ def google_callback(request):
                 except Exception as e:
                     # This scope combination didn't work, try the next one
                     print(f"Failed to exchange code with redirect URI {redirect_uri} and scopes {scopes}: {str(e)}")
+                    attempt_errors.append({
+                        "redirect_uri": redirect_uri,
+                        "scopes": scopes,
+                        "error": str(e)
+                    })
                     continue
             
             # If we got credentials, break out of the redirect URI loop
@@ -273,7 +279,12 @@ def google_callback(request):
             print("Failed to exchange authorization code for credentials after trying all combinations")
             return JsonResponse({
                 "success": False,
-                "error": "Failed to exchange authorization code for credentials. Please try again."
+                "error": "Failed to exchange authorization code for credentials.",
+                "details": {
+                    "incoming_redirect_uri": incoming_redirect_uri,
+                    "tried_redirect_uris": possible_redirect_uris,
+                    "attempts": attempt_errors
+                }
             }, status=400)
         
         # Verify the ID token
