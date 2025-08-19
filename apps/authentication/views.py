@@ -232,48 +232,58 @@ def google_callback(request):
         used_redirect_uri = None
         attempt_errors = []  # collect debug info for failures
         
-        # Try each possible redirect URI until one works
-        for redirect_uri in possible_redirect_uris:
-            # Try with different scope combinations
-            scope_combinations = [MINIMAL_SCOPES, LEGACY_SCOPES]
-            
-            for scopes in scope_combinations:
-                try:
-                    print(f"Trying redirect URI: {redirect_uri} with scopes: {scopes}")
-                    # Create a new flow instance for this redirect URI
-                    flow_instance = Flow.from_client_config(
-                        {
-                            "web": {
-                                "client_id": GOOGLE_CLIENT_ID,
-                                "client_secret": GOOGLE_CLIENT_SECRET,
-                                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                                "token_uri": "https://oauth2.googleapis.com/token",
-                                "redirect_uris": [redirect_uri],
-                            }
-                        },
-                        scopes=scopes
-                    )
-                    flow_instance.redirect_uri = redirect_uri
-                    
-                    # Try to exchange the code for credentials; redirect_uri already set on flow_instance
-                    flow_instance.fetch_token(code=code)
-                    credentials = flow_instance.credentials
-                    used_redirect_uri = redirect_uri
-                    print(f"Successfully exchanged code for credentials using: {redirect_uri} with scopes: {scopes}")
-                    break
-                except Exception as e:
-                    # This scope combination didn't work, try the next one
-                    print(f"Failed to exchange code with redirect URI {redirect_uri} and scopes {scopes}: {str(e)}")
-                    attempt_errors.append({
-                        "redirect_uri": redirect_uri,
-                        "scopes": scopes,
-                        "error": str(e)
-                    })
-                    continue
-            
-            # If we got credentials, break out of the redirect URI loop
-            if credentials:
-                break
+        # Read granted scopes (Google may include this in callback query)
+        granted_scope_param = request.GET.get('scope')
+        granted_scopes_list = None
+        if granted_scope_param:
+            try:
+                granted_scopes_list = granted_scope_param.split(' ')
+                print(f"Granted scopes from callback: {granted_scopes_list}")
+            except Exception as e:
+                print(f"Failed parsing granted scopes: {e}")
+
+        # Only use the incoming redirect URI to avoid consuming the code on multiple attempts
+        if incoming_redirect_uri and incoming_redirect_uri in allowed_redirect_uris:
+            redirect_uri = incoming_redirect_uri
+        else:
+            return JsonResponse({
+                "success": False,
+                "error": "Invalid or missing redirect URI",
+                "details": {
+                    "incoming_redirect_uri": incoming_redirect_uri,
+                    "allowed_redirect_uris": allowed_redirect_uris
+                }
+            }, status=400)
+
+        # Decide scopes to use for token exchange: prefer granted scopes from callback
+        scopes_to_use = granted_scopes_list if granted_scopes_list else MINIMAL_SCOPES
+
+        try:
+            print(f"Exchanging code with redirect_uri={redirect_uri} and scopes={scopes_to_use}")
+            flow_instance = Flow.from_client_config(
+                {
+                    "web": {
+                        "client_id": GOOGLE_CLIENT_ID,
+                        "client_secret": GOOGLE_CLIENT_SECRET,
+                        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                        "token_uri": "https://oauth2.googleapis.com/token",
+                        "redirect_uris": [redirect_uri],
+                    }
+                },
+                scopes=scopes_to_use
+            )
+            flow_instance.redirect_uri = redirect_uri
+            flow_instance.fetch_token(code=code)
+            credentials = flow_instance.credentials
+            used_redirect_uri = redirect_uri
+            print("Successfully exchanged code for credentials.")
+        except Exception as e:
+            print(f"Token exchange failed: {e}")
+            attempt_errors.append({
+                "redirect_uri": redirect_uri,
+                "scopes": scopes_to_use,
+                "error": str(e)
+            })
         
         if not credentials:
             print("Failed to exchange authorization code for credentials after trying all combinations")
