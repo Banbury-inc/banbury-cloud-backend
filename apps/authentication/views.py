@@ -1,4 +1,5 @@
 from django.views.decorators.csrf import csrf_exempt
+import base64
 from django.views.decorators.http import require_http_methods
 from rest_framework.permissions import AllowAny
 import bcrypt
@@ -166,10 +167,18 @@ def google(request):
     flow_instance.redirect_uri = frontend_redirect_uri
     
     # Generate the authorization URL without state
+    # Encode scopes into state so callback can reconstruct exact scope set
+    try:
+        state_payload = {"scopes": MINIMAL_SCOPES, "type": "initial"}
+        encoded_state = base64.urlsafe_b64encode(json.dumps(state_payload).encode()).decode()
+    except Exception:
+        encoded_state = None
+
     authorization_url, _ = flow_instance.authorization_url(
         access_type='offline',
-        include_granted_scopes='true',
-        prompt='consent'
+        include_granted_scopes='false',
+        prompt='consent',
+        state=encoded_state
     )
     
     return JsonResponse({
@@ -232,15 +241,26 @@ def google_callback(request):
         used_redirect_uri = None
         attempt_errors = []  # collect debug info for failures
         
-        # Read granted scopes (Google may include this in callback query)
-        granted_scope_param = request.GET.get('scope')
+        # Reconstruct scopes: prefer scopes encoded in state, then 'scope' param
         granted_scopes_list = None
-        if granted_scope_param:
+        state_param = request.GET.get('state')
+        if state_param:
             try:
-                granted_scopes_list = granted_scope_param.split(' ')
-                print(f"Granted scopes from callback: {granted_scopes_list}")
+                decoded = base64.urlsafe_b64decode(state_param.encode()).decode()
+                state_obj = json.loads(decoded)
+                if isinstance(state_obj, dict) and isinstance(state_obj.get('scopes'), list):
+                    granted_scopes_list = state_obj['scopes']
+                    print(f"Scopes from state: {granted_scopes_list}")
             except Exception as e:
-                print(f"Failed parsing granted scopes: {e}")
+                print(f"Failed parsing state scopes: {e}")
+        if not granted_scopes_list:
+            granted_scope_param = request.GET.get('scope')
+            if granted_scope_param:
+                try:
+                    granted_scopes_list = granted_scope_param.split(' ')
+                    print(f"Granted scopes from callback param: {granted_scopes_list}")
+                except Exception as e:
+                    print(f"Failed parsing granted scopes: {e}")
 
         # Only use the incoming redirect URI to avoid consuming the code on multiple attempts
         if incoming_redirect_uri and incoming_redirect_uri in allowed_redirect_uris:
