@@ -1,5 +1,6 @@
 from django.views.decorators.csrf import csrf_exempt
 import base64
+import os
 from django.views.decorators.http import require_http_methods
 from rest_framework.permissions import AllowAny
 import bcrypt
@@ -167,19 +168,25 @@ def google(request):
     flow_instance.redirect_uri = frontend_redirect_uri
     
     # Generate the authorization URL without state
-    # Encode scopes into state so callback can reconstruct exact scope set
-    try:
-        state_payload = {"scopes": MINIMAL_SCOPES, "type": "initial"}
-        encoded_state = base64.urlsafe_b64encode(json.dumps(state_payload).encode()).decode()
-    except Exception:
-        encoded_state = None
+    # Configure optional state and include_granted_scopes via env for flexibility/testing
+    use_state = os.environ.get('OAUTH_USE_STATE') == '1'
+    include_granted = os.environ.get('OAUTH_INCLUDE_GRANTED_SCOPES', 'true').lower() == 'true'
 
-    authorization_url, _ = flow_instance.authorization_url(
-        access_type='offline',
-        include_granted_scopes='false',
-        prompt='consent',
-        state=encoded_state
-    )
+    kwargs = {
+        'access_type': 'offline',
+        'include_granted_scopes': 'true' if include_granted else 'false',
+        'prompt': 'consent',
+    }
+
+    if use_state:
+        try:
+            state_payload = {"scopes": MINIMAL_SCOPES, "type": "initial"}
+            encoded_state = base64.urlsafe_b64encode(json.dumps(state_payload).encode()).decode()
+            kwargs['state'] = encoded_state
+        except Exception:
+            pass
+
+    authorization_url, _ = flow_instance.authorization_url(**kwargs)
     
     return JsonResponse({
         "authUrl": authorization_url
