@@ -248,26 +248,27 @@ def google_callback(request):
         used_redirect_uri = None
         attempt_errors = []  # collect debug info for failures
         
-        # Reconstruct scopes: prefer scopes encoded in state, then 'scope' param
+        # Reconstruct scopes: prefer 'scope' param from Google callback; normalize short names
+        def normalize_scopes(scopes: list) -> list:
+            mapping = {
+                'email': 'https://www.googleapis.com/auth/userinfo.email',
+                'profile': 'https://www.googleapis.com/auth/userinfo.profile',
+            }
+            result = []
+            for s in scopes:
+                s2 = mapping.get(s, s)
+                if s2 not in result:
+                    result.append(s2)
+            return result
+
         granted_scopes_list = None
-        state_param = request.GET.get('state')
-        if state_param:
+        granted_scope_param = request.GET.get('scope')
+        if granted_scope_param:
             try:
-                decoded = base64.urlsafe_b64decode(state_param.encode()).decode()
-                state_obj = json.loads(decoded)
-                if isinstance(state_obj, dict) and isinstance(state_obj.get('scopes'), list):
-                    granted_scopes_list = state_obj['scopes']
-                    print(f"Scopes from state: {granted_scopes_list}")
+                granted_scopes_list = normalize_scopes(granted_scope_param.split(' '))
+                print(f"Granted scopes from callback param (normalized): {granted_scopes_list}")
             except Exception as e:
-                print(f"Failed parsing state scopes: {e}")
-        if not granted_scopes_list:
-            granted_scope_param = request.GET.get('scope')
-            if granted_scope_param:
-                try:
-                    granted_scopes_list = granted_scope_param.split(' ')
-                    print(f"Granted scopes from callback param: {granted_scopes_list}")
-                except Exception as e:
-                    print(f"Failed parsing granted scopes: {e}")
+                print(f"Failed parsing granted scopes: {e}")
 
         # Only use the incoming redirect URI to avoid consuming the code on multiple attempts
         if incoming_redirect_uri and incoming_redirect_uri in allowed_redirect_uris:
@@ -300,6 +301,11 @@ def google_callback(request):
                 scopes=scopes_to_use
             )
             flow_instance.redirect_uri = redirect_uri
+            # Avoid oauthlib scope mismatch parsing by unsetting client scope before parsing response
+            try:
+                flow_instance.client.scope = None
+            except Exception:
+                pass
             flow_instance.fetch_token(code=code)
             credentials = flow_instance.credentials
             used_redirect_uri = redirect_uri
@@ -311,6 +317,39 @@ def google_callback(request):
                 "scopes": scopes_to_use,
                 "error": str(e)
             })
+            # If the error tells us scopes have changed, extract them and retry once
+            try:
+                msg = str(e)
+                marker = ' to "'
+                if 'Scope has changed' in msg and marker in msg:
+                    new_scopes_str = msg.split(marker, 1)[1].rstrip('".')
+                    derived_scopes = new_scopes_str.split(' ')
+                    print(f"Retrying with scopes derived from error: {derived_scopes}")
+                    flow_instance2 = Flow.from_client_config(
+                        {
+                            "web": {
+                                "client_id": GOOGLE_CLIENT_ID,
+                                "client_secret": GOOGLE_CLIENT_SECRET,
+                                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                                "token_uri": "https://oauth2.googleapis.com/token",
+                                "redirect_uris": [redirect_uri],
+                            }
+                        },
+                        scopes=derived_scopes
+                    )
+                    flow_instance2.redirect_uri = redirect_uri
+                    try:
+                        flow_instance2.client.scope = None
+                    except Exception:
+                        pass
+                    flow_instance2.fetch_token(code=code)
+                    credentials = flow_instance2.credentials
+                    used_redirect_uri = redirect_uri
+                    print("Successfully exchanged code after deriving scopes from error.")
+                else:
+                    print("No derivable scopes from error message.")
+            except Exception as e2:
+                print(f"Retry with derived scopes failed: {e2}")
         
         if not credentials:
             print("Failed to exchange authorization code for credentials after trying all combinations")
