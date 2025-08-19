@@ -186,6 +186,7 @@ def google_callback(request):
     # Add debugging information
     print(f"Google callback received - Code: {code[:10] if code else 'None'}..., Redirect URI: {incoming_redirect_uri}")
     print(f"REDIRECT_URI env var: {REDIRECT_URI}")
+    print(f"All query params: {dict(request.GET)}")
     
     if not code:
         return JsonResponse({
@@ -220,17 +221,22 @@ def google_callback(request):
             if uri and uri not in possible_redirect_uris:
                 possible_redirect_uris.append(uri)
         
+        # If no redirect URIs were found, use the default
+        if not possible_redirect_uris:
+            possible_redirect_uris = [REDIRECT_URI]
+            print(f"No valid redirect URIs found, using default: {REDIRECT_URI}")
+        
+        print(f"Will try these redirect URIs: {possible_redirect_uris}")
+        
         credentials = None
         used_redirect_uri = None
         
         # Try each possible redirect URI until one works
         for redirect_uri in possible_redirect_uris:
             # Try with different scope combinations
-            # Start with minimal scopes, then try legacy scopes, then try all possible scopes
-            all_possible_scopes = list(set(MINIMAL_SCOPES + LEGACY_SCOPES))
-            scope_sets = [MINIMAL_SCOPES, LEGACY_SCOPES, all_possible_scopes]
+            scope_combinations = [MINIMAL_SCOPES, LEGACY_SCOPES]
             
-            for scopes in scope_sets:
+            for scopes in scope_combinations:
                 try:
                     print(f"Trying redirect URI: {redirect_uri} with scopes: {scopes}")
                     # Create a new flow instance for this redirect URI
@@ -255,7 +261,7 @@ def google_callback(request):
                     print(f"Successfully exchanged code for credentials using: {redirect_uri} with scopes: {scopes}")
                     break
                 except Exception as e:
-                    # This scope set didn't work, try the next one
+                    # This scope combination didn't work, try the next one
                     print(f"Failed to exchange code with redirect URI {redirect_uri} and scopes {scopes}: {str(e)}")
                     continue
             
@@ -264,9 +270,10 @@ def google_callback(request):
                 break
         
         if not credentials:
+            print("Failed to exchange authorization code for credentials after trying all combinations")
             return JsonResponse({
                 "success": False,
-                "error": "Failed to exchange authorization code for credentials"
+                "error": "Failed to exchange authorization code for credentials. Please try again."
             }, status=400)
         
         # Verify the ID token
@@ -399,10 +406,12 @@ def google_callback(request):
         })
         
     except Exception as e:
-        print(f"Error in callback: {str(e)}")
+        print(f"Error in google_callback: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return JsonResponse({
             "success": False,
-            "error": str(e)
+            "error": f"Authentication failed: {str(e)}"
         }, status=400)
 
 
