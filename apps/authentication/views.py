@@ -68,8 +68,34 @@ def login(request):
 
 
 
-# Configure Google OAuth2
-SCOPES = [
+# Configure Google OAuth2 - Minimal initial scopes
+MINIMAL_SCOPES = [
+    "https://www.googleapis.com/auth/userinfo.profile",
+    "https://www.googleapis.com/auth/userinfo.email",
+    "openid"
+]
+
+# All available scopes for incremental authorization
+ALL_SCOPES = {
+    "profile": [
+        "https://www.googleapis.com/auth/userinfo.profile",
+        "https://www.googleapis.com/auth/userinfo.email"
+    ],
+    "drive": [
+        "https://www.googleapis.com/auth/drive",
+        "https://www.googleapis.com/auth/drive.file"
+    ],
+    "gmail": [
+        "https://www.googleapis.com/auth/gmail.modify",
+        "https://www.googleapis.com/auth/gmail.settings.basic"
+    ],
+    "calendar": [
+        "https://www.googleapis.com/auth/calendar"
+    ]
+}
+
+# Legacy scopes for backward compatibility
+LEGACY_SCOPES = [
     "https://www.googleapis.com/auth/userinfo.profile",
     "https://www.googleapis.com/auth/userinfo.email",
     "https://www.googleapis.com/auth/drive",
@@ -80,7 +106,7 @@ SCOPES = [
     "openid"
 ]
 
-# Create the flow object
+# Create the flow object with minimal scopes
 flow = Flow.from_client_config(
     {
         "web": {
@@ -91,7 +117,7 @@ flow = Flow.from_client_config(
             "redirect_uris": [REDIRECT_URI],
         }
     },
-    scopes=SCOPES
+    scopes=MINIMAL_SCOPES
 )
 
 def google(request):
@@ -124,7 +150,7 @@ def google(request):
             "error": "Invalid redirect URI"
         }, status=400)
     
-    # Create a new flow instance with the correct redirect URI
+    # Create a new flow instance with the correct redirect URI and minimal scopes
     flow_instance = Flow.from_client_config(
         {
             "web": {
@@ -135,7 +161,7 @@ def google(request):
                 "redirect_uris": [frontend_redirect_uri],
             }
         },
-        scopes=SCOPES
+        scopes=MINIMAL_SCOPES
     )
     flow_instance.redirect_uri = frontend_redirect_uri
     
@@ -205,7 +231,7 @@ def google_callback(request):
                             "redirect_uris": [redirect_uri],
                         }
                     },
-                    scopes=SCOPES
+                    scopes=MINIMAL_SCOPES
                 )
                 flow_instance.redirect_uri = redirect_uri
                 
@@ -1344,3 +1370,190 @@ def gmail_list_threads(request):
     from apps.files.gmail_service import list_threads
     result = list_threads(username, query, max_results)
     return JsonResponse(result)
+
+
+# =============================================================================
+# Scope Management Endpoints
+# =============================================================================
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def get_user_scopes(request):
+    """Get the current scopes for the authenticated user."""
+    username = _require_auth_username(request)
+    if not username:
+        return JsonResponse({"message": "Authentication required"}, status=401)
+    
+    try:
+        # Import the get_user_drive_credentials function from files app
+        from apps.files.google_drive_service import get_user_drive_credentials
+        
+        credentials = get_user_drive_credentials(username)
+        if not credentials:
+            return JsonResponse({
+                "scopes": [],
+                "message": "No Google credentials found"
+            })
+        
+        # Determine which features are available based on scopes
+        available_features = {
+            "profile": any(scope in credentials.scopes for scope in ALL_SCOPES["profile"]),
+            "drive": any(scope in credentials.scopes for scope in ALL_SCOPES["drive"]),
+            "gmail": any(scope in credentials.scopes for scope in ALL_SCOPES["gmail"]),
+            "calendar": any(scope in credentials.scopes for scope in ALL_SCOPES["calendar"])
+        }
+        
+        return JsonResponse({
+            "scopes": credentials.scopes,
+            "available_features": available_features,
+            "message": "Scopes retrieved successfully"
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            "error": f"Failed to get user scopes: {str(e)}"
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def request_additional_scopes(request):
+    """Request additional scopes for the authenticated user."""
+    username = _require_auth_username(request)
+    if not username:
+        return JsonResponse({"message": "Authentication required"}, status=401)
+    
+    try:
+        data = json.loads(request.body)
+        requested_features = data.get('features', [])
+        
+        if not requested_features:
+            return JsonResponse({
+                "error": "No features specified"
+            }, status=400)
+        
+        # Validate requested features
+        valid_features = list(ALL_SCOPES.keys())
+        invalid_features = [f for f in requested_features if f not in valid_features]
+        if invalid_features:
+            return JsonResponse({
+                "error": f"Invalid features: {invalid_features}. Valid features: {valid_features}"
+            }, status=400)
+        
+        # Get current scopes
+        from apps.files.google_drive_service import get_user_drive_credentials
+        credentials = get_user_drive_credentials(username)
+        
+        if not credentials:
+            return JsonResponse({
+                "error": "No Google credentials found. Please authenticate with Google first."
+            }, status=400)
+        
+        # Determine which scopes to request
+        current_scopes = set(credentials.scopes)
+        requested_scopes = set()
+        
+        for feature in requested_features:
+            requested_scopes.update(ALL_SCOPES[feature])
+        
+        # Only request scopes that aren't already granted
+        new_scopes = requested_scopes - current_scopes
+        
+        if not new_scopes:
+            return JsonResponse({
+                "message": "All requested scopes are already granted",
+                "scopes": list(current_scopes)
+            })
+        
+        # Get the redirect URI from the request
+        frontend_redirect_uri = request.GET.get('redirect_uri', REDIRECT_URI)
+        
+        # Validate the redirect URI for security
+        allowed_redirect_uris = [
+            'http://localhost:3000/authentication/auth/callback',
+            'http://localhost:3001/authentication/auth/callback',
+            'http://localhost:3002/authentication/auth/callback',
+            'http://localhost:8080/authentication/auth/callback',
+            'https://banbury.io/authentication/auth/callback',
+            'https://www.banbury.io/authentication/auth/callback',
+            'https://dev.banbury.io/authentication/auth/callback',
+            'https://www.dev.banbury.io/authentication/auth/callback',
+            REDIRECT_URI
+        ]
+        
+        if frontend_redirect_uri not in allowed_redirect_uris:
+            return JsonResponse({
+                "error": "Invalid redirect URI"
+            }, status=400)
+        
+        # Create OAuth flow with additional scopes
+        all_scopes = list(current_scopes) + list(new_scopes)
+        flow_instance = Flow.from_client_config(
+            {
+                "web": {
+                    "client_id": GOOGLE_CLIENT_ID,
+                    "client_secret": GOOGLE_CLIENT_SECRET,
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                    "redirect_uris": [frontend_redirect_uri],
+                }
+            },
+            scopes=all_scopes
+        )
+        flow_instance.redirect_uri = frontend_redirect_uri
+        
+        # Generate the authorization URL
+        authorization_url, _ = flow_instance.authorization_url(
+            access_type='offline',
+            include_granted_scopes='true',
+            prompt='consent'
+        )
+        
+        return JsonResponse({
+            "authUrl": authorization_url,
+            "requested_features": requested_features,
+            "new_scopes": list(new_scopes),
+            "message": "Additional scopes authorization URL generated"
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+    except Exception as e:
+        return JsonResponse({
+            "error": f"Failed to request additional scopes: {str(e)}"
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def get_available_features(request):
+    """Get information about available Google features and their required scopes."""
+    return JsonResponse({
+        "features": {
+            "profile": {
+                "name": "Profile Information",
+                "description": "Access to your Google profile information (name, email, picture)",
+                "scopes": ALL_SCOPES["profile"],
+                "required": True
+            },
+            "drive": {
+                "name": "Google Drive",
+                "description": "Access to read, write, and manage files in your Google Drive",
+                "scopes": ALL_SCOPES["drive"],
+                "required": False
+            },
+            "gmail": {
+                "name": "Gmail",
+                "description": "Access to read, send, and manage your Gmail messages",
+                "scopes": ALL_SCOPES["gmail"],
+                "required": False
+            },
+            "calendar": {
+                "name": "Google Calendar",
+                "description": "Access to read and manage your Google Calendar events",
+                "scopes": ALL_SCOPES["calendar"],
+                "required": False
+            }
+        },
+        "message": "Available features retrieved successfully"
+    })
