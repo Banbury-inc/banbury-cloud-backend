@@ -255,8 +255,8 @@ def google_callback(request):
                     )
                     flow_instance.redirect_uri = redirect_uri
                     
-                    # Try to exchange the code for credentials (explicit redirect_uri)
-                    flow_instance.fetch_token(code=code, redirect_uri=redirect_uri)
+                    # Try to exchange the code for credentials; redirect_uri already set on flow_instance
+                    flow_instance.fetch_token(code=code)
                     credentials = flow_instance.credentials
                     used_redirect_uri = redirect_uri
                     print(f"Successfully exchanged code for credentials using: {redirect_uri} with scopes: {scopes}")
