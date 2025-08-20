@@ -23,4 +23,11 @@ urlpatterns = [
     path("memory/context/", views.get_memory_context, name="get_memory_context"),
     path("memory/conversation/", views.add_conversation_to_memory, name="add_conversation_to_memory"),
     path("memory/status/", views.get_memory_status, name="get_memory_status"),
+    
+    # Knowledge Graph endpoints
+    path("knowledge/graph/", views.get_knowledge_graph, name="get_knowledge_graph"),
+    path("knowledge/search/", views.search_knowledge_graph, name="search_knowledge_graph"),
+    path("knowledge/entity/add/", views.add_entity_to_graph, name="add_entity_to_graph"),
+    path("knowledge/fact/add/", views.add_fact_to_graph, name="add_fact_to_graph"),
+    path("knowledge/document/add/", views.add_document_to_graph, name="add_document_to_graph"),
 ]

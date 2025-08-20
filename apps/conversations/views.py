@@ -4,6 +4,7 @@ from django.http import JsonResponse
 import json
 from .models import Conversation, Memory
 from .memory_service import memory_service
+from datetime import datetime
 
 @csrf_exempt
 @require_http_methods(["POST"])
@@ -668,6 +669,471 @@ def get_memory_status(request):
             "success": True,
             "status": status
         })
+    except Exception as e:
+        return JsonResponse({
+            "success": False,
+            "error": str(e)
+        }, status=500)
+
+# Knowledge Graph Endpoints
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def get_knowledge_graph(request):
+    """
+    Get the full knowledge graph data for the authenticated user
+    
+    Query parameters:
+    - limit: Maximum number of entities/facts to return (default: 50)
+    - scope: Search scope - 'nodes' for entities, 'edges' for facts, or 'both' (default: 'both')
+    """
+    try:
+        username = request.username_from_token
+        
+        limit = int(request.GET.get("limit", 50))
+        scope = request.GET.get("scope", "both")
+        
+        if scope == "both":
+            # Use rich search results for entities
+            entities_result = memory_service.search_memories_enhanced(
+                username, "", "assistant_ui", limit, None, True, "nodes", "cross_encoder"
+            )
+            
+            # Try to get rich facts from search first, fallback to thread messages
+            try:
+                facts_result = memory_service.search_memories_enhanced(
+                    username, "user", "assistant_ui", limit, None, True, "edges", "cross_encoder"
+                )
+                if not facts_result.get("zep_facts"):
+                    raise Exception("No facts found in search")
+            except:
+                # Fallback to thread messages
+                all_messages = memory_service.get_thread_messages(username, "assistant_ui", limit)
+                facts = []
+                for msg in all_messages:
+                    facts.append({
+                        "fact": f"{msg.get('role', 'user')}: {msg.get('content', '')}",
+                        "confidence": 1.0,
+                        "score": 1.0,
+                        "created_at": msg.get('created_at', ''),
+                        "uuid": msg.get('uuid', ''),
+                        "labels": [msg.get('role', 'user'), "message"],
+                        "attributes": {},
+                        "source": "zep_thread"
+                    })
+                facts_result = {"zep_facts": facts}
+            
+            # Get Zep users
+            users = memory_service.get_zep_users(username, limit)
+            
+            users_result = {"zep_users": users}
+            
+            return JsonResponse({
+                "success": True,
+                "data": {
+                    "entities": entities_result.get("zep_entities", []),
+                    "facts": facts_result.get("zep_facts", []),
+                    "users": users_result.get("zep_users", []),
+                    "total_entities": len(entities_result.get("zep_entities", [])),
+                    "total_facts": len(facts_result.get("zep_facts", [])),
+                    "total_users": len(users_result.get("zep_users", [])),
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "zep_entities": entities_result.get("zep_entities", []),
+                    "zep_facts": facts_result.get("zep_facts", []),
+                    "zep_users": users_result.get("zep_users", []),
+                    "zep_entities_count": len(entities_result.get("zep_entities", [])),
+                    "zep_facts_count": len(facts_result.get("zep_facts", [])),
+                    "zep_users_count": len(users_result.get("zep_users", [])),
+                    "user_id": username,
+                    "session_id": "assistant_ui",
+                    "limit": limit,
+                    "scope": scope,
+                    "query": "",
+                    "memory_type": None,
+                    "use_zep": True,
+                    "reranker": "cross_encoder"
+                }
+            })
+        elif scope == "nodes":
+            result = memory_service.search_memories_enhanced(
+                username, "", "assistant_ui", limit, None, True, "nodes", "cross_encoder"
+            )
+            users = memory_service.get_zep_users(username, limit)
+            return JsonResponse({
+                "success": True,
+                "data": {
+                    "entities": result.get("zep_entities", []),
+                    "users": users,
+                    "total_entities": len(result.get("zep_entities", [])),
+                    "total_users": len(users),
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+            })
+        elif scope == "edges":
+            result = memory_service.search_memories_enhanced(
+                username, "", "assistant_ui", limit, None, True, "edges", "cross_encoder"
+            )
+            users = memory_service.get_zep_users(username, limit)
+            return JsonResponse({
+                "success": True,
+                "data": {
+                    "facts": result.get("zep_facts", []),
+                    "users": users,
+                    "total_facts": len(result.get("zep_facts", [])),
+                    "total_users": len(users),
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+            })
+        else:
+            return JsonResponse({
+                "success": False,
+                "error": "Invalid scope parameter. Use 'nodes', 'edges', or 'both'"
+            }, status=400)
+            
+    except ValueError:
+        return JsonResponse({
+            "success": False,
+            "error": "Invalid limit parameter"
+        }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            "success": False,
+            "error": str(e)
+        }, status=500)
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def search_knowledge_graph(request):
+    """
+    Search the knowledge graph for specific entities or facts
+    
+    Query parameters:
+    - query: Search query (required)
+    - limit: Maximum number of results to return (default: 50)
+    - scope: Search scope - 'nodes' for entities, 'edges' for facts, or 'both' (default: 'both')
+    """
+    try:
+        username = request.username_from_token
+        
+        query = request.GET.get("query")
+        if not query:
+            return JsonResponse({
+                "success": False,
+                "error": "Query parameter is required"
+            }, status=400)
+        
+        limit = int(request.GET.get("limit", 50))
+        scope = request.GET.get("scope", "both")
+        
+        if scope == "both":
+            # Search both entities and facts from the assistant_ui session (where AI stores memories)
+            entities_result = memory_service.search_memories_enhanced(
+                username, query, "assistant_ui", limit, None, True, "nodes", "cross_encoder"
+            )
+            facts_result = memory_service.search_memories_enhanced(
+                username, query, "assistant_ui", limit, None, True, "edges", "cross_encoder"
+            )
+            
+            # Handle both Zep and MongoDB results
+            entities = entities_result.get("zep_entities", [])
+            facts = facts_result.get("zep_facts", [])
+            
+            # If no Zep results, try to convert MongoDB results
+            if not entities and entities_result.get("memories"):
+                entities = []
+                for memory in entities_result.get("memories", []):
+                    entities.append({
+                        "id": memory.get("_id", ""),
+                        "name": memory.get("content", "")[:50] + "...",
+                        "type": memory.get("type", "memory"),
+                        "summary": memory.get("content", ""),
+                        "attributes": {}
+                    })
+            
+            if not facts and facts_result.get("memories"):
+                facts = []
+                for memory in facts_result.get("memories", []):
+                    facts.append({
+                        "fact": memory.get("content", ""),
+                        "confidence": 0.8,
+                        "source": "mongodb"
+                    })
+            
+            return JsonResponse({
+                "success": True,
+                "query": query,
+                "data": {
+                    "entities": entities,
+                    "facts": facts,
+                    "total_entities": len(entities),
+                    "total_facts": len(facts),
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+            })
+        elif scope == "nodes":
+            result = memory_service.search_memories_enhanced(
+                username, query, "assistant_ui", limit, None, True, "nodes", "cross_encoder"
+            )
+            
+            entities = result.get("zep_entities", [])
+            if not entities and result.get("memories"):
+                entities = []
+                for memory in result.get("memories", []):
+                    entities.append({
+                        "id": memory.get("_id", ""),
+                        "name": memory.get("content", "")[:50] + "...",
+                        "type": memory.get("type", "memory"),
+                        "summary": memory.get("content", ""),
+                        "attributes": {}
+                    })
+            
+            return JsonResponse({
+                "success": True,
+                "query": query,
+                "data": {
+                    "entities": entities,
+                    "total_entities": len(entities),
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+            })
+        elif scope == "edges":
+            result = memory_service.search_memories_enhanced(
+                username, query, "assistant_ui", limit, None, True, "edges", "cross_encoder"
+            )
+            
+            facts = result.get("zep_facts", [])
+            if not facts and result.get("memories"):
+                facts = []
+                for memory in result.get("memories", []):
+                    facts.append({
+                        "fact": memory.get("content", ""),
+                        "confidence": 0.8,
+                        "source": "mongodb"
+                    })
+            
+            return JsonResponse({
+                "success": True,
+                "query": query,
+                "data": {
+                    "facts": facts,
+                    "total_facts": len(facts),
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+            })
+        else:
+            return JsonResponse({
+                "success": False,
+                "error": "Invalid scope parameter. Use 'nodes', 'edges', or 'both'"
+            }, status=400)
+            
+    except ValueError:
+        return JsonResponse({
+            "success": False,
+            "error": "Invalid limit parameter"
+        }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            "success": False,
+            "error": str(e)
+        }, status=500)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def add_entity_to_graph(request):
+    """
+    Add an entity to the knowledge graph
+    
+    Expected JSON payload:
+    {
+        "name": "Entity name",
+        "labels": ["label1", "label2"],
+        "attributes": {...} (optional),
+        "summary": "Entity summary" (optional)
+    }
+    """
+    try:
+        data = json.loads(request.body)
+        username = request.username_from_token
+        
+        name = data.get("name")
+        labels = data.get("labels", [])
+        attributes = data.get("attributes", {})
+        summary = data.get("summary", "")
+        
+        if not name:
+            return JsonResponse({
+                "success": False,
+                "error": "Entity name is required"
+            }, status=400)
+        
+        if not labels:
+            return JsonResponse({
+                "success": False,
+                "error": "Entity labels are required"
+            }, status=400)
+        
+        # Create entity data
+        entity_data = {
+            "name": name,
+            "labels": labels if isinstance(labels, list) else [labels],
+            "attributes": attributes,
+            "summary": summary
+        }
+        
+        # Add to graph using the memory service
+        result = memory_service.store_memory_enhanced(
+            username, 
+            json.dumps(entity_data), 
+            "entity", 
+            "assistant_ui", 
+            {"entity_type": "knowledge_graph_entity"}, 
+            True
+        )
+        
+        if result["success"]:
+            return JsonResponse({
+                "success": True,
+                "message": "Entity added successfully",
+                "data": entity_data,
+                "timestamp": datetime.utcnow().isoformat()
+            })
+        else:
+            return JsonResponse(result, status=500)
+            
+    except json.JSONDecodeError:
+        return JsonResponse({
+            "success": False,
+            "error": "Invalid JSON"
+        }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            "success": False,
+            "error": str(e)
+        }, status=500)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def add_fact_to_graph(request):
+    """
+    Add a fact to the knowledge graph
+    
+    Expected JSON payload:
+    {
+        "fact": "Fact content",
+        "source": "source_name" (optional)
+    }
+    """
+    try:
+        data = json.loads(request.body)
+        username = request.username_from_token
+        
+        fact = data.get("fact")
+        source = data.get("source", "user_input")
+        
+        if not fact:
+            return JsonResponse({
+                "success": False,
+                "error": "Fact content is required"
+            }, status=400)
+        
+        # Create fact data
+        fact_data = {
+            "fact": fact,
+            "source": source,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+        # Add to graph using the memory service
+        result = memory_service.store_memory_enhanced(
+            username, 
+            json.dumps(fact_data), 
+            "fact", 
+            "assistant_ui", 
+            {"fact_type": "knowledge_graph_fact"}, 
+            True
+        )
+        
+        if result["success"]:
+            return JsonResponse({
+                "success": True,
+                "message": "Fact added successfully",
+                "data": fact_data,
+                "timestamp": datetime.utcnow().isoformat()
+            })
+        else:
+            return JsonResponse(result, status=500)
+            
+    except json.JSONDecodeError:
+        return JsonResponse({
+            "success": False,
+            "error": "Invalid JSON"
+        }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            "success": False,
+            "error": str(e)
+        }, status=500)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def add_document_to_graph(request):
+    """
+    Add a document to the knowledge graph
+    
+    Expected JSON payload:
+    {
+        "content": "Document content",
+        "title": "Document title" (optional),
+        "source": "source_name" (optional)
+    }
+    """
+    try:
+        data = json.loads(request.body)
+        username = request.username_from_token
+        
+        content = data.get("content")
+        title = data.get("title", "Untitled Document")
+        source = data.get("source", "user_upload")
+        
+        if not content:
+            return JsonResponse({
+                "success": False,
+                "error": "Document content is required"
+            }, status=400)
+        
+        # Create document data
+        document_data = {
+            "content": content,
+            "title": title,
+            "source": source,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+        # Add to graph using the memory service
+        result = memory_service.store_memory_enhanced(
+            username, 
+            json.dumps(document_data), 
+            "document", 
+            "assistant_ui", 
+            {"document_type": "knowledge_graph_document"}, 
+            True
+        )
+        
+        if result["success"]:
+            return JsonResponse({
+                "success": True,
+                "message": "Document added successfully",
+                "data": document_data,
+                "timestamp": datetime.utcnow().isoformat()
+            })
+        else:
+            return JsonResponse(result, status=500)
+            
+    except json.JSONDecodeError:
+        return JsonResponse({
+            "success": False,
+            "error": "Invalid JSON"
+        }, status=400)
     except Exception as e:
         return JsonResponse({
             "success": False,

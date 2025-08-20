@@ -1,7 +1,9 @@
 import os
 import json
+import hashlib
 from datetime import datetime
 from typing import Optional, List, Dict, Any
+
 
 # Try multiple possible import paths for the Zep client
 ZepClientClass = None  # type: ignore
@@ -55,8 +57,9 @@ class EnhancedMemoryService:
 	"""Enhanced memory service with optional Zep Cloud integration"""
 	
 	def __init__(self):
-		self.zep_api_key = os.getenv('ZEP_API_KEY')
+		self.zep_api_key = 'z_1dWlkIjoiNGM2YzZkNjEtODY1Ni00ZjY3LWE4YzgtY2MyYzI1YzVlNjczIn0.af1wRMsgNmxIskCgjEMdbI31kU0ATizP-_oRi7lBvbwpQgUg3NntBHPnq75jX0aMDWaNxWLIso_FqMmwQZD1ZQ'
 		self.mem0_api_key = os.getenv('MEM0_API_KEY')
+		self.zep_group_id = os.getenv('ZEP_GROUP_ID')
 		self.zep_client = None
 		
 		if self.zep_api_key and ZepClientClass is not None:
@@ -68,10 +71,6 @@ class EnhancedMemoryService:
 	def is_zep_enabled(self) -> bool:
 		"""Check if Zep Cloud is enabled"""
 		return self.zep_client is not None
-	
-	def generate_zep_user_id(self, username: str, workspace_id: str = "default") -> str:
-		"""Generate a Zep user ID from username and workspace"""
-		return f"{workspace_id}_{username}"
 	
 	def setup_zep_ontology(self) -> bool:
 		"""Set up the ontology for Zep Cloud"""
@@ -113,12 +112,12 @@ class EnhancedMemoryService:
 			return False
 	
 	def ensure_zep_user(self, username: str, email: str = None, first_name: str = None, last_name: str = None) -> Optional[Any]:
-		"""Ensure a user exists in Zep Cloud"""
+		"""Ensure a user exists in Zep Cloud and return the user object"""
 		if not self.is_zep_enabled():
 			return None
 			
 		try:
-			zep_user_id = self.generate_zep_user_id(username)
+			zep_user_id = username
 			# Try to get existing user
 			if hasattr(self.zep_client, "user") and hasattr(self.zep_client.user, "get"):
 				try:
@@ -140,23 +139,155 @@ class EnhancedMemoryService:
 			return None
 
 	def ensure_zep_session(self, username: str, session_id: str) -> bool:
-		"""Best-effort: use get_session if available; otherwise rely on thread.add_messages to create implicitly."""
+		"""Ensure a Zep session exists for the user; create it if missing (best-effort)."""
 		if not self.is_zep_enabled():
 			return False
+		
 		try:
-			zep_user_id = self.generate_zep_user_id(username)
-			# Some SDKs only expose thread APIs in v3; prefer thread.get if available
+			# Try multiple approaches for session/thread creation
+			created = False
+			
+			# Approach 1: Try memory interface (legacy)
+			if hasattr(self.zep_client, "memory"):
+				mem = self.zep_client.memory  # type: ignore[assignment]
+				# Check if session exists
+				if hasattr(mem, "get_session"):
+					try:
+						existing = mem.get_session(session_id=session_id, user_id=username)  # type: ignore[union-attr]
+						if existing:
+							return True
+					except Exception:
+						pass
+				
+				# Try to create session via memory interface
+				for create_name in ["add_session", "create_session", "upsert_session", "open_session"]:
+					if hasattr(mem, create_name):
+						try:
+							create_fn = getattr(mem, create_name)
+							create_fn(session_id=session_id, user_id=username)  # type: ignore[misc]
+							created = True
+							break
+						except Exception:
+							continue
+			
+			# Approach 2: Try thread interface (v3)
+			if not created and hasattr(self.zep_client, "thread"):
+				thr = self.zep_client.thread  # type: ignore[assignment]
+				# Check if thread exists
+				if hasattr(thr, "get"):
+					try:
+						existing = thr.get(thread_id=session_id)  # type: ignore[union-attr]
+						if existing:
+							# Even if thread exists, try to create/associate session
+							created = True  # Mark as created since thread exists
+					except Exception:
+						pass
+				
+				# Try to create thread
+				for create_name in ["create", "add", "upsert", "open"]:
+					if hasattr(thr, create_name):
+						try:
+							create_fn = getattr(thr, create_name)
+							# Try with just thread_id first
+							try:
+								create_fn(thread_id=session_id)  # type: ignore[misc]
+								created = True
+								break
+							except Exception:
+								# Try with user context if required by SDK
+								create_fn(thread_id=session_id, user_id=username)  # type: ignore[misc]
+								created = True
+								break
+						except Exception:
+							continue
+			
+			# Approach 3: Try threads interface (alternative v3 naming)
+			if not created and hasattr(self.zep_client, "threads"):
+				thr = self.zep_client.threads  # type: ignore[assignment]
+				# Check if thread exists
+				if hasattr(thr, "get"):
+					try:
+						existing = thr.get(thread_id=session_id)  # type: ignore[union-attr]
+						if existing:
+							created = True  # Mark as created since thread exists
+					except Exception:
+						pass
+				
+				# Try to create thread
+				for create_name in ["create", "add", "upsert", "open"]:
+					if hasattr(thr, create_name):
+						try:
+							create_fn = getattr(thr, create_name)
+							# Try with just thread_id first
+							try:
+								create_fn(thread_id=session_id)  # type: ignore[misc]
+								created = True
+								break
+							except Exception:
+								# Try with user context if required by SDK
+								create_fn(thread_id=session_id, user_id=username)  # type: ignore[misc]
+								created = True
+								break
+						except Exception:
+							continue
+			
+			# Approach 4: Always try to create a session via memory interface (even if thread exists)
+			if hasattr(self.zep_client, "memory"):
+				mem = self.zep_client.memory  # type: ignore[assignment]
+				for create_name in ["add_session", "create_session", "upsert_session", "open_session"]:
+					if hasattr(mem, create_name):
+						try:
+							create_fn = getattr(mem, create_name)
+							create_fn(session_id=session_id, user_id=username)  # type: ignore[misc]
+							created = True
+							break
+						except Exception:
+							continue
+			
+			# Approach 5: Fallback - try to create by adding a message
+			if not created:
+				# Try memory interface
+				if hasattr(self.zep_client, "memory"):
+					mem = self.zep_client.memory  # type: ignore[assignment]
+					for msg_name in ["add_messages", "append", "create_messages"]:
+						if hasattr(mem, msg_name):
+							try:
+								msg_fn = getattr(mem, msg_name)
+								msg_fn(session_id=session_id, messages=[{"role": "user", "content": "", "metadata": {"_init": True}}])  # type: ignore[misc]
+								created = True
+								break
+							except Exception:
+								continue
+				
+				# Try thread interface
+				if not created and hasattr(self.zep_client, "thread"):
+					thr = self.zep_client.thread  # type: ignore[assignment]
+					if hasattr(thr, "add_messages"):
+						try:
+							msg = _build_zep_message(name=username, role="user", content="", metadata={"_init": True})
+							thr.add_messages(thread_id=session_id, messages=[msg])  # type: ignore[union-attr]
+							created = True
+						except Exception:
+							pass
+			
+			# Verify creation if possible
 			if hasattr(self.zep_client, "thread") and hasattr(self.zep_client.thread, "get"):
 				try:
-					self.zep_client.thread.get(thread_id=session_id)  # type: ignore[union-attr]
-					return True
+					ver = self.zep_client.thread.get(thread_id=session_id)  # type: ignore[union-attr]
+					return True if ver else created
 				except Exception:
-					# Let add_messages create it implicitly
-					return True
-			# Legacy memory API fallback (no-op)
-			return True
+					return created
+			elif hasattr(self.zep_client, "memory") and hasattr(self.zep_client.memory, "get_session"):
+				try:
+					ver = self.zep_client.memory.get_session(session_id=session_id, user_id=username)  # type: ignore[union-attr]
+					return True if ver else created
+				except Exception:
+					return created
+			
+			return created
 		except Exception:
-			return True
+			# Best-effort: do not fail the caller if session creation is flaky
+			return False
 	
 	def ensure_zep_thread(self, username: str, thread_id: str) -> bool:
 		"""Ensure a Zep v3 thread exists, creating it if the SDK exposes a create/add method. Best-effort."""
@@ -182,7 +313,7 @@ class EnhancedMemoryService:
 									create_fn(thread_id=thread_id)  # type: ignore[misc]
 								except Exception:
 									# Try with user context if required by SDK
-									user_id = self.generate_zep_user_id(username)
+									user_id = username
 									create_fn(thread_id=thread_id, user_id=user_id)  # type: ignore[misc]
 								return True
 							except Exception:
@@ -210,12 +341,13 @@ class EnhancedMemoryService:
 			try:
 				# Ensure user and thread best-effort
 				self.ensure_zep_user(username)
+				self.ensure_zep_session(username, session_id)
 				self.ensure_zep_thread(username, session_id)
 				# Add to Zep graph (optional, v3 signature typically does not take data_type)
 				if hasattr(self.zep_client, "graph") and hasattr(self.zep_client.graph, "add"):
-					user_id = self.generate_zep_user_id(username)
+					zep_user_id = self.get_zep_user_id(username)
 					try:
-						self.zep_client.graph.add(user_id=user_id, data=content)  # type: ignore[union-attr]
+						self.zep_client.graph.add(user_id=zep_user_id, data=content)  # type: ignore[union-attr]
 						zep_info["stored_graph"] = True
 					except Exception as e_graph:
 						zep_info["graph_error"] = str(e_graph)
@@ -298,102 +430,129 @@ class EnhancedMemoryService:
 		reranker: str = "cross_encoder"
 	) -> Dict[str, Any]:
 		"""Search memories with enhanced Zep Cloud integration"""
+		print(f"Search memories: username={username}, query={query}, session_id={session_id}, use_zep={use_zep}")
 		# Get MongoDB results
 		mongo_result = MongoMemory.search_memories(username, query, session_id, limit, memory_type)
 		
 		# If Zep is enabled and requested, also search in Zep Cloud
 		if use_zep and self.is_zep_enabled():
 			try:
-				# Prefer searching by thread (session) or hashed user bound to thread
-				used_user_id = None
-				used_strategy = None
-				search_user_id = None
-				if hasattr(self.zep_client, "thread") and hasattr(self.zep_client.thread, "get"):
-					try:
-						thr = self.zep_client.thread.get(thread_id=session_id)  # type: ignore[union-attr]
-						# Try common locations for the associated user id
-						search_user_id = getattr(thr, 'user_id', None)
-						if not search_user_id:
-							user_obj = getattr(thr, 'user', None)
-							if user_obj is not None:
-								search_user_id = getattr(user_obj, 'uuid', None) or getattr(user_obj, 'id', None) or getattr(user_obj, 'user_id', None)
-					except Exception:
-						pass
-
+				# Get the correct Zep user ID
+				zep_user_id = self.get_zep_user_id(username)
+				
 				zep_result = None
-				if hasattr(self.zep_client, "graph") and hasattr(self.zep_client.graph, "search"):
-					# Attempt 1: by thread_id if supported
+				
+				# Try v3 thread search first
+				if hasattr(self.zep_client, "thread") and hasattr(self.zep_client.thread, "search"):
 					try:
-						zep_result = self.zep_client.graph.search(  # type: ignore[union-attr]
+						print(f"Trying v3 thread search: thread_id={session_id}, query={query[:255]}")
+						zep_result = self.zep_client.thread.search(  # type: ignore[union-attr]
 							thread_id=session_id,
+							query=query[:255],
+							limit=limit,
+						)
+						print(f"V3 thread search result: {zep_result}")
+					except Exception as e:
+						print(f"V3 thread search failed: {e}")
+						zep_result = None
+				
+				# Fallback to v2 graph search
+				if zep_result is None and hasattr(self.zep_client, "graph") and hasattr(self.zep_client.graph, "search"):
+					try:
+						print(f"Trying v2 graph search: user_id={zep_user_id}, query={query[:255]}, scope={scope}")
+						zep_result = self.zep_client.graph.search(  # type: ignore[union-attr]
+							user_id=zep_user_id,
 							query=query[:255],
 							scope=scope,
 							limit=limit,
 							reranker=reranker,
 						)
-						used_strategy = "thread_id"
-					except Exception:
+						print(f"V2 graph search result: {zep_result}")
+					except Exception as e:
+						print(f"V2 graph search failed: {e}")
 						zep_result = None
-					# Attempt 2: by hashed user bound to thread
-					if zep_result is None and search_user_id:
-						try:
-							zep_result = self.zep_client.graph.search(  # type: ignore[union-attr]
-								user_id=str(search_user_id),
-								query=query[:255],
-								scope=scope,
-								limit=limit,
-								reranker=reranker,
-							)
-							used_user_id = str(search_user_id)
-							used_strategy = "thread_user_id"
-						except Exception:
-							zep_result = None
-					# Attempt 3: fallback to our generated user id
-					if zep_result is None:
-						try:
-							fallback_user = self.generate_zep_user_id(username)
-							zep_result = self.zep_client.graph.search(  # type: ignore[union-attr]
-								user_id=fallback_user,
-								query=query[:255],
-								scope=scope,
-								limit=limit,
-								reranker=reranker,
-							)
-							used_user_id = fallback_user
-							used_strategy = "fallback_user_id"
-						except Exception:
-							zep_result = None
+
 				combined_result: Dict[str, Any] = {
 					"success": True,
 					"mongo_memories": [],
 					"zep_facts": [],
 					"zep_entities": [],
 					"count": 0,
-					"used_user_id": used_user_id,
-					"used_strategy": used_strategy,
 				}
-				# Extract facts from Zep results
-				if zep_result and hasattr(zep_result, 'edges'):
-					for edge in getattr(zep_result, 'edges', []) or []:
-						combined_result["zep_facts"].append({
-							"fact": getattr(edge, 'fact', ''),
-							"confidence": getattr(edge, 'score', 0) or 0,
-							"source": "zep_cloud"
-						})
-						combined_result["count"] += 1
-				# Extract entities from Zep results
-				if zep_result and hasattr(zep_result, 'nodes'):
-					for node in getattr(zep_result, 'nodes', []) or []:
-						combined_result["zep_entities"].append({
-							"id": getattr(node, 'uuid_', ''),
-							"name": getattr(node, 'name', ''),
-							"type": (getattr(node, 'labels', []) or ['entity'])[0],
-							"summary": getattr(node, 'summary', ''),
-							"attributes": _json_safe(getattr(node, 'attributes', {})),
-						})
-						combined_result["count"] += 1
+				
+				# Process Zep search results
+				if zep_result:
+					print(f"Processing Zep result: {zep_result}")
+					print(f"Zep result type: {type(zep_result)}")
+					print(f"Zep result attributes: {dir(zep_result)}")
+					
+					# Try to extract v3 thread search results
+					if hasattr(zep_result, 'messages'):
+						messages = getattr(zep_result, 'messages', []) or []
+						for message in messages:
+							content = getattr(message, 'content', '')
+							role = getattr(message, 'role', 'user')
+							message_metadata = getattr(message, 'metadata', {}) or {}
+							
+							combined_result["zep_facts"].append({
+								"fact": f"{role}: {content}",
+								"confidence": 1.0,
+								"score": 1.0,
+								"created_at": getattr(message, 'created_at', ''),
+								"uuid": getattr(message, 'uuid_', ''),
+								"labels": [role, "message"],
+								"attributes": _json_safe(message_metadata),
+								"domain": message_metadata.get('domain', ''),
+								"expertise_level": message_metadata.get('expertise_level', ''),
+								"source": "zep_v3_thread"
+							})
+							combined_result["count"] += 1
+					
+					# Try to extract v2 graph search results
+					elif hasattr(zep_result, 'edges') or hasattr(zep_result, 'nodes'):
+						# Extract facts from Zep results
+						if hasattr(zep_result, 'edges'):
+							for edge in getattr(zep_result, 'edges', []) or []:
+								# Extract all available attributes
+								edge_attributes = getattr(edge, 'attributes', {}) or {}
+								edge_labels = getattr(edge, 'labels', []) or []
+								
+								combined_result["zep_facts"].append({
+									"fact": getattr(edge, 'fact', ''),
+									"confidence": getattr(edge, 'score', 0) or 0,
+									"score": getattr(edge, 'score', 0) or 0,
+									"created_at": getattr(edge, 'created_at', ''),
+									"graph_id": getattr(edge, 'graph_id', ''),
+									"labels": edge_labels,
+									"attributes": _json_safe(edge_attributes),
+									"domain": edge_attributes.get('domain', ''),
+									"expertise_level": edge_attributes.get('expertise_level', ''),
+									"source": "zep_v2_graph"
+								})
+								combined_result["count"] += 1
+						# Extract entities from Zep results
+						if hasattr(zep_result, 'nodes'):
+							for node in getattr(zep_result, 'nodes', []) or []:
+								# Extract all available attributes
+								node_attributes = getattr(node, 'attributes', {}) or {}
+								node_labels = getattr(node, 'labels', []) or []
+								
+								combined_result["zep_entities"].append({
+									"id": getattr(node, 'uuid_', ''),
+									"name": getattr(node, 'name', ''),
+									"type": node_labels[0] if node_labels else 'entity',
+									"summary": getattr(node, 'summary', ''),
+									"score": getattr(node, 'score', 0) or 0,
+									"created_at": getattr(node, 'created_at', ''),
+									"graph_id": getattr(node, 'graph_id', ''),
+									"labels": node_labels,
+									"attributes": _json_safe(node_attributes),
+									"source": "zep_v2_graph"
+								})
+								combined_result["count"] += 1
 				# Only include stringified raw for safety
 				combined_result["zep_raw"] = str(zep_result)
+				print(f"Final combined result: {combined_result}")
 				return combined_result
 			except Exception as e:
 				return {
@@ -406,6 +565,241 @@ class EnhancedMemoryService:
 				}
 		return mongo_result
 	
+	def get_zep_user_id(self, username: str) -> Optional[str]:
+		"""Get the Zep user ID for a given username"""
+		if not self.is_zep_enabled():
+			return None
+		try:
+			user = self.ensure_zep_user(username)
+			if user:
+				# Try to get the Zep user ID from the user object
+				zep_user_id = getattr(user, 'user_id', None) or getattr(user, 'uuid_', None) or username
+				return zep_user_id
+			return username
+		except Exception:
+			return username
+
+	def extract_entities_from_graph(self, username: str, limit: int = 50) -> List[Dict[str, Any]]:
+		"""Extract entities from the Zep knowledge graph"""
+		if not self.is_zep_enabled():
+			return []
+		try:
+			zep_user_id = self.get_zep_user_id(username)
+			entities = []
+			
+			# Try to get entities from the graph
+			if hasattr(self.zep_client, "graph") and hasattr(self.zep_client.graph, "search"):
+				try:
+					# Search for all entities (nodes) in the graph
+					result = self.zep_client.graph.search(  # type: ignore[union-attr]
+						user_id=zep_user_id,
+						query="",  # Empty query to get all entities
+						scope="nodes",
+						limit=limit,
+						reranker="cross_encoder",
+					)
+					
+					if result and hasattr(result, 'nodes'):
+						nodes = getattr(result, 'nodes', []) or []
+						for node in nodes:
+							# Extract all available attributes
+							node_attributes = getattr(node, 'attributes', {}) or {}
+							node_labels = getattr(node, 'labels', []) or []
+							
+							entities.append({
+								"id": getattr(node, 'uuid_', ''),
+								"name": getattr(node, 'name', ''),
+								"type": node_labels[0] if node_labels else 'entity',
+								"summary": getattr(node, 'summary', ''),
+								"score": getattr(node, 'score', 0) or 0,
+								"created_at": getattr(node, 'created_at', ''),
+								"graph_id": getattr(node, 'graph_id', ''),
+								"labels": node_labels,
+								"attributes": _json_safe(node_attributes),
+								"source": "zep_graph"
+							})
+					
+				except Exception:
+					pass
+			
+			# If no entities found, try to extract from thread messages
+			if not entities:
+				messages = self.get_thread_messages(username, "assistant_ui", limit)
+				
+				# Simple entity extraction from message content
+				extracted_entities = {}
+				for msg in messages:
+					content = msg.get('content', '').lower()
+					
+					# Look for common entity patterns
+					if 'name is' in content or 'called' in content:
+						# Extract person names
+						import re
+						name_patterns = [
+							r'name is (\w+)',
+							r'called (\w+)',
+							r'(\w+) is my',
+							r'(\w+) has',
+						]
+						for pattern in name_patterns:
+							matches = re.findall(pattern, content)
+							for match in matches:
+								if len(match) > 2:  # Filter out short matches
+									extracted_entities[match] = {
+										"type": "Person",
+										"source": "message_extraction"
+									}
+					
+					# Look for company/organization mentions
+					if 'company' in content or 'work at' in content or 'job at' in content:
+						company_patterns = [
+							r'work at (\w+)',
+							r'job at (\w+)',
+							r'company (\w+)',
+						]
+						for pattern in company_patterns:
+							matches = re.findall(pattern, content)
+							for match in matches:
+								if len(match) > 2:
+									extracted_entities[match] = {
+										"type": "Company",
+										"source": "message_extraction"
+									}
+				
+				# Convert extracted entities to standard format
+				for name, info in extracted_entities.items():
+					entities.append({
+						"id": f"extracted_{name.lower()}",
+						"name": name,
+						"type": info["type"],
+						"summary": f"Extracted from conversation: {name}",
+						"attributes": {"source": info["source"]},
+						"source": "message_extraction"
+					})
+			
+			return entities
+		except Exception:
+			return []
+
+	def get_zep_users(self, username: str = None, limit: int = 50) -> List[Dict[str, Any]]:
+		"""Get all Zep users"""
+		if not self.is_zep_enabled():
+			return []
+		try:
+			users = []
+			
+			# Since we're using Zep v2 API, we need to get users individually
+			# For now, let's get the current user and any other users we can find
+			
+			# Method 1: Try to get current user from memory interface (v2)
+			if username and hasattr(self.zep_client, "memory") and hasattr(self.zep_client.memory, "get_user"):
+				try:
+					# Try to get user by username
+					user = self.zep_client.memory.get_user(user_id=username)  # type: ignore[union-attr]
+					if user:
+						users.append({
+							"id": getattr(user, 'user_id', username),
+							"uuid": getattr(user, 'uuid_', ''),
+							"email": getattr(user, 'email', username),
+							"first_name": getattr(user, 'first_name', ''),
+							"last_name": getattr(user, 'last_name', ''),
+							"created_at": getattr(user, 'created_at', ''),
+							"updated_at": getattr(user, 'updated_at', ''),
+							"session_count": getattr(user, 'session_count', 0),
+							"metadata": _json_safe(getattr(user, 'metadata', {})),
+						})
+				except Exception:
+					pass
+			
+			# Method 2: Try user interface (v2/v3)
+			if username and hasattr(self.zep_client, "user") and hasattr(self.zep_client.user, "get"):
+				try:
+					user = self.zep_client.user.get(user_id=username)  # type: ignore[union-attr]
+					if user:
+						users.append({
+							"id": getattr(user, 'user_id', username),
+							"uuid": getattr(user, 'uuid_', ''),
+							"email": getattr(user, 'email', username),
+							"first_name": getattr(user, 'first_name', ''),
+							"last_name": getattr(user, 'last_name', ''),
+							"created_at": getattr(user, 'created_at', ''),
+							"updated_at": getattr(user, 'updated_at', ''),
+							"session_count": getattr(user, 'session_count', 0),
+							"metadata": _json_safe(getattr(user, 'metadata', {})),
+						})
+				except Exception:
+					pass
+			
+			# Method 3: Try v3 methods as fallback
+			if not users and hasattr(self.zep_client, "user") and hasattr(self.zep_client.user, "list"):
+				try:
+					user_list = self.zep_client.user.list(limit=limit)  # type: ignore[union-attr]
+					if user_list:
+						for user in user_list:
+							users.append({
+								"id": getattr(user, 'user_id', ''),
+								"uuid": getattr(user, 'uuid_', ''),
+								"email": getattr(user, 'email', ''),
+								"first_name": getattr(user, 'first_name', ''),
+								"last_name": getattr(user, 'last_name', ''),
+								"created_at": getattr(user, 'created_at', ''),
+								"updated_at": getattr(user, 'updated_at', ''),
+								"session_count": getattr(user, 'session_count', 0),
+								"metadata": _json_safe(getattr(user, 'metadata', {})),
+							})
+				except Exception:
+					pass
+			
+			return users
+		except Exception:
+			return []
+
+	def get_thread_messages(self, username: str, session_id: str, limit: int = 50) -> List[Dict[str, Any]]:
+		"""Get all messages from a Zep thread"""
+		if not self.is_zep_enabled():
+			return []
+		try:
+			zep_user_id = self.get_zep_user_id(username)
+			messages = []
+			
+			# Try v3 thread interface
+			if hasattr(self.zep_client, "thread") and hasattr(self.zep_client.thread, "get"):
+				try:
+					thread = self.zep_client.thread.get(thread_id=session_id)  # type: ignore[union-attr]
+					if hasattr(thread, 'messages'):
+						thread_messages = getattr(thread, 'messages', []) or []
+						for msg in thread_messages[-limit:]:
+							messages.append({
+								"content": getattr(msg, 'content', ''),
+								"role": getattr(msg, 'role', 'user'),
+								"name": getattr(msg, 'name', ''),
+								"created_at": getattr(msg, 'created_at', ''),
+								"uuid": getattr(msg, 'uuid_', ''),
+							})
+				except Exception:
+					pass
+			
+			# Try v2 memory interface as fallback
+			if not messages and hasattr(self.zep_client, "memory") and hasattr(self.zep_client.memory, "get_session"):
+				try:
+					session = self.zep_client.memory.get_session(session_id=session_id, user_id=zep_user_id)  # type: ignore[union-attr]
+					if hasattr(session, 'messages'):
+						session_messages = getattr(session, 'messages', []) or []
+						for msg in session_messages[-limit:]:
+							messages.append({
+								"content": getattr(msg, 'content', ''),
+								"role": getattr(msg, 'role', 'user'),
+								"name": getattr(msg, 'name', ''),
+								"created_at": getattr(msg, 'created_at', ''),
+								"uuid": getattr(msg, 'uuid_', ''),
+							})
+				except Exception:
+					pass
+			
+			return messages
+		except Exception:
+			return []
+
 	def get_memory_context(
 		self,
 		username: str,
@@ -417,7 +811,7 @@ class EnhancedMemoryService:
 		if not self.is_zep_enabled():
 			return None
 		try:
-			zep_user_id = self.generate_zep_user_id(username)
+			zep_user_id = self.get_zep_user_id(username)
 			context = None
 			if hasattr(self.zep_client, "memory") and hasattr(self.zep_client.memory, "get_session"):
 				context = self.zep_client.memory.get_session(  # type: ignore[union-attr]
