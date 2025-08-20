@@ -5,6 +5,7 @@ from apps.health.views import HealthCheckView
 urlpatterns = [
     path('', include('apps.urls')),
     path('authentication/', include('apps.authentication.urls')),
+    path('conversations/', include('apps.conversations.urls')),
     path('devices/', include('apps.devices.urls')),
     path('docs/', include('apps.docs.urls')),
     path('files/', include('apps.files.urls')),

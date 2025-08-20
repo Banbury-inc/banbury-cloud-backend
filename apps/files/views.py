@@ -11,6 +11,7 @@ from websocket.utils import broadcast_new_file
 from .get_shared_files import get_shared_files as db_get_shared_files
 from .upload_to_s3 import upload_file_to_s3
 from .list_s3_files import list_s3_files
+from .search_s3_files import search_s3_files
 from .download_s3_file import download_s3_file
 from .delete_s3_file import delete_s3_file, delete_multiple_s3_files
 from .google_drive_service import (
@@ -1446,6 +1447,38 @@ def get_s3_files(request):
         return JsonResponse({"error": result["error"]}, status=result.get("status_code", 500))
     
     return JsonResponse(result)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def search_s3_files_view(request):
+    """
+    Searches S3 files for a specific user by query string.
+    
+    Expects a POST request with JSON body containing:
+    - query (str): The search query to match against file names
+        
+    Returns:
+        JsonResponse: A list of matching files stored in S3 for the user
+    """
+    username = request.username_from_token
+    
+    try:
+        data = json.loads(request.body)
+        query = data.get("query")
+        
+        if not query:
+            return JsonResponse({"error": "Missing query parameter"}, status=400)
+        
+        result = search_s3_files(username, query)
+        
+        if "error" in result:
+            return JsonResponse({"error": result["error"]}, status=result.get("status_code", 500))
+        
+        return JsonResponse(result)
+        
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
 
 
 @csrf_exempt
