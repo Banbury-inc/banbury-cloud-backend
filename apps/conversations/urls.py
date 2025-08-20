@@ -7,4 +7,5 @@ urlpatterns = [
     path("<str:conversation_id>/", views.get_conversation, name="get_conversation"),
     path("<str:conversation_id>/delete/", views.delete_conversation, name="delete_conversation"),
     path("<str:conversation_id>/title/", views.update_conversation_title, name="update_conversation_title"),
+    path("<str:conversation_id>/update/", views.update_conversation, name="update_conversation"),
 ]

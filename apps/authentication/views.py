@@ -1342,7 +1342,7 @@ def gmail_get_messages_batch(request):
     
     def fetch_message(message_id):
         try:
-            url = f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{message_id}"
+            url = f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{message_id}?format=full"
             resp = requests.get(
                 url,
                 headers={"Authorization": f"Bearer {access_token}"},

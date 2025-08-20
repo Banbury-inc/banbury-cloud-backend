@@ -203,3 +203,50 @@ class Conversation:
                 "success": False,
                 "error": str(e)
             }
+
+    @staticmethod
+    def update_conversation(conversation_id, username, title, messages, metadata=None):
+        """
+        Update an entire conversation
+        
+        Args:
+            conversation_id (str): The ID of the conversation
+            username (str): The username for verification
+            title (str): The new title
+            messages (list): The new messages
+            metadata (dict): Optional metadata
+            
+        Returns:
+            dict: Result of the update operation
+        """
+        try:
+            result = conversations_collection.update_one(
+                {
+                    "_id": ObjectId(conversation_id),
+                    "username": username
+                },
+                {
+                    "$set": {
+                        "title": title,
+                        "messages": messages,
+                        "metadata": metadata or {},
+                        "updated_at": datetime.utcnow()
+                    }
+                }
+            )
+            
+            if result.modified_count == 0:
+                return {
+                    "success": False,
+                    "error": "Conversation not found"
+                }
+            
+            return {
+                "success": True,
+                "message": "Conversation updated successfully"
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e)
+            }
