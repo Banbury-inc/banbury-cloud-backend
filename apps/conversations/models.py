@@ -9,6 +9,7 @@ uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retr
 client = MongoClient(uri)
 db = client["NeuraNet"]
 conversations_collection = db["conversations"]
+memories_collection = db["memories"]
 
 class Conversation:
     """Model for storing conversations in MongoDB"""
@@ -244,6 +245,243 @@ class Conversation:
             return {
                 "success": True,
                 "message": "Conversation updated successfully"
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e)
+            }
+
+class Memory:
+    """Model for storing AI memories in MongoDB"""
+    
+    @staticmethod
+    def store_memory(username, content, memory_type="general", session_id="default", metadata=None):
+        """
+        Store a memory in MongoDB
+        
+        Args:
+            username (str): The username of the memory owner
+            content (str): The content to remember
+            memory_type (str): Type of memory (e.g., 'preference', 'fact', 'context')
+            session_id (str): Session ID for memory isolation
+            metadata (dict): Optional metadata about the memory
+            
+        Returns:
+            dict: Result of the store operation
+        """
+        try:
+            memory_data = {
+                "username": username,
+                "content": content,
+                "type": memory_type,
+                "session_id": session_id,
+                "metadata": metadata or {},
+                "created_at": datetime.utcnow(),
+                "updated_at": datetime.utcnow()
+            }
+            
+            result = memories_collection.insert_one(memory_data)
+            
+            return {
+                "success": True,
+                "memory_id": str(result.inserted_id),
+                "message": "Memory stored successfully"
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
+    @staticmethod
+    def search_memories(username, query, session_id="default", limit=10, memory_type=None):
+        """
+        Search memories for a user
+        
+        Args:
+            username (str): The username to search memories for
+            query (str): Search query
+            session_id (str): Session ID for memory isolation
+            limit (int): Maximum number of memories to return
+            memory_type (str): Optional filter by memory type
+            
+        Returns:
+            dict: List of relevant memories
+        """
+        try:
+            # Build search filter
+            search_filter = {
+                "username": username,
+                "session_id": session_id
+            }
+            
+            if memory_type:
+                search_filter["type"] = memory_type
+            
+            # Get all memories for the user and session
+            memories = list(memories_collection.find(search_filter).sort("created_at", -1))
+            
+            # Simple keyword search (case-insensitive)
+            query_lower = query.lower()
+            relevant_memories = []
+            
+            for memory in memories:
+                if query_lower in memory["content"].lower():
+                    relevant_memories.append(memory)
+                    if len(relevant_memories) >= limit:
+                        break
+            
+            # Convert ObjectId to string for JSON serialization
+            for memory in relevant_memories:
+                memory["_id"] = str(memory["_id"])
+                if "created_at" in memory and hasattr(memory["created_at"], "isoformat"):
+                    memory["created_at"] = memory["created_at"].isoformat()
+                if "updated_at" in memory and hasattr(memory["updated_at"], "isoformat"):
+                    memory["updated_at"] = memory["updated_at"].isoformat()
+            
+            return {
+                "success": True,
+                "memories": relevant_memories,
+                "count": len(relevant_memories)
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
+    @staticmethod
+    def get_memories(username, session_id="default", limit=50, offset=0, memory_type=None):
+        """
+        Get memories for a user
+        
+        Args:
+            username (str): The username to get memories for
+            session_id (str): Session ID for memory isolation
+            limit (int): Maximum number of memories to return
+            offset (int): Number of memories to skip
+            memory_type (str): Optional filter by memory type
+            
+        Returns:
+            dict: List of memories
+        """
+        try:
+            # Build filter
+            search_filter = {
+                "username": username,
+                "session_id": session_id
+            }
+            
+            if memory_type:
+                search_filter["type"] = memory_type
+            
+            memories = list(memories_collection.find(search_filter).sort("created_at", -1).skip(offset).limit(limit))
+            
+            # Convert ObjectId to string for JSON serialization
+            for memory in memories:
+                memory["_id"] = str(memory["_id"])
+                if "created_at" in memory and hasattr(memory["created_at"], "isoformat"):
+                    memory["created_at"] = memory["created_at"].isoformat()
+                if "updated_at" in memory and hasattr(memory["updated_at"], "isoformat"):
+                    memory["updated_at"] = memory["updated_at"].isoformat()
+            
+            return {
+                "success": True,
+                "memories": memories
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
+    @staticmethod
+    def delete_memory(memory_id, username):
+        """
+        Delete a memory
+        
+        Args:
+            memory_id (str): The ID of the memory
+            username (str): The username for verification
+            
+        Returns:
+            dict: Result of the delete operation
+        """
+        try:
+            result = memories_collection.delete_one({
+                "_id": ObjectId(memory_id),
+                "username": username
+            })
+            
+            if result.deleted_count == 0:
+                return {
+                    "success": False,
+                    "error": "Memory not found"
+                }
+            
+            return {
+                "success": True,
+                "message": "Memory deleted successfully"
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
+    @staticmethod
+    def delete_memories_by_session(username, session_id):
+        """
+        Delete all memories for a specific session
+        
+        Args:
+            username (str): The username for verification
+            session_id (str): The session ID to delete memories for
+            
+        Returns:
+            dict: Result of the delete operation
+        """
+        try:
+            result = memories_collection.delete_many({
+                "username": username,
+                "session_id": session_id
+            })
+            
+            return {
+                "success": True,
+                "message": f"Deleted {result.deleted_count} memories for session {session_id}"
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
+    @staticmethod
+    def cleanup_old_memories(username, days_to_keep=30):
+        """
+        Clean up old memories for a user
+        
+        Args:
+            username (str): The username to clean up memories for
+            days_to_keep (int): Number of days to keep memories
+            
+        Returns:
+            dict: Result of the cleanup operation
+        """
+        try:
+            from datetime import timedelta
+            cutoff_date = datetime.utcnow() - timedelta(days=days_to_keep)
+            
+            result = memories_collection.delete_many({
+                "username": username,
+                "created_at": {"$lt": cutoff_date}
+            })
+            
+            return {
+                "success": True,
+                "message": f"Deleted {result.deleted_count} old memories"
             }
         except Exception as e:
             return {
