@@ -1677,3 +1677,126 @@ def get_available_features(request):
         },
         "message": "Available features retrieved successfully"
     })
+
+@csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
+@require_http_methods(["GET"])
+def get_site_visitor_info(request):
+    """Retrieves site visitor information from the database."""
+    try:
+        # MongoDB connection
+        uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+        client = MongoClient(uri)
+        db = client["NeuraNet"]
+        site_collection = db["site"]
+
+        # Get query parameters for filtering
+        limit = int(request.GET.get('limit', 100))  # Default to 100 records
+        days = int(request.GET.get('days', 30))  # Default to last 30 days
+        
+        # Calculate date filter
+        from datetime import datetime, timedelta
+        cutoff_date = datetime.now() - timedelta(days=days)
+        
+        # Query the database
+        visitors = list(site_collection.find({
+            "time": {"$gte": cutoff_date}
+        }).sort("time", -1).limit(limit))
+        
+        # Convert ObjectId to string for JSON serialization
+        for visitor in visitors:
+            visitor['_id'] = str(visitor['_id'])
+            # Convert datetime to string
+            if 'time' in visitor:
+                visitor['time'] = visitor['time'].isoformat()
+        
+        # Get summary statistics
+        total_visitors = site_collection.count_documents({})
+        recent_visitors = site_collection.count_documents({"time": {"$gte": cutoff_date}})
+        
+        # Get country statistics
+        country_stats = list(site_collection.aggregate([
+            {"$group": {"_id": "$country", "count": {"$sum": 1}}},
+            {"$sort": {"count": -1}},
+            {"$limit": 10}
+        ]))
+        
+        # Get city statistics
+        city_stats = list(site_collection.aggregate([
+            {"$group": {"_id": "$city", "count": {"$sum": 1}}},
+            {"$sort": {"count": -1}},
+            {"$limit": 10}
+        ]))
+        
+        # Get hourly distribution for the last 24 hours
+        yesterday = datetime.now() - timedelta(days=1)
+        hourly_stats = list(site_collection.aggregate([
+            {"$match": {"time": {"$gte": yesterday}}},
+            {"$group": {"_id": {"$hour": "$time"}, "count": {"$sum": 1}}},
+            {"$sort": {"_id": 1}}
+        ]))
+        
+        # Get daily visitor counts for the specified period
+        try:
+            daily_stats = list(site_collection.aggregate([
+                {"$match": {"time": {"$gte": cutoff_date}}},
+                {"$group": {
+                    "_id": {
+                        "year": {"$year": "$time"},
+                        "month": {"$month": "$time"},
+                        "day": {"$dayOfMonth": "$time"}
+                    },
+                    "count": {"$sum": 1},
+                    "date": {"$first": "$time"}
+                }},
+                {"$sort": {"_id": 1}},
+                {"$project": {
+                    "_id": 0,
+                    "date": {"$dateToString": {"format": "%Y-%m-%d", "date": "$date"}},
+                    "count": 1
+                }}
+            ]))
+            print(f"Daily stats query result: {daily_stats}")
+        except Exception as e:
+            print(f"Error in daily stats aggregation: {e}")
+            # Fallback: create daily stats manually from visitors data
+            daily_stats = []
+            if visitors:
+                from collections import defaultdict
+                daily_counts = defaultdict(int)
+                for visitor in visitors:
+                    if 'time' in visitor:
+                        try:
+                            # Parse the ISO string back to datetime
+                            visitor_time = datetime.fromisoformat(visitor['time'].replace('Z', '+00:00'))
+                            date_key = visitor_time.strftime('%Y-%m-%d')
+                            daily_counts[date_key] += 1
+                        except Exception as parse_error:
+                            print(f"Error parsing visitor time: {parse_error}")
+                            continue
+                
+                # Convert to the expected format
+                daily_stats = [
+                    {"date": date, "count": count} 
+                    for date, count in sorted(daily_counts.items())
+                ]
+            print(f"Fallback daily stats: {daily_stats}")
+        
+        response_data = {
+            "result": "success",
+            "visitors": visitors,
+            "summary": {
+                "total_visitors": total_visitors,
+                "recent_visitors": recent_visitors,
+                "period_days": days
+            },
+            "country_stats": country_stats,
+            "city_stats": city_stats,
+            "hourly_stats": hourly_stats,
+            "daily_stats": daily_stats
+        }
+        
+        return JsonResponse(response_data, safe=False)
+        
+    except Exception as e:
+        print(f"Error retrieving visitor data: {e}")
+        return JsonResponse({"error": "Failed to retrieve visitor data"}, status=500)
