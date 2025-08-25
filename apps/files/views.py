@@ -25,6 +25,7 @@ import boto3
 from django.core.files.uploadedfile import UploadedFile
 import os
 from datetime import datetime, timedelta
+import base64
 from botocore.exceptions import ClientError
 import jwt
 
@@ -1785,6 +1786,26 @@ def gmail_send_message(request):
         in_reply_to = data.get('in_reply_to')
         references = data.get('references')
         thread_id = data.get('thread_id')
+        raw_attachments = data.get('attachments') or []
+        attachments = []
+        # attachments expected as list of { filename, mimeType, content }
+        if isinstance(raw_attachments, list):
+            for att in raw_attachments:
+                try:
+                    filename = att.get('filename')
+                    mime_type = att.get('mimeType') or att.get('mime_type')
+                    content_b64 = att.get('content')
+                    if content_b64 is None:
+                        continue
+                    content_bytes = base64.b64decode(content_b64)
+                    attachments.append({
+                        'filename': filename,
+                        'mime_type': mime_type,
+                        'content': content_bytes,
+                    })
+                except Exception as e:
+                    # Skip bad attachment entries
+                    print(f"Attachment parse error: {e}")
         
         if not to or not subject or not body:
             return JsonResponse({
@@ -1792,7 +1813,7 @@ def gmail_send_message(request):
             }, status=400)
         
         from .gmail_service import send_message
-        result = send_message(username, to, subject, body, cc, bcc, in_reply_to, references, thread_id)
+        result = send_message(username, to, subject, body, cc, bcc, in_reply_to, references, thread_id, attachments)
         return JsonResponse(result)
         
     except json.JSONDecodeError:
@@ -1840,6 +1861,24 @@ def gmail_send_reply(request):
         body = data.get('body')
         cc = data.get('cc')
         bcc = data.get('bcc')
+        raw_attachments = data.get('attachments') or []
+        attachments = []
+        if isinstance(raw_attachments, list):
+            for att in raw_attachments:
+                try:
+                    filename = att.get('filename')
+                    mime_type = att.get('mimeType') or att.get('mime_type')
+                    content_b64 = att.get('content')
+                    if content_b64 is None:
+                        continue
+                    content_bytes = base64.b64decode(content_b64)
+                    attachments.append({
+                        'filename': filename,
+                        'mime_type': mime_type,
+                        'content': content_bytes,
+                    })
+                except Exception as e:
+                    print(f"Attachment parse error: {e}")
         
         if not original_message_id or not to or not subject or not body:
             return JsonResponse({
@@ -1847,7 +1886,7 @@ def gmail_send_reply(request):
             }, status=400)
         
         from .gmail_service import send_reply
-        result = send_reply(username, original_message_id, to, subject, body, cc, bcc)
+        result = send_reply(username, original_message_id, to, subject, body, cc, bcc, attachments)
         return JsonResponse(result)
         
     except json.JSONDecodeError:
@@ -1938,6 +1977,24 @@ def gmail_send_message_with_signature(request):
         cc = data.get('cc')
         bcc = data.get('bcc')
         is_draft = data.get('isDraft', False)
+        raw_attachments = data.get('attachments') or []
+        attachments = []
+        if isinstance(raw_attachments, list):
+            for att in raw_attachments:
+                try:
+                    filename = att.get('filename')
+                    mime_type = att.get('mimeType') or att.get('mime_type')
+                    content_b64 = att.get('content')
+                    if content_b64 is None:
+                        continue
+                    content_bytes = base64.b64decode(content_b64)
+                    attachments.append({
+                        'filename': filename,
+                        'mime_type': mime_type,
+                        'content': content_bytes,
+                    })
+                except Exception as e:
+                    print(f"Attachment parse error: {e}")
         
         if not is_draft and (not to or not subject or not body):
             return JsonResponse({
@@ -1945,7 +2002,7 @@ def gmail_send_message_with_signature(request):
             }, status=400)
         
         from .gmail_service import send_message_with_signature
-        result = send_message_with_signature(username, to, subject, body, cc, bcc, is_draft)
+        result = send_message_with_signature(username, to, subject, body, cc, bcc, is_draft, attachments)
         return JsonResponse(result)
         
     except json.JSONDecodeError:

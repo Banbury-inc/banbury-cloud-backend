@@ -4,7 +4,6 @@ Uses the same Google credentials as Google Drive.
 """
 
 import base64
-import email
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 from google.oauth2.credentials import Credentials
@@ -12,6 +11,10 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from pymongo.mongo_client import MongoClient
 from .google_drive_service import get_user_drive_credentials
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email import encoders
 
 
 def get_gmail_service(username: str):
@@ -325,9 +328,10 @@ def create_draft(username: str, to: str, subject: str, body: str, cc: str = None
         }
 
 
-def send_message(username: str, to: str, subject: str, body: str, cc: str = None, bcc: str = None, 
-                in_reply_to: str = None, references: str = None, thread_id: str = None) -> Dict[str, Any]:
-    """Send an email message with proper threading support."""
+def send_message(username: str, to: str, subject: str, body: str, cc: str = None, bcc: str = None,
+                in_reply_to: str = None, references: str = None, thread_id: str = None,
+                attachments: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+    """Send an email message with proper threading support and optional attachments."""
     try:
         service = get_gmail_service(username)
         if not service:
@@ -337,7 +341,7 @@ def send_message(username: str, to: str, subject: str, body: str, cc: str = None
             }
         
         # Create message with threading support
-        message = create_message(to, subject, body, cc, bcc, in_reply_to, references, thread_id)
+        message = create_message(to, subject, body, cc, bcc, in_reply_to, references, thread_id, attachments)
         
         # Send the message
         sent_message = service.users().messages().send(
@@ -366,9 +370,10 @@ def send_message(username: str, to: str, subject: str, body: str, cc: str = None
         }
 
 
-def send_reply(username: str, original_message_id: str, to: str, subject: str, body: str, 
-               cc: str = None, bcc: str = None) -> Dict[str, Any]:
-    """Send a reply to an existing message with proper threading."""
+def send_reply(username: str, original_message_id: str, to: str, subject: str, body: str,
+               cc: str = None, bcc: str = None,
+               attachments: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+    """Send a reply to an existing message with proper threading and optional attachments."""
     try:
         service = get_gmail_service(username)
         if not service:
@@ -414,7 +419,8 @@ def send_reply(username: str, original_message_id: str, to: str, subject: str, b
             bcc=bcc,
             in_reply_to=original_message_id_header,
             references=references,
-            thread_id=thread_id
+            thread_id=thread_id,
+            attachments=attachments
         )
         
     except HttpError as e:
@@ -431,39 +437,62 @@ def send_reply(username: str, original_message_id: str, to: str, subject: str, b
         }
 
 
-def create_message(to: str, subject: str, body: str, cc: str = None, bcc: str = None, 
-                  in_reply_to: str = None, references: str = None, thread_id: str = None) -> Dict[str, Any]:
-    """Create a message for Gmail API with proper threading support."""
-    # Check if body contains HTML tags to determine content type
+def create_message(to: str, subject: str, body: str, cc: str = None, bcc: str = None,
+                  in_reply_to: str = None, references: str = None, thread_id: str = None,
+                  attachments: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+    """
+    Create a message for Gmail API with proper threading support and optional attachments.
+    attachments: list of dicts with keys: filename (str), content (bytes), mime_type (str)
+    """
     is_html = '<' in body and '>' in body
-    
-    # Create message with appropriate content type
-    if is_html:
-        message = email.mime.text.MIMEText(body, 'html')
+
+    if attachments and len(attachments) > 0:
+        # Create a multipart message for attachments
+        message_root = MIMEMultipart('mixed')
+        body_part = MIMEText(body, 'html' if is_html else 'plain')
+        message_root.attach(body_part)
+
+        for att in attachments:
+            try:
+                filename = att.get('filename')
+                content = att.get('content')
+                mime_type = att.get('mime_type') or 'application/octet-stream'
+                main_type, sub_type = (mime_type.split('/', 1) + ['octet-stream'])[:2]
+                part = MIMEBase(main_type, sub_type)
+                part.set_payload(content)
+                encoders.encode_base64(part)
+                if filename:
+                    part.add_header('Content-Disposition', f'attachment; filename="{filename}"')
+                message_root.attach(part)
+            except Exception as e:
+                # Skip faulty attachment but continue sending
+                print(f"Error attaching file {att}: {e}")
+        message = message_root
     else:
-        message = email.mime.text.MIMEText(body, 'plain')
-    
+        # Simple message without attachments
+        message = MIMEText(body, 'html' if is_html else 'plain')
+
     message['to'] = to
     message['subject'] = subject
-    
+
     if cc:
         message['cc'] = cc
     if bcc:
         message['bcc'] = bcc
-    
+
     # Add threading headers for proper email threading (RFC 2822 standard)
     if in_reply_to:
         message['In-Reply-To'] = in_reply_to
     if references:
         message['References'] = references
-    
+
     raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
-    
+
     # Create the message object with thread ID if provided
     message_obj = {'raw': raw_message}
     if thread_id:
         message_obj['threadId'] = thread_id
-    
+
     return message_obj
 
 
@@ -602,9 +631,10 @@ def get_email_signature(username: str) -> Dict[str, Any]:
         }
 
 
-def send_message_with_signature(username: str, to: str, subject: str, body: str, 
-                              cc: str = None, bcc: str = None, is_draft: bool = False) -> Dict[str, Any]:
-    """Send an email with the user's signature automatically added."""
+def send_message_with_signature(username: str, to: str, subject: str, body: str,
+                              cc: str = None, bcc: str = None, is_draft: bool = False,
+                              attachments: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+    """Send an email with the user's signature automatically added and optional attachments."""
     try:
         # Get the user's signature first
         signature_result = get_email_signature(username)
@@ -623,7 +653,7 @@ def send_message_with_signature(username: str, to: str, subject: str, body: str,
                 body_with_signature = f"{body}\n\n{signature}"
         
         # Send the email with signature
-        return send_message(username, to, subject, body_with_signature, cc, bcc, is_draft)
+        return send_message(username, to, subject, body_with_signature, cc, bcc, None, None, None, attachments)
         
     except Exception as e:
         print(f"Error sending message with signature: {e}")

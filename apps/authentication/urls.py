@@ -30,6 +30,9 @@ urlpatterns = [
     path('gmail/reply/', views.gmail_send_reply, name='gmail_send_reply'),
     path('gmail/thread/<str:thread_id>/', views.gmail_get_thread, name='gmail_get_thread'),
     path('gmail/threads/', views.gmail_list_threads, name='gmail_list_threads'),
+    # Google Calendar API proxy endpoints
+    path('calendar/events/', views.calendar_events, name='calendar_events'),
+    path('calendar/events/<str:event_id>/', views.calendar_event_detail, name='calendar_event_detail'),
     # Scope management endpoints
     path('scopes/user/', views.get_user_scopes, name='get_user_scopes'),
     path('scopes/request/', views.request_additional_scopes, name='request_additional_scopes'),

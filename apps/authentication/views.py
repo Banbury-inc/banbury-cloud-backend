@@ -1105,6 +1105,95 @@ def _require_auth_username(request):
         return validated.payload.get('username')
     except Exception:
         return None
+@csrf_exempt
+@require_http_methods(["GET", "POST", "PUT", "DELETE"])
+def calendar_events(request, event_id: str = None):
+    """Proxy Google Calendar events for the authenticated user.
+    GET: list events (query: timeMin, timeMax, maxResults, pageToken, q, singleEvents, orderBy, calendarId)
+    POST: create event (json: calendarId?, event)
+    PUT: update event (requires eventId path -> use calendar_event_detail)
+    DELETE: not supported here.
+    """
+    username = _require_auth_username(request)
+    if not username:
+        return JsonResponse({"message": "Authentication required"}, status=401)
+
+    user_doc = _get_mongo_user_by_username(username)
+    if not user_doc:
+        return JsonResponse({"message": "User not found"}, status=404)
+
+    credentials = user_doc.get("google_drive_credentials") or {}
+    access_token, _ = _refresh_google_access_token_if_needed(credentials, user_doc)
+    if not access_token:
+        return JsonResponse({"message": "No Google credentials on file"}, status=400)
+
+    base = "https://www.googleapis.com/calendar/v3/calendars"
+    if request.method == "GET":
+        calendar_id = request.GET.get('calendarId', 'primary')
+        params = {}
+        for key in ["timeMin", "timeMax", "maxResults", "pageToken", "q", "singleEvents", "orderBy"]:
+            val = request.GET.get(key)
+            if val is not None:
+                params[key] = val
+        url = f"{base}/{calendar_id}/events"
+        if params:
+            url += f"?{urlencode(params)}"
+        resp = requests.get(url, headers={"Authorization": f"Bearer {access_token}"}, timeout=20)
+        return JsonResponse(resp.json(), status=resp.status_code)
+
+    if request.method == "POST":
+        try:
+            payload = json.loads(request.body or '{}')
+        except json.JSONDecodeError:
+            return JsonResponse({"message": "Invalid JSON"}, status=400)
+        calendar_id = payload.get('calendarId', 'primary')
+        event = payload.get('event') or {}
+        url = f"{base}/{calendar_id}/events"
+        resp = requests.post(url, headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}, json=event, timeout=20)
+        return JsonResponse(resp.json(), status=resp.status_code)
+
+    return JsonResponse({"message": "Method not allowed"}, status=405)
+
+
+@csrf_exempt
+@require_http_methods(["GET", "PUT", "DELETE"])
+def calendar_event_detail(request, event_id: str):
+    """Get/Update/Delete a single Google Calendar event by ID."""
+    username = _require_auth_username(request)
+    if not username:
+        return JsonResponse({"message": "Authentication required"}, status=401)
+
+    user_doc = _get_mongo_user_by_username(username)
+    if not user_doc:
+        return JsonResponse({"message": "User not found"}, status=404)
+
+    credentials = user_doc.get("google_drive_credentials") or {}
+    access_token, _ = _refresh_google_access_token_if_needed(credentials, user_doc)
+    if not access_token:
+        return JsonResponse({"message": "No Google credentials on file"}, status=400)
+
+    calendar_id = request.GET.get('calendarId', 'primary')
+    base = "https://www.googleapis.com/calendar/v3/calendars"
+    url = f"{base}/{calendar_id}/events/{event_id}"
+
+    if request.method == "GET":
+        resp = requests.get(url, headers={"Authorization": f"Bearer {access_token}"}, timeout=20)
+        return JsonResponse(resp.json(), status=resp.status_code)
+    if request.method == "PUT":
+        try:
+            payload = json.loads(request.body or '{}')
+        except json.JSONDecodeError:
+            return JsonResponse({"message": "Invalid JSON"}, status=400)
+        event = payload.get('event') or {}
+        resp = requests.put(url, headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}, json=event, timeout=20)
+        return JsonResponse(resp.json(), status=resp.status_code)
+    if request.method == "DELETE":
+        resp = requests.delete(url, headers={"Authorization": f"Bearer {access_token}"}, timeout=20)
+        if resp.status_code in (200, 204):
+            return JsonResponse({"success": True})
+        return JsonResponse(resp.json(), status=resp.status_code)
+
+    return JsonResponse({"message": "Method not allowed"}, status=405)
 
 
 @csrf_exempt
