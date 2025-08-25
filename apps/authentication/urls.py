@@ -9,6 +9,7 @@ urlpatterns = [
     path("getuserinfo4/<str:username>/<str:password>/", views.getuserinfo4, name="getuserinfo4"),
     path("add_site_visitor_info/", views.add_site_visitor_info, name="add_site_visitor_info"),
     path("get_site_visitor_info/", views.get_site_visitor_info, name="get_site_visitor_info"),
+    path("get_client_ip/", views.get_client_ip, name="get_client_ip"),
     path("google/", views.google, name="google"),
     path("auth/callback", views.google_callback, name="google_callback_no_slash"),
     path("auth/callback/", views.google_callback, name="google_callback"),

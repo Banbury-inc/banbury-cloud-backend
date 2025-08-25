@@ -756,7 +756,71 @@ def refresh_token(request):
         }, status=401)
 
 
-@csrf_exempt  # Disable CSRF token for this view only if necessary (e.g., for external API access)
+
+@api_view(['GET'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def get_client_ip(request):
+    """Get the client's public IP address by fetching it from an external service."""
+    try:
+        # Get the client's IP address from the request first
+        # Check for various headers in order of preference
+        
+        # 1. Check for CloudFlare headers
+        cf_connecting_ip = request.META.get('HTTP_CF_CONNECTING_IP')
+        if cf_connecting_ip:
+            client_ip = cf_connecting_ip
+        # 2. Check for forwarded headers (for proxy/load balancer scenarios)
+        elif request.META.get('HTTP_X_FORWARDED_FOR'):
+            # Take the first IP in the list (the original client IP)
+            client_ip = request.META.get('HTTP_X_FORWARDED_FOR').split(',')[0].strip()
+        # 3. Check for real IP header
+        elif request.META.get('HTTP_X_REAL_IP'):
+            client_ip = request.META.get('HTTP_X_REAL_IP')
+        # 4. Fall back to REMOTE_ADDR
+        else:
+            client_ip = request.META.get('REMOTE_ADDR', 'Unknown')
+        
+        # If we have a valid client IP, use it; otherwise fetch from external service
+        if client_ip and client_ip != 'Unknown' and client_ip != '127.0.0.1':
+            # Validate IP address format (basic check)
+            import re
+            ip_pattern = r'^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$'
+            if re.match(ip_pattern, client_ip):
+                ip_address = client_ip
+            else:
+                ip_address = 'Unknown'
+        else:
+            # Fetch public IP from external service (server-side, no CORS issues)
+            try:
+                import requests
+                response = requests.get('https://api.ipify.org?format=json', timeout=5)
+                if response.status_code == 200:
+                    data = response.json()
+                    ip_address = data.get('ip', 'Unknown')
+                else:
+                    ip_address = 'Unknown'
+            except Exception:
+                # If external service fails, try alternative
+                try:
+                    response = requests.get('https://api64.ipify.org?format=json', timeout=5)
+                    if response.status_code == 200:
+                        data = response.json()
+                        ip_address = data.get('ip', 'Unknown')
+                    else:
+                        ip_address = 'Unknown'
+                except Exception:
+                    ip_address = 'Unknown'
+        
+        # For debugging (only in development)
+        if settings.DEBUG:
+            print(f"IP Detection Debug - Client IP: {client_ip}, Public IP: {ip_address}")
+        
+        return Response({"ip": ip_address})
+    except Exception as e:
+        return Response({"error": str(e)}, status=500)
+
+@csrf_exempt
 @require_http_methods(["POST"])
 def add_site_visitor_info(request):
     """Records information about site visitors, including IP-based geolocation."""

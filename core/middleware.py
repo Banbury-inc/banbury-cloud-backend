@@ -22,7 +22,11 @@ class AuthenticationTokenMiddleware:
             '/authentication/new_register/',
             '/authentication/login_api/',
             '/authentication/google/',
-            '/authentication/auth/callback/'
+            '/authentication/auth/callback/',
+            # Public endpoints (no auth required)
+            '/authentication/get_client_ip/',
+            '/authentication/add_site_visitor_info/',
+            '/authentication/get_site_visitor_info/'
         ]
         
         # Check if the current path starts with any of the excluded paths

@@ -45,8 +45,12 @@ DEBUG = True
 # Change this to your production URL for deployment
 ALLOWED_HOSTS = ['*', 'localhost', '127.0.0.1']
 
-# CSRF_TRUSTED_ORIGINS = ['https://website2-v3xlkt54dq-uc.a.run.app']
-# CSRF_TRUSTED_ORIGINS = ['*']
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:3000',
+    'https://www.banbury.io',
+    'https://banbury.io',
+    'https://api.dev.banbury.io',
+]
 
 
 # Application definition
