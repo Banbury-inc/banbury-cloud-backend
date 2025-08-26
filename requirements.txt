@@ -100,3 +100,4 @@ wrapt==1.16.0
 zope.interface==7.1.1
 zep-cloud==3.4.1
 mem0ai==0.1.32
+sendgrid==6.11.0

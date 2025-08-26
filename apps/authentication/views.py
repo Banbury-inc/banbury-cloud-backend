@@ -25,6 +25,7 @@ from rest_framework_simplejwt.tokens import AccessToken
 from django.conf import settings
 from rest_framework.response import Response
 from .utils import generate_api_key, validate_api_key, register_api_key, list_user_api_keys, delete_api_key
+from .email_service import email_service
 from django.views.decorators.csrf import csrf_exempt
 import requests
 from urllib.parse import urlencode
@@ -626,6 +627,24 @@ def register(request):
 
         try:
             user_collection.insert_one(new_user)
+            
+            # Send welcome email after successful user creation
+            if email and first_name:
+                try:
+                    email_sent = email_service.send_welcome_email(
+                        user_email=email,
+                        user_first_name=first_name,
+                        user_last_name=last_name or "",
+                        username=username
+                    )
+                    if email_sent:
+                        print(f"Welcome email sent successfully to {email}")
+                    else:
+                        print(f"Failed to send welcome email to {email}")
+                except Exception as email_error:
+                    print(f"Error sending welcome email to {email}: {email_error}")
+                    # Don't fail registration if email fails
+                    
         except Exception as e:
             print(f"Error sending to device: {e}")
         result = "success"
