@@ -472,6 +472,21 @@ def google_callback(request):
                 print(f"Error updating user with Drive credentials: {e}")
                 # Continue without failing the login
         
+        # Track successful login
+        try:
+            login_collection = db["user_logins"]
+            login_event = {
+                "username": user.get("username") or email,
+                "user_id": str(user.get("_id")),
+                "timestamp": datetime.utcnow(),
+                "ip_address": request.META.get('HTTP_X_FORWARDED_FOR', request.META.get('REMOTE_ADDR', 'unknown')),
+                "user_agent": request.META.get('HTTP_USER_AGENT', 'unknown'),
+                "auth_method": "google_oauth"
+            }
+            login_collection.insert_one(login_event)
+        except Exception as e:
+            print(f"Error tracking Google OAuth login: {e}")
+        
         # Generate a JWT token for the user
         access = AccessToken()
         access["username"] = user.get("username") or email
@@ -692,6 +707,21 @@ def getuserinfo4(request, username, password):
     if bcrypt.checkpw(password_bytes, stored_hashed_password):
         result = "success"
         username = user.get("username")
+        
+        # Track successful login
+        try:
+            login_collection = db["user_logins"]
+            login_event = {
+                "username": username,
+                "user_id": str(user["_id"]),
+                "timestamp": datetime.utcnow(),
+                "ip_address": request.META.get('HTTP_X_FORWARDED_FOR', request.META.get('REMOTE_ADDR', 'unknown')),
+                "user_agent": request.META.get('HTTP_USER_AGENT', 'unknown'),
+                "auth_method": "password"
+            }
+            login_collection.insert_one(login_event)
+        except Exception as e:
+            print(f"Error tracking login: {e}")
         
         # Generate a valid Simple JWT access token without hitting the DB
         access = AccessToken()
@@ -1846,14 +1876,18 @@ def get_site_visitor_info(request):
         limit = int(request.GET.get('limit', 100))  # Default to 100 records
         days = int(request.GET.get('days', 30))  # Default to last 30 days
         
-        # Calculate date filter
+        # Calculate date filter (including today)
         from datetime import datetime, timedelta
-        cutoff_date = datetime.now() - timedelta(days=days)
+        # Use UTC time to match MongoDB storage
+        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        cutoff_date = today_start - timedelta(days=days-1)
         
         # Query the database
+        print(f"Main visitors query date range: {cutoff_date} to {datetime.now()}")
         visitors = list(site_collection.find({
             "time": {"$gte": cutoff_date}
         }).sort("time", -1).limit(limit))
+        print(f"Found {len(visitors)} visitors in date range")
         
         # Convert ObjectId to string for JSON serialization
         for visitor in visitors:
@@ -1888,41 +1922,71 @@ def get_site_visitor_info(request):
             {"$sort": {"_id": 1}}
         ]))
         
-        # Get daily visitor counts for the specified period
+        # Get daily visitor counts for the specified period (including today)
         try:
+            # Use a date range that includes today by going back (days-1) days from today
+            # This ensures we get the full period including today
+            today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+            daily_cutoff = today_start - timedelta(days=days-1)
+            print(f"Daily stats date range: {daily_cutoff} to {today_start}")
+            print(f"Current time: {datetime.now()}")
+            
             daily_stats = list(site_collection.aggregate([
-                {"$match": {"time": {"$gte": cutoff_date}}},
+                {"$match": {"time": {"$gte": daily_cutoff}}},
                 {"$group": {
                     "_id": {
                         "year": {"$year": "$time"},
                         "month": {"$month": "$time"},
                         "day": {"$dayOfMonth": "$time"}
                     },
-                    "count": {"$sum": 1},
-                    "date": {"$first": "$time"}
+                    "count": {"$sum": 1}
                 }},
                 {"$sort": {"_id": 1}},
                 {"$project": {
                     "_id": 0,
-                    "date": {"$dateToString": {"format": "%Y-%m-%d", "date": "$date"}},
+                    "date": {
+                        "$dateToString": {
+                            "format": "%Y-%m-%d",
+                            "date": {
+                                "$dateFromParts": {
+                                    "year": "$_id.year",
+                                    "month": "$_id.month",
+                                    "day": "$_id.day"
+                                }
+                            }
+                        }
+                    },
                     "count": 1
                 }}
             ]))
             print(f"Daily stats query result: {daily_stats}")
+            
+            # Debug: Check if we have any visitors today
+            today_str = today_start.strftime('%Y-%m-%d')
+            today_visitors = [v for v in visitors if 'time' in v and v['time'].startswith(today_str)]
+            print(f"Visitors found for today ({today_str}): {len(today_visitors)}")
+            if today_visitors:
+                print(f"Sample today visitor: {today_visitors[0]}")
         except Exception as e:
             print(f"Error in daily stats aggregation: {e}")
-            # Fallback: create daily stats manually from visitors data
+            # Fallback: create daily stats manually from visitors data (including today)
             daily_stats = []
             if visitors:
                 from collections import defaultdict
                 daily_counts = defaultdict(int)
+                # Use the same date range logic as above
+                today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+                daily_cutoff = today_start - timedelta(days=days-1)
+                
                 for visitor in visitors:
                     if 'time' in visitor:
                         try:
                             # Parse the ISO string back to datetime
                             visitor_time = datetime.fromisoformat(visitor['time'].replace('Z', '+00:00'))
-                            date_key = visitor_time.strftime('%Y-%m-%d')
-                            daily_counts[date_key] += 1
+                            # Only count visitors from the daily cutoff date onwards
+                            if visitor_time >= daily_cutoff:
+                                date_key = visitor_time.strftime('%Y-%m-%d')
+                                daily_counts[date_key] += 1
                         except Exception as parse_error:
                             print(f"Error parsing visitor time: {parse_error}")
                             continue
@@ -2063,3 +2127,120 @@ def browserbase_session(request):
 		return JsonResponse({ 'error': 'Unknown error contacting Browserbase' }, status=502)
 	except Exception as e:
 		return JsonResponse({ 'error': str(e) }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def get_login_analytics(request):
+	"""Retrieves login analytics from the database."""
+	try:
+		# MongoDB connection
+		uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+		client = MongoClient(uri)
+		db = client["NeuraNet"]
+		login_collection = db["user_logins"]
+		
+		# Get query parameters for filtering
+		limit = int(request.GET.get('limit', 100))  # Default to 100 records
+		days = int(request.GET.get('days', 30))  # Default to last 30 days
+		
+		# Calculate date filter (including today)
+		from datetime import datetime, timedelta
+		today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+		cutoff_date = today_start - timedelta(days=days-1)
+		
+		# Query the database
+		print(f"Login analytics query date range: {cutoff_date} to {datetime.now()}")
+		logins = list(login_collection.find({
+			"timestamp": {"$gte": cutoff_date}
+		}).sort("timestamp", -1).limit(limit))
+		print(f"Found {len(logins)} logins in date range")
+		
+		# Convert ObjectId to string for JSON serialization
+		for login in logins:
+			login['_id'] = str(login['_id'])
+			# Convert datetime to string
+			if 'timestamp' in login:
+				login['timestamp'] = login['timestamp'].isoformat()
+		
+		# Get summary statistics
+		total_logins = login_collection.count_documents({})
+		recent_logins = login_collection.count_documents({"timestamp": {"$gte": cutoff_date}})
+		
+		# Get auth method statistics
+		auth_method_stats = list(login_collection.aggregate([
+			{"$match": {"timestamp": {"$gte": cutoff_date}}},
+			{"$group": {"_id": "$auth_method", "count": {"$sum": 1}}},
+			{"$sort": {"count": -1}}
+		]))
+		
+		# Get hourly distribution for the last 24 hours
+		yesterday = datetime.utcnow() - timedelta(days=1)
+		hourly_stats = list(login_collection.aggregate([
+			{"$match": {"timestamp": {"$gte": yesterday}}},
+			{"$group": {"_id": {"$hour": "$timestamp"}, "count": {"$sum": 1}}},
+			{"$sort": {"_id": 1}}
+		]))
+		
+		# Get daily login counts for the specified period (including today)
+		try:
+			daily_stats = list(login_collection.aggregate([
+				{"$match": {"timestamp": {"$gte": cutoff_date}}},
+				{"$group": {
+					"_id": {
+						"year": {"$year": "$timestamp"},
+						"month": {"$month": "$timestamp"},
+						"day": {"$dayOfMonth": "$timestamp"}
+					},
+					"count": {"$sum": 1}
+				}},
+				{"$sort": {"_id": 1}},
+				{"$project": {
+					"_id": 0,
+					"date": {
+						"$dateToString": {
+							"format": "%Y-%m-%d",
+							"date": {
+								"$dateFromParts": {
+									"year": "$_id.year",
+									"month": "$_id.month",
+									"day": "$_id.day"
+								}
+							}
+						}
+					},
+					"count": 1
+				}}
+			]))
+			print(f"Login daily stats query result: {daily_stats}")
+		except Exception as e:
+			print(f"Error in login daily stats aggregation: {e}")
+			daily_stats = []
+		
+		# Get top users by login count
+		top_users_stats = list(login_collection.aggregate([
+			{"$match": {"timestamp": {"$gte": cutoff_date}}},
+			{"$group": {"_id": "$username", "count": {"$sum": 1}}},
+			{"$sort": {"count": -1}},
+			{"$limit": 10}
+		]))
+		
+		response_data = {
+			"result": "success",
+			"logins": logins,
+			"summary": {
+				"total_logins": total_logins,
+				"recent_logins": recent_logins,
+				"period_days": days
+			},
+			"auth_method_stats": auth_method_stats,
+			"hourly_stats": hourly_stats,
+			"daily_stats": daily_stats,
+			"top_users_stats": top_users_stats
+		}
+		
+		return JsonResponse(response_data, safe=False)
+		
+	except Exception as e:
+		print(f"Error retrieving login analytics: {e}")
+		return JsonResponse({"error": "Failed to retrieve login analytics"}, status=500)

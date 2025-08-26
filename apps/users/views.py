@@ -476,6 +476,30 @@ def list_all_users(request):
             ai_counts_map = {}
             system_total_ai_messages = 0
 
+        # Build a map of login counts and last login per user_id
+        login_collection = db["user_logins"]
+        try:
+            # Get login counts per user
+            login_counts_cursor = login_collection.aggregate([
+                {"$group": {"_id": "$user_id", "count": {"$sum": 1}, "lastLogin": {"$max": "$timestamp"}}}
+            ])
+            login_counts_map = {}
+            last_login_map = {}
+            system_total_logins = 0
+            for item in login_counts_cursor:
+                key = str(item.get("_id"))
+                count = int(item.get("count", 0))
+                last_login = item.get("lastLogin")
+                login_counts_map[key] = count
+                if last_login:
+                    last_login_map[key] = last_login.isoformat()
+                system_total_logins += count
+        except Exception as e:
+            print(f"Error getting login stats: {e}")
+            login_counts_map = {}
+            last_login_map = {}
+            system_total_logins = 0
+
         # Get all users with basic information
         users = user_collection.find(
             {},
@@ -503,7 +527,9 @@ def list_all_users(request):
                 "created_at": user.get("created_at"),
                 "auth_method": user.get("auth_method", "Email/Password"),
                 "totalFiles": file_counts_map.get(user_id_str, 0),
-                "aiMessageCount": ai_counts_map.get(user_id_str, 0)
+                "aiMessageCount": ai_counts_map.get(user_id_str, 0),
+                "loginCount": login_counts_map.get(user_id_str, 0),
+                "lastLoginDate": last_login_map.get(user_id_str)
             })
         
         return JsonResponse({
