@@ -1953,3 +1953,113 @@ def get_site_visitor_info(request):
     except Exception as e:
         print(f"Error retrieving visitor data: {e}")
         return JsonResponse({"error": "Failed to retrieve visitor data"}, status=500)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def browserbase_session(request):
+	"""Authenticated proxy to create a Browserbase session and return an embeddable URL."""
+	# Prefer auth from middleware if available
+	username = getattr(request, 'username_from_token', None)
+	if not username:
+		# Fallback: validate bearer token manually
+		auth_header = request.headers.get('Authorization')
+		if auth_header and ' ' in auth_header:
+			try:
+				_type, token = auth_header.split(' ', 1)
+				validated = AccessToken(token)
+				username = validated.payload.get('username')
+			except Exception:
+				username = None
+	# Final fallback: allow X-API-Key if configured and valid
+	if not username:
+		api_key_header = request.headers.get('X-API-Key')
+		if not api_key_header or not validate_api_key(api_key_header):
+			return JsonResponse({'message': 'Authentication required'}, status=401)
+
+	# Read optional startUrl
+	try:
+		payload = json.loads(request.body or '{}')
+	except Exception:
+		payload = {}
+	start_url = payload.get('startUrl') or 'https://news.google.com'
+
+	# Call Browserbase API with server-side credentials
+	api_key = os.environ.get('BROWSERBASE_API_KEY') or os.environ.get('BROWSERBASE_API_TOKEN')
+	project_id = os.environ.get('BROWSERBASE_PROJECT_ID')
+	if not api_key:
+		return JsonResponse({ 'error': 'Browserbase API key not configured' }, status=500)
+
+	try:
+		# Browserbase API now only accepts projectId in the payload
+		payload = {}
+		if project_id:
+			payload['projectId'] = project_id
+		else:
+			return JsonResponse({ 'error': 'Browserbase project ID not configured' }, status=500)
+
+		endpoints = [
+			'https://api.browserbase.com/v1/sessions',
+		]
+		header_modes = []
+		# Mode A: x-bb-api-key header (correct format based on API response)
+		mode_a = {
+			'Content-Type': 'application/json',
+			'x-bb-api-key': api_key,
+		}
+		header_modes.append(mode_a)
+		# Mode B: Legacy headers as fallback
+		mode_b = {
+			'Content-Type': 'application/json',
+			'Authorization': f'Bearer {api_key}',
+			'X-API-Key': api_key,
+			'x-api-key': api_key,
+			'X-Browserbase-Api-Key': api_key,
+			'x-browserbase-api-key': api_key,
+		}
+		if project_id:
+			mode_b['x-browserbase-project-id'] = project_id
+			mode_b['X-Browserbase-Project-Id'] = project_id
+		header_modes.append(mode_b)
+		# Mode C: Bearer only
+		mode_c = { 'Content-Type': 'application/json', 'Authorization': f'Bearer {api_key}' }
+		if project_id:
+			mode_c['x-browserbase-project-id'] = project_id
+		header_modes.append(mode_c)
+
+		last_resp = None
+		for url in endpoints:
+			for hdrs in header_modes:
+				resp = requests.post(url, json=payload, headers=hdrs, timeout=30)
+				last_resp = resp
+				if 200 <= resp.status_code < 300:
+					try:
+						data = resp.json()
+						session_id = data.get('id')
+						
+						# Fetch debug URLs for the session
+						if session_id:
+							debug_url = f'https://api.browserbase.com/v1/sessions/{session_id}/debug'
+							debug_resp = requests.get(debug_url, headers=hdrs, timeout=10)
+							if debug_resp.status_code == 200:
+								debug_data = debug_resp.json()
+								# Map debuggerFullscreenUrl to embedUrl/viewerUrl
+								if 'debuggerFullscreenUrl' in debug_data:
+									data['embedUrl'] = debug_data['debuggerFullscreenUrl']
+									data['viewerUrl'] = debug_data['debuggerFullscreenUrl']
+								elif 'debuggerUrl' in debug_data:
+									data['embedUrl'] = debug_data['debuggerUrl']
+									data['viewerUrl'] = debug_data['debuggerUrl']
+					except Exception:
+						data = {}
+					return JsonResponse(data, status=200)
+				# If unauthorized or forbidden, try next mode/endpoint
+				if resp.status_code in (401, 403):
+					continue
+				# Other errors: break to return
+				break
+		# If we reach here, return last response details
+		if last_resp is not None:
+			return JsonResponse({ 'error': last_resp.text or f'HTTP {last_resp.status_code}' }, status=last_resp.status_code)
+		return JsonResponse({ 'error': 'Unknown error contacting Browserbase' }, status=502)
+	except Exception as e:
+		return JsonResponse({ 'error': str(e) }, status=500)

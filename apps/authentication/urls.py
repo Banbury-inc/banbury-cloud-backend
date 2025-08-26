@@ -19,6 +19,8 @@ urlpatterns = [
     path('api-key/validate/', views.validate_user_api_key, name='validate_api_key'),
     path('api-key/list/', views.list_api_keys, name='list_api_keys'),
     path('api-key/delete/', views.delete_user_api_key, name='delete_api_key'),
+    # Browser automation
+    path('browserbase/session/', views.browserbase_session, name='browserbase_session'),
     # Gmail API proxy endpoints
     path('gmail/list_messages/', views.gmail_list_messages, name='gmail_list_messages'),
     path('gmail/messages/<str:message_id>/', views.gmail_get_message, name='gmail_get_message'),
