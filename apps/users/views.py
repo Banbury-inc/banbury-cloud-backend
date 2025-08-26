@@ -500,7 +500,7 @@ def list_all_users(request):
             last_login_map = {}
             system_total_logins = 0
 
-        # Get all users with basic information
+        # Get all users with basic information including Google credentials
         users = user_collection.find(
             {},
             {
@@ -510,7 +510,8 @@ def list_all_users(request):
                 "first_name": 1,
                 "last_name": 1,
                 "created_at": 1,
-                "auth_method": 1
+                "auth_method": 1,
+                "google_drive_credentials": 1
             }
         )
         
@@ -518,6 +519,23 @@ def list_all_users(request):
         user_list = []
         for user in users:
             user_id_str = str(user.get("_id"))
+            
+            # Extract Google scopes from credentials
+            google_scopes = []
+            scope_count = 0
+            google_credentials = user.get("google_drive_credentials", {})
+            if google_credentials and "scopes" in google_credentials:
+                google_scopes = google_credentials["scopes"] or []
+                scope_count = len(google_scopes)
+            
+            # Check for individual scope types
+            has_email_scope = any('userinfo.email' in scope for scope in google_scopes)
+            has_profile_scope = any('userinfo.profile' in scope for scope in google_scopes)
+            has_gmail_scope = any('gmail' in scope for scope in google_scopes)
+            has_drive_scope = any('drive' in scope for scope in google_scopes)
+            has_calendar_scope = any('calendar' in scope for scope in google_scopes)
+            has_contacts_scope = any('contacts' in scope for scope in google_scopes)
+            
             user_list.append({
                 "_id": user_id_str,
                 "username": user.get("username"),
@@ -529,7 +547,15 @@ def list_all_users(request):
                 "totalFiles": file_counts_map.get(user_id_str, 0),
                 "aiMessageCount": ai_counts_map.get(user_id_str, 0),
                 "loginCount": login_counts_map.get(user_id_str, 0),
-                "lastLoginDate": last_login_map.get(user_id_str)
+                "lastLoginDate": last_login_map.get(user_id_str),
+                "googleScopes": google_scopes,
+                "scopeCount": scope_count,
+                "hasEmailScope": has_email_scope,
+                "hasProfileScope": has_profile_scope,
+                "hasGmailScope": has_gmail_scope,
+                "hasDriveScope": has_drive_scope,
+                "hasCalendarScope": has_calendar_scope,
+                "hasContactsScope": has_contacts_scope
             })
         
         return JsonResponse({

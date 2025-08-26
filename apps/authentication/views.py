@@ -2244,3 +2244,116 @@ def get_login_analytics(request):
 	except Exception as e:
 		print(f"Error retrieving login analytics: {e}")
 		return JsonResponse({"error": "Failed to retrieve login analytics"}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def get_google_scopes_analytics(request):
+	"""Retrieves Google OAuth scopes analytics from the database."""
+	try:
+		# MongoDB connection
+		uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+		client = MongoClient(uri)
+		db = client["NeuraNet"]
+		user_collection = db["users"]
+		
+		# Get all users with Google OAuth credentials
+		users_with_google = list(user_collection.find(
+			{"google_drive_credentials": {"$exists": True}},
+			{"google_drive_credentials.scopes": 1, "username": 1, "email": 1}
+		))
+		
+		# Analyze scope usage
+		scope_usage = {}
+		total_google_users = len(users_with_google)
+		users_with_scopes = []
+		
+		for user in users_with_google:
+			user_id = str(user.get("_id"))
+			username = user.get("username", "")
+			email = user.get("email", "")
+			credentials = user.get("google_drive_credentials", {})
+			scopes = credentials.get("scopes", [])
+			
+			if scopes:
+				users_with_scopes.append({
+					"user_id": user_id,
+					"username": username,
+					"email": email,
+					"scopes": scopes,
+					"scope_count": len(scopes)
+				})
+				
+				# Count each scope
+				for scope in scopes:
+					if scope in scope_usage:
+						scope_usage[scope] += 1
+					else:
+						scope_usage[scope] = 1
+		
+		# Convert to sorted list
+		scope_stats = [
+			{"scope": scope, "count": count, "percentage": round((count / total_google_users) * 100, 1)}
+			for scope, count in sorted(scope_usage.items(), key=lambda x: x[1], reverse=True)
+		]
+		
+		# Get scope categories
+		scope_categories = {}
+		for scope in scope_usage.keys():
+			if 'userinfo' in scope:
+				category = 'User Info'
+			elif 'gmail' in scope:
+				category = 'Gmail'
+			elif 'drive' in scope:
+				category = 'Google Drive'
+			elif 'calendar' in scope:
+				category = 'Google Calendar'
+			elif 'contacts' in scope:
+				category = 'Contacts'
+			else:
+				category = 'Other'
+			
+			if category in scope_categories:
+				scope_categories[category] += scope_usage[scope]
+			else:
+				scope_categories[category] = scope_usage[scope]
+		
+		category_stats = [
+			{"category": category, "count": count}
+			for category, count in sorted(scope_categories.items(), key=lambda x: x[1], reverse=True)
+		]
+		
+		# Get distribution of scope counts per user
+		scope_count_distribution = {}
+		for user in users_with_scopes:
+			count = user["scope_count"]
+			if count in scope_count_distribution:
+				scope_count_distribution[count] += 1
+			else:
+				scope_count_distribution[count] = 1
+		
+		distribution_stats = [
+			{"scope_count": count, "user_count": user_count}
+			for count, user_count in sorted(scope_count_distribution.items())
+		]
+		
+		response_data = {
+			"result": "success",
+			"summary": {
+				"total_google_users": total_google_users,
+				"users_with_scopes": len(users_with_scopes),
+				"unique_scopes": len(scope_usage),
+				"most_common_scope": scope_stats[0]["scope"] if scope_stats else None,
+				"average_scopes_per_user": round(sum(user["scope_count"] for user in users_with_scopes) / len(users_with_scopes), 1) if users_with_scopes else 0
+			},
+			"scope_stats": scope_stats,
+			"category_stats": category_stats,
+			"distribution_stats": distribution_stats,
+			"users_with_scopes": users_with_scopes[:20]  # Limit to first 20 for performance
+		}
+		
+		return JsonResponse(response_data, safe=False)
+		
+	except Exception as e:
+		print(f"Error retrieving Google scopes analytics: {e}")
+		return JsonResponse({"error": "Failed to retrieve Google scopes analytics"}, status=500)
