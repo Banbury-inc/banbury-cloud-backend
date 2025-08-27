@@ -62,6 +62,40 @@ def upload_file_to_s3(request, username):
     if not user:
         return JsonResponse({"error": "User not found."}, status=404)
     
+    # Check user's subscription status and apply storage limits
+    try:
+        # Get user's subscription status
+        user_subscription = user.get("subscription", "free")
+        
+        # Only check storage limits for free users
+        if user_subscription != "pro":
+            # Get all files for this user and sum their sizes
+            user_files = file_collection.find({"user_id": user["_id"]})
+            current_total_size = sum(file.get("file_size", 0) for file in user_files)
+            
+            # Calculate new total size after upload
+            new_total_size = current_total_size + uploaded_file.size
+            
+            # Check if upload would exceed 10GB limit for free users (10 * 1024^3 bytes)
+            storage_limit_bytes = 10 * 1024 * 1024 * 1024  # 10GB for free users
+            
+            if new_total_size > storage_limit_bytes:
+                return JsonResponse({
+                    "error": "Storage limit exceeded",
+                    "message": "You have exceeded the 10GB storage limit. Please subscribe to our Pro plan for unlimited storage.",
+                    "current_usage": current_total_size,
+                    "file_size": uploaded_file.size,
+                    "would_exceed_by": new_total_size - storage_limit_bytes,
+                    "subscription": user_subscription
+                }, status=413)  # 413 Payload Too Large
+        else:
+            # Pro users have unlimited storage - no limit check needed
+            print(f"Pro user {username} uploading file - no storage limit applied")
+            
+    except Exception as e:
+        print(f"Warning: Failed to check storage limit: {e}")
+        # Continue with upload if storage check fails
+    
     # Find the device by device_name for the user (optional)
     device = device_collection.find_one({
         "user_id": user["_id"],
@@ -123,6 +157,28 @@ def upload_file_to_s3(request, username):
         
         # Insert file metadata into MongoDB
         file_collection.insert_one(file_metadata)
+        
+        # Calculate total file size for the user and update user collection
+        try:
+            # Get all files for this user and sum their sizes
+            user_files = file_collection.find({"user_id": user["_id"]})
+            total_file_size = sum(file.get("file_size", 0) for file in user_files)
+            
+            # Update user document with total file size
+            user_collection.update_one(
+                {"_id": user["_id"]},
+                {
+                    "$set": {
+                        "total_file_size": total_file_size,
+                        "last_file_upload_at": current_time
+                    }
+                }
+            )
+            
+            print(f"Updated total file size for user {username}: {total_file_size} bytes")
+            
+        except Exception as e:
+            print(f"Warning: Failed to update user total file size: {e}")
         
         # Broadcast the new file (if needed, using existing utility)
         try:

@@ -442,7 +442,6 @@ def list_all_users(request):
         db = client["NeuraNet"]
         user_collection = db["users"]
         file_collection = db["files"]
-        ai_usage_collection = db["ai_usage"]
         
         # Build a map of file counts per user_id
         try:
@@ -460,10 +459,11 @@ def list_all_users(request):
             file_counts_map = {}
             system_total_files = 0
 
-        # Build a map of AI message counts per user_id
+        # Build a map of AI message counts per user_id from user collection
         try:
-            ai_counts_cursor = ai_usage_collection.aggregate([
-                {"$group": {"_id": "$user_id", "count": {"$sum": "$message_count"}}}
+            ai_counts_cursor = user_collection.aggregate([
+                {"$match": {"ai_message_count": {"$exists": True, "$gt": 0}}},
+                {"$group": {"_id": "$_id", "count": {"$sum": "$ai_message_count"}}}
             ])
             ai_counts_map = {}
             system_total_ai_messages = 0
@@ -472,7 +472,8 @@ def list_all_users(request):
                 count = int(item.get("count", 0))
                 ai_counts_map[key] = count
                 system_total_ai_messages += count
-        except Exception:
+        except Exception as e:
+            print(f"Error getting AI usage stats: {e}")
             ai_counts_map = {}
             system_total_ai_messages = 0
 
@@ -500,7 +501,7 @@ def list_all_users(request):
             last_login_map = {}
             system_total_logins = 0
 
-        # Get all users with basic information including Google credentials
+        # Get all users with basic information including Google credentials, AI usage, and subscription
         users = user_collection.find(
             {},
             {
@@ -511,7 +512,12 @@ def list_all_users(request):
                 "last_name": 1,
                 "created_at": 1,
                 "auth_method": 1,
-                "google_drive_credentials": 1
+                "google_drive_credentials": 1,
+                "ai_message_count": 1,
+                "last_ai_message_at": 1,
+                "subscription": 1,
+                "total_file_size": 1,
+                "last_file_upload_at": 1
             }
         )
         
@@ -544,8 +550,12 @@ def list_all_users(request):
                 "last_name": user.get("last_name"),
                 "created_at": user.get("created_at"),
                 "auth_method": user.get("auth_method", "Email/Password"),
+                "subscription": user.get("subscription", "free"),
                 "totalFiles": file_counts_map.get(user_id_str, 0),
-                "aiMessageCount": ai_counts_map.get(user_id_str, 0),
+                "totalFileSize": user.get("total_file_size", 0),
+                "lastFileUploadAt": user.get("last_file_upload_at"),
+                "aiMessageCount": user.get("ai_message_count", 0),
+                "lastAiMessageAt": user.get("last_ai_message_at"),
                 "loginCount": login_counts_map.get(user_id_str, 0),
                 "lastLoginDate": last_login_map.get(user_id_str),
                 "googleScopes": google_scopes,
@@ -596,34 +606,41 @@ def ai_message_sent(request):
         client = MongoClient(uri)
         db = client["NeuraNet"]
         user_collection = db["users"]
-        ai_usage_collection = db["ai_usage"]
 
-        # Find user
-        user = user_collection.find_one({"username": username})
-        if not user:
-            return JsonResponse({'message': 'User not found'}, status=404)
-        user_id = user.get('_id')
-
-        # Increment count atomically and upsert
+        # Find user and increment AI message count atomically
         from datetime import datetime
-        result = ai_usage_collection.update_one(
-            {"user_id": user_id},
+        result = user_collection.update_one(
+            {"username": username},
             {
-                "$inc": {"message_count": 1},
-                "$set": {"last_message_at": datetime.utcnow().isoformat()},
-                "$setOnInsert": {"created_at": datetime.utcnow().isoformat()}
-            },
-            upsert=True
+                "$inc": {"ai_message_count": 1},
+                "$set": {"last_ai_message_at": datetime.utcnow().isoformat()},
+                "$setOnInsert": {"ai_usage_created_at": datetime.utcnow().isoformat()}
+            }
         )
 
-        # Read back the latest count
-        usage_doc = ai_usage_collection.find_one({"user_id": user_id})
-        count = int(usage_doc.get('message_count', 0)) if usage_doc else 0
+        if result.matched_count == 0:
+            return JsonResponse({'message': 'User not found'}, status=404)
+
+        # Read back the updated user document to get the latest count
+        user = user_collection.find_one({"username": username})
+        count = int(user.get('ai_message_count', 0)) if user else 0
+        subscription = user.get('subscription', 'free') if user else 'free'
+
+        # Check if AI message limit is exceeded (only for free users)
+        if subscription == 'free' and count > 100:
+            return JsonResponse({
+                'result': 'exceeded_ai_message_limit',
+                'message': 'AI message limit exceeded. You have reached the maximum of 100 AI messages. Please subscribe to the Pro plan for unlimited requests.',
+                'username': username,
+                'user_id': str(user.get('_id')),
+                'aiMessageCount': count,
+                'subscription': subscription
+            }, status=429)  # 429 Too Many Requests
 
         return JsonResponse({
             'result': 'success',
             'username': username,
-            'user_id': str(user_id),
+            'user_id': str(user.get('_id')),
             'aiMessageCount': count
         })
         

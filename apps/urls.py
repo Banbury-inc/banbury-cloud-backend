@@ -6,4 +6,5 @@ urlpatterns = [
     path("", views.homepage, name="home"),
     path('ws/', include(websocket_urlpatterns)),
     path('browserbase/', include('apps.browserbase.urls')),
+    path('billing/', include('apps.billing.urls')),
 ]
