@@ -882,7 +882,12 @@ def add_site_visitor_info(request):
         return JsonResponse({"error": "Invalid JSON"}, status=400)
 
     # Fetch location data based on the IP address
+    city = "Unknown"
+    region = "Unknown"
+    country = "Unknown"
+    
     try:
+        # Try primary service: ipapi.com
         api_key = "9ab07cc6f5a49eeb6ad0c6f5cc04e34d"
         geo_response = http_requests.get(f"http://api.ipapi.com/api/{ip_address}?access_key={api_key}")
         if geo_response.status_code == 200:
@@ -891,13 +896,31 @@ def add_site_visitor_info(request):
             region = geo_data.get("region", "Unknown")
             country = geo_data.get("country_name", "Unknown")
         else:
-            city = "Unknown"
-            region = "Unknown"
-            country = "Unknown"
+            # Try fallback service: ip-api.com (free, no API key required)
+            try:
+                fallback_response = http_requests.get(f"http://ip-api.com/json/{ip_address}")
+                if fallback_response.status_code == 200:
+                    fallback_data = fallback_response.json()
+                    if fallback_data.get("status") == "success":
+                        city = fallback_data.get("city", "Unknown")
+                        region = fallback_data.get("regionName", "Unknown")
+                        country = fallback_data.get("country", "Unknown")
+            except http_requests.RequestException:
+                # If fallback also fails, keep default "Unknown" values
+                pass
     except http_requests.RequestException:
-        city = "Unknown"
-        region = "Unknown"
-        country = "Unknown"
+        # If primary service fails completely, try fallback service
+        try:
+            fallback_response = http_requests.get(f"http://ip-api.com/json/{ip_address}")
+            if fallback_response.status_code == 200:
+                fallback_data = fallback_response.json()
+                if fallback_data.get("status") == "success":
+                    city = fallback_data.get("city", "Unknown")
+                    region = fallback_data.get("regionName", "Unknown")
+                    country = fallback_data.get("country", "Unknown")
+        except http_requests.RequestException:
+            # If both services fail, keep default "Unknown" values
+            pass
 
     time = datetime.now()
 
