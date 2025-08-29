@@ -26,7 +26,11 @@ class AuthenticationTokenMiddleware:
             # Public endpoints (no auth required)
             '/authentication/get_client_ip/',
             '/authentication/add_site_visitor_info/',
-            '/authentication/get_site_visitor_info/'
+            '/authentication/get_site_visitor_info/',
+            # X (Twitter) OAuth callback must be public
+            '/authentication/x_api/oauth_callback/',
+            # favicon should not require auth
+            '/favicon.ico'
         ]
         
         # Check if the current path starts with any of the excluded paths

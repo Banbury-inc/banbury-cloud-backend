@@ -28,6 +28,22 @@ urlpatterns = [
     path('gmail/messages/<str:message_id>/', views.gmail_get_message, name='gmail_get_message'),
     path('gmail/send_message/', views.gmail_send_message, name='gmail_send_message'),
     path('gmail/messages/<str:message_id>/modify/', views.gmail_modify_message, name='gmail_modify_message'),
+    # X API proxy endpoints
+    path('x_api/user_info/', views.x_api_user_info, name='x_api_user_info'),
+    path('x_api/user_tweets/', views.x_api_user_tweets, name='x_api_user_tweets'),
+    path('x_api/search_tweets/', views.x_api_search_tweets, name='x_api_search_tweets'),
+    path('x_api/trending_topics/', views.x_api_trending_topics, name='x_api_trending_topics'),
+    path('x_api/post_tweet/', views.x_api_post_tweet, name='x_api_post_tweet'),
+    # X OAuth2 endpoints
+    path('x_api/oauth2/initiate/', views.x_api_oauth2_initiate, name='x_api_oauth2_initiate'),
+    path('x_api/oauth2/callback/', views.x_api_oauth2_callback, name='x_api_oauth2_callback'),
+    path('x_api/oauth2/disconnect/', views.x_api_oauth2_disconnect, name='x_api_oauth2_disconnect'),
+    # X API Connection Management
+    path('x_api/connection_status/', views.x_api_connection_status, name='x_api_connection_status'),
+    path('x_api/initiate_oauth/', views.x_api_initiate_oauth, name='x_api_initiate_oauth'),
+    path('x_api/oauth_callback/', views.x_api_oauth_callback, name='x_api_oauth_callback'),
+    path('x_api/disconnect/', views.x_api_disconnect, name='x_api_disconnect'),
+    path('x_api/test_connection/', views.x_api_test_connection, name='x_api_test_connection'),
     path('gmail/messages/batch', views.gmail_get_messages_batch, name='gmail_get_messages_batch'),
     path('gmail/messages/<str:message_id>/attachments/<str:attachment_id>', views.gmail_get_attachment, name='gmail_get_attachment'),
     path('gmail/test-batch', views.gmail_test_batch, name='gmail_test_batch'),

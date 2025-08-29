@@ -1,6 +1,7 @@
 from django.views.decorators.csrf import csrf_exempt
 import base64
 import os
+import hashlib
 from django.views.decorators.http import require_http_methods
 from rest_framework.permissions import AllowAny
 import bcrypt
@@ -29,6 +30,7 @@ from .email_service import email_service
 from django.views.decorators.csrf import csrf_exempt
 import requests
 from urllib.parse import urlencode
+import urllib.parse
 
 load_dotenv()
 
@@ -2399,3 +2401,1180 @@ def get_google_scopes_analytics(request):
 	except Exception as e:
 		print(f"Error retrieving Google scopes analytics: {e}")
 		return JsonResponse({"error": "Failed to retrieve Google scopes analytics"}, status=500)
+
+
+# X API endpoints
+
+# OAuth2 (PKCE) helper functions for X API
+def _base64url_encode(raw_bytes: bytes) -> str:
+	return base64.urlsafe_b64encode(raw_bytes).rstrip(b'=').decode('utf-8')
+
+def _generate_code_verifier() -> str:
+	# 64-char unpadded URL-safe string
+	random_bytes = os.urandom(64)
+	return _base64url_encode(random_bytes)[:64]
+
+def _code_challenge_from_verifier(verifier: str) -> str:
+	digest = hashlib.sha256(verifier.encode('utf-8')).digest()
+	return _base64url_encode(digest)
+
+def _get_user_doc(username: str):
+	uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+	client = MongoClient(uri)
+	db = client["NeuraNet"]
+	user_collection = db["users"]
+	return user_collection.find_one({"username": username}), user_collection
+
+def _now_utc_iso() -> str:
+	return datetime.utcnow().isoformat()
+
+def _ensure_oauth2_token_fresh(user_doc: dict, user_collection, username: str) -> tuple[str | None, dict | None]:
+	"""Return valid access_token, updated_oauth2 dict if refreshed. Handles refresh if expired."""
+	oauth2 = (user_doc or {}).get('x_api_oauth2') or {}
+	access_token = oauth2.get('access_token')
+	refresh_token = oauth2.get('refresh_token')
+	expires_at = oauth2.get('expires_at')
+	client_id = os.environ.get('X_OAUTH2_CLIENT_ID')
+	client_secret = os.environ.get('X_OAUTH2_CLIENT_SECRET')
+	if not access_token:
+		return None, None
+	# If no expiry, assume valid
+	try:
+		is_expired = False
+		if expires_at:
+			exp_dt = datetime.fromisoformat(expires_at)
+			is_expired = exp_dt <= datetime.utcnow()
+	except Exception:
+		is_expired = False
+	if not is_expired:
+		return access_token, None
+	# Refresh if we can
+	if not refresh_token:
+		return None, None
+	try:
+		data = {
+			'grant_type': 'refresh_token',
+			'refresh_token': refresh_token,
+		}
+		if client_id:
+			data['client_id'] = client_id
+		# Some providers require client_secret; include when present
+		if client_secret:
+			data['client_secret'] = client_secret
+		resp = requests.post(
+			"https://api.twitter.com/2/oauth2/token",
+			data=data,
+			headers={'Content-Type': 'application/x-www-form-urlencoded'},
+			timeout=15
+		)
+		if resp.status_code != 200:
+			return None, None
+		payload = resp.json() or {}
+		new_access = payload.get('access_token')
+		new_refresh = payload.get('refresh_token') or refresh_token
+		expires_in = payload.get('expires_in')
+		scope = payload.get('scope') or oauth2.get('scope')
+		token_type = payload.get('token_type') or oauth2.get('token_type')
+		new_expires_at = None
+		if isinstance(expires_in, int):
+			new_expires_at = (datetime.utcnow() + timedelta(seconds=max(expires_in - 60, 0))).isoformat()
+		if new_access:
+			updated = {
+				'access_token': new_access,
+				'refresh_token': new_refresh,
+				'expires_at': new_expires_at or oauth2.get('expires_at'),
+				'scope': scope,
+				'token_type': token_type,
+				'user_id': oauth2.get('user_id'),
+				'username': oauth2.get('username')
+			}
+			user_collection.update_one({"username": username}, {"$set": {"x_api_oauth2": updated}})
+			return new_access, updated
+		return None, None
+	except Exception:
+		return None, None
+@csrf_exempt
+@require_http_methods(["GET"])
+def x_api_user_info(request):
+	"""Get X (Twitter) user information by username or user ID."""
+	try:
+		# Get authenticated user information
+		auth_header = request.headers.get('Authorization')
+		if not auth_header or ' ' not in auth_header:
+			return JsonResponse({'message': 'Authentication required'}, status=401)
+		
+		auth_type, token = auth_header.split(' ', 1)
+		if auth_type.lower() != 'bearer':
+			return JsonResponse({'message': 'Invalid authentication type'}, status=401)
+			
+		# Validate token and get username
+		try:
+			validated = AccessToken(token)
+			username = validated.payload.get('username')
+			
+			if not username:
+				return JsonResponse({'message': 'Invalid token'}, status=401)
+				
+		except Exception as e:
+			return JsonResponse({'message': str(e)}, status=401)
+
+		# Get query parameters
+		username_param = request.GET.get('username')
+		user_id_param = request.GET.get('user_id')
+		
+		if not username_param and not user_id_param:
+			return JsonResponse({'error': 'Either username or user_id parameter is required'}, status=400)
+
+		# Get X API credentials from environment
+		x_api_key = os.environ.get('X_API_KEY')
+		x_api_secret = os.environ.get('X_API_SECRET')
+		x_bearer_token = os.environ.get('X_BEARER_TOKEN')
+		
+		if not x_bearer_token:
+			return JsonResponse({'error': 'X API credentials not configured'}, status=500)
+
+		# Build X API URL
+		if username_param:
+			url = f"https://api.twitter.com/2/users/by/username/{username_param}"
+		else:
+			url = f"https://api.twitter.com/2/users/{user_id_param}"
+		
+		# Add user fields (include protected for visibility)
+		url += "?user.fields=id,name,username,description,profile_image_url,public_metrics,verified,created_at,protected"
+
+		# Make request to X API
+		headers = {
+			'Authorization': f'Bearer {x_bearer_token}',
+			'Content-Type': 'application/json'
+		}
+		
+		response = requests.get(url, headers=headers, timeout=30)
+		
+		if response.status_code == 200:
+			data = response.json()
+			return JsonResponse(data, safe=False)
+		else:
+			rate_remaining = response.headers.get('x-rate-limit-remaining')
+			rate_reset = response.headers.get('x-rate-limit-reset')
+			return JsonResponse({
+				'error': f'X API error: {response.status_code} - {response.text}',
+				'rate_limit_remaining': rate_remaining,
+				'rate_limit_reset': rate_reset
+			}, status=response.status_code)
+			
+	except Exception as e:
+		return JsonResponse({'error': f'Error: {str(e)}'}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def x_api_oauth2_initiate(request):
+	"""Start OAuth2 PKCE flow: returns auth_url for client redirect."""
+	try:
+		# Auth user
+		auth_header = request.headers.get('Authorization')
+		if not auth_header or ' ' not in auth_header:
+			return JsonResponse({'message': 'Authentication required'}, status=401)
+		auth_type, token = auth_header.split(' ', 1)
+		if auth_type.lower() != 'bearer':
+			return JsonResponse({'message': 'Invalid authentication type'}, status=401)
+		validated = AccessToken(token)
+		username = validated.payload.get('username')
+		if not username:
+			return JsonResponse({'message': 'Invalid token'}, status=401)
+
+		client_id = os.environ.get('X_OAUTH2_CLIENT_ID')
+		redirect_uri = os.environ.get('X_OAUTH2_REDIRECT_URI') or request.POST.get('redirect_uri') or request.GET.get('redirect_uri')
+		scope = os.environ.get('X_OAUTH2_SCOPE') or 'tweet.read users.read offline.access'
+		if not client_id or not redirect_uri:
+			return JsonResponse({'error': 'OAuth2 not configured (client_id/redirect_uri)'}, status=500)
+
+		state = _base64url_encode(os.urandom(24))
+		verifier = _generate_code_verifier()
+		challenge = _code_challenge_from_verifier(verifier)
+
+		# Persist state + verifier for user
+		user_doc, user_collection = _get_user_doc(username)
+		user_collection.update_one(
+			{"username": username},
+			{"$set": {"x_api_oauth2_state": {"state": state, "code_verifier": verifier, "created_at": _now_utc_iso()}}},
+			upsert=True
+		)
+
+		authorize_url = "https://twitter.com/i/oauth2/authorize"
+		params = {
+			'response_type': 'code',
+			'client_id': client_id,
+			'redirect_uri': redirect_uri,
+			'scope': scope,
+			'state': state,
+			'code_challenge': challenge,
+			'code_challenge_method': 'S256'
+		}
+		return JsonResponse({'auth_url': f"{authorize_url}?{urllib.parse.urlencode(params)}"})
+	except Exception as e:
+		return JsonResponse({'error': f'Error: {str(e)}'}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST", "GET"])
+def x_api_oauth2_callback(request):
+	"""Exchange code for tokens, store in Mongo under x_api_oauth2."""
+	try:
+		# Auth user
+		auth_header = request.headers.get('Authorization')
+		if not auth_header or ' ' not in auth_header:
+			return JsonResponse({'message': 'Authentication required'}, status=401)
+		auth_type, token = auth_header.split(' ', 1)
+		if auth_type.lower() != 'bearer':
+			return JsonResponse({'message': 'Invalid authentication type'}, status=401)
+		validated = AccessToken(token)
+		username = validated.payload.get('username')
+		if not username:
+			return JsonResponse({'message': 'Invalid token'}, status=401)
+
+		code = request.POST.get('code') or request.GET.get('code')
+		state = request.POST.get('state') or request.GET.get('state')
+		if not code or not state:
+			return JsonResponse({'error': 'Missing code/state'}, status=400)
+
+		client_id = os.environ.get('X_OAUTH2_CLIENT_ID')
+		client_secret = os.environ.get('X_OAUTH2_CLIENT_SECRET')
+		redirect_uri = os.environ.get('X_OAUTH2_REDIRECT_URI') or request.POST.get('redirect_uri') or request.GET.get('redirect_uri')
+		if not client_id or not redirect_uri:
+			return JsonResponse({'error': 'OAuth2 not configured (client_id/redirect_uri)'}, status=500)
+
+		user_doc, user_collection = _get_user_doc(username)
+		state_doc = (user_doc or {}).get('x_api_oauth2_state') or {}
+		if state_doc.get('state') != state:
+			return JsonResponse({'error': 'Invalid state'}, status=400)
+		verifier = state_doc.get('code_verifier')
+		if not verifier:
+			return JsonResponse({'error': 'Missing code_verifier'}, status=400)
+
+		data = {
+			'grant_type': 'authorization_code',
+			'code': code,
+			'redirect_uri': redirect_uri,
+			'code_verifier': verifier,
+			'client_id': client_id,
+		}
+		if client_secret:
+			data['client_secret'] = client_secret
+		resp = requests.post(
+			"https://api.twitter.com/2/oauth2/token",
+			data=data,
+			headers={'Content-Type': 'application/x-www-form-urlencoded'},
+			timeout=15
+		)
+		if resp.status_code != 200:
+			return JsonResponse({'error': f'Token exchange failed: {resp.status_code} - {resp.text}'}, status=resp.status_code)
+		payload = resp.json() or {}
+		access_token = payload.get('access_token')
+		refresh_token = payload.get('refresh_token')
+		expires_in = payload.get('expires_in')
+		scope = payload.get('scope')
+		token_type = payload.get('token_type')
+		expires_at = None
+		if isinstance(expires_in, int):
+			expires_at = (datetime.utcnow() + timedelta(seconds=max(expires_in - 60, 0))).isoformat()
+
+		# Resolve user id/username via v2 me endpoint
+		resolved_user_id = None
+		resolved_username = None
+		if access_token:
+			me_resp = requests.get(
+				"https://api.twitter.com/2/users/me?user.fields=id,username,name",
+				headers={'Authorization': f'Bearer {access_token}'},
+				timeout=10
+			)
+			if me_resp.status_code == 200:
+				me = me_resp.json() or {}
+				ud = me.get('data') or {}
+				resolved_user_id = ud.get('id')
+				resolved_username = ud.get('username')
+
+		user_collection.update_one(
+			{"username": username},
+			{"$set": {
+				"x_api_oauth2": {
+					"access_token": access_token,
+					"refresh_token": refresh_token,
+					"expires_at": expires_at,
+					"scope": scope,
+					"token_type": token_type,
+					"user_id": resolved_user_id,
+					"username": resolved_username,
+				},
+				"x_api_oauth2_state": None
+			}},
+			upsert=True
+		)
+		return JsonResponse({'success': True, 'user_id': resolved_user_id, 'username': resolved_username})
+	except Exception as e:
+		return JsonResponse({'error': f'Error: {str(e)}'}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def x_api_oauth2_disconnect(request):
+	"""Clear stored OAuth2 credentials for the authenticated user."""
+	try:
+		auth_header = request.headers.get('Authorization')
+		if not auth_header or ' ' not in auth_header:
+			return JsonResponse({'message': 'Authentication required'}, status=401)
+		auth_type, token = auth_header.split(' ', 1)
+		if auth_type.lower() != 'bearer':
+			return JsonResponse({'message': 'Invalid authentication type'}, status=401)
+		validated = AccessToken(token)
+		username = validated.payload.get('username')
+		if not username:
+			return JsonResponse({'message': 'Invalid token'}, status=401)
+
+		user_doc, user_collection = _get_user_doc(username)
+		user_collection.update_one({"username": username}, {"$unset": {"x_api_oauth2": "", "x_api_oauth2_state": ""}})
+		return JsonResponse({'success': True})
+	except Exception as e:
+		return JsonResponse({'error': f'Error: {str(e)}'}, status=500)
+@csrf_exempt
+@require_http_methods(["GET"])
+def x_api_user_tweets(request):
+	"""Get recent tweets from an X (Twitter) user."""
+	try:
+		# Get authenticated user information
+		auth_header = request.headers.get('Authorization')
+		if not auth_header or ' ' not in auth_header:
+			return JsonResponse({'message': 'Authentication required'}, status=401)
+		
+		auth_type, token = auth_header.split(' ', 1)
+		if auth_type.lower() != 'bearer':
+			return JsonResponse({'message': 'Invalid authentication type'}, status=401)
+			
+		# Validate token and get username
+		try:
+			validated = AccessToken(token)
+			username = validated.payload.get('username')
+			
+			if not username:
+				return JsonResponse({'message': 'Invalid token'}, status=401)
+				
+		except Exception as e:
+			return JsonResponse({'message': str(e)}, status=401)
+
+		# Get query parameters
+		username_param = request.GET.get('username')
+		user_id_param = request.GET.get('user_id')
+		try:
+			max_results = int(request.GET.get('max_results', 10))
+		except (TypeError, ValueError):
+			return JsonResponse({'error': 'max_results must be an integer'}, status=400)
+		exclude_retweets = request.GET.get('exclude_retweets', 'false').lower() == 'true'
+		exclude_replies = request.GET.get('exclude_replies', 'false').lower() == 'true'
+		
+		if not username_param and not user_id_param:
+			return JsonResponse({'error': 'Either username or user_id parameter is required'}, status=400)
+
+		# Get X API credentials from environment
+		x_bearer_token = os.environ.get('X_BEARER_TOKEN')
+		use_app_bearer = request.GET.get('use_app_bearer', 'false').lower() == 'true'
+		
+		# OAuth2 user-bearer preferred if present
+		user_doc = None
+		user_collection = None
+		try:
+			uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+			client = MongoClient(uri)
+			db = client["NeuraNet"]
+			user_collection = db["users"]
+			user_doc = user_collection.find_one({"username": username})
+		except Exception:
+			user_doc = None
+
+		if (not use_app_bearer) and user_doc and user_doc.get('x_api_oauth2', {}).get('access_token'):
+			user_access_token, updated = _ensure_oauth2_token_fresh(user_doc, user_collection, username)
+			if user_access_token:
+				# Resolve user_id if needed using user bearer
+				resolved_user_id = user_id_param
+				if username_param and not resolved_user_id:
+					try:
+						user_url = f"https://api.twitter.com/2/users/by/username/{username_param}?user.fields=id,username"
+						resp = requests.get(user_url, headers={'Authorization': f'Bearer {user_access_token}'}, timeout=15)
+						if resp.status_code != 200:
+							return JsonResponse({'error': f'X API error getting user: {resp.status_code}'}, status=resp.status_code)
+						ud = resp.json() or {}
+						resolved_user_id = (ud.get('data') or {}).get('id')
+						if not resolved_user_id:
+							return JsonResponse({'error': 'User not found'}, status=404)
+					except requests.exceptions.RequestException as e:
+						return JsonResponse({'error': f'Upstream X API error (user lookup v2 user-bearer): {str(e)}'}, status=502)
+
+				# Build v2 tweets request with user bearer
+				url = f"https://api.twitter.com/2/users/{resolved_user_id}/tweets"
+				params = {
+					'max_results': min(max_results, 100),
+					'tweet.fields': 'id,text,created_at,public_metrics,entities,referenced_tweets'
+				}
+				if exclude_retweets:
+					params['exclude'] = 'retweets'
+				if exclude_replies:
+					params['exclude'] = params.get('exclude', '') + ',replies' if params.get('exclude') else 'replies'
+				try:
+					resp = requests.get(url, headers={'Authorization': f'Bearer {user_access_token}'}, params=params, timeout=30)
+				except requests.exceptions.RequestException as e:
+					return JsonResponse({'error': f'Upstream X API error (tweets v2 user-bearer): {str(e)}'}, status=502)
+				if resp.status_code == 200:
+					return JsonResponse(resp.json(), safe=False)
+				# If unauthorized with user token, attempt app-bearer fallback if configured
+				if resp.status_code in (401, 403) and x_bearer_token:
+					pass
+				else:
+					return JsonResponse({'error': f'X API error: {resp.status_code} - {resp.text}'}, status=resp.status_code)
+
+		# Try to use per-user OAuth1 credentials next (legacy)
+		user_x_credentials = (user_doc or {}).get('x_api_credentials') if user_doc else None
+		try:
+			uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+			client = MongoClient(uri)
+			db = client["NeuraNet"]
+			user_collection = db["users"]
+			user_doc = user_collection.find_one({"username": username})
+			if user_doc:
+				user_x_credentials = user_doc.get('x_api_credentials', {})
+		except Exception:
+			user_x_credentials = None
+
+		# If user has OAuth1 credentials, use v1.1 timeline with user context
+		if (not use_app_bearer) and user_x_credentials and user_x_credentials.get('access_token') and user_x_credentials.get('access_token_secret'):
+			try:
+				from requests_oauthlib import OAuth1Session
+				x_api_key = os.environ.get('X_API_KEY')
+				x_api_secret = os.environ.get('X_API_SECRET')
+				if not x_api_key or not x_api_secret:
+					return JsonResponse({'error': 'X API consumer keys not configured'}, status=500)
+
+				oauth = OAuth1Session(
+					x_api_key,
+					client_secret=x_api_secret,
+					resource_owner_key=user_x_credentials.get('access_token'),
+					resource_owner_secret=user_x_credentials.get('access_token_secret')
+				)
+
+				# Resolve user_id if only username was provided
+				resolved_user_id = user_id_param
+				if username_param and not resolved_user_id:
+					try:
+						lookup_url = "https://api.twitter.com/1.1/users/show.json"
+						lu_resp = oauth.get(lookup_url, params={'screen_name': username_param}, timeout=30)
+						if lu_resp.status_code != 200:
+							return JsonResponse({'error': f'X API error getting user (v1.1): {lu_resp.status_code}'}, status=lu_resp.status_code)
+						ud = lu_resp.json() or {}
+						resolved_user_id = ud.get('id_str') or (str(ud.get('id')) if ud.get('id') is not None else None)
+						if not resolved_user_id:
+							return JsonResponse({'error': 'User not found'}, status=404)
+					except requests.exceptions.RequestException as e:
+						return JsonResponse({'error': f'Upstream X API error (user lookup v1.1): {str(e)}'}, status=502)
+
+				# Build v1.1 timeline params
+				timeline_url = "https://api.twitter.com/1.1/statuses/user_timeline.json"
+				params_v11 = {
+					'user_id': resolved_user_id or user_id_param,
+					'count': min(max_results, 200),
+					'tweet_mode': 'extended'
+				}
+				if exclude_retweets:
+					params_v11['include_rts'] = 'false'
+				if exclude_replies:
+					params_v11['exclude_replies'] = 'true'
+
+				try:
+					resp = oauth.get(timeline_url, params=params_v11, timeout=30)
+				except requests.exceptions.RequestException as e:
+					return JsonResponse({'error': f'Upstream X API error (tweets v1.1): {str(e)}'}, status=502)
+
+				if resp.status_code == 200:
+					data = resp.json()
+					return JsonResponse(data, safe=False)
+				else:
+					# If app bearer is available, fall through to v2 implementation below
+					if not x_bearer_token:
+						return JsonResponse({'error': f'X API error (v1.1): {resp.status_code} - {resp.text}'}, status=resp.status_code)
+			except Exception as e:
+				# Fall through to app-level bearer if available
+				pass
+
+		# If no per-user credentials (or explicitly forced), require app-level bearer for v2
+		if not x_bearer_token:
+			return JsonResponse({'error': 'No X user credentials connected and app bearer token not configured'}, status=400)
+
+		# First get user ID if username provided
+		user_id = user_id_param
+		if username_param:
+			user_url = f"https://api.twitter.com/2/users/by/username/{username_param}"
+			headers = {
+				'Authorization': f'Bearer {x_bearer_token}',
+				'Content-Type': 'application/json'
+			}
+			
+			try:
+				user_response = requests.get(user_url, headers=headers, timeout=30)
+			except requests.exceptions.RequestException as e:
+				return JsonResponse({'error': f'Upstream X API error (user lookup): {str(e)}'}, status=502)
+			if user_response.status_code != 200:
+				return JsonResponse({'error': f'X API error getting user: {user_response.status_code}'}, status=user_response.status_code)
+			
+			user_data = user_response.json()
+			user_id = user_data.get('data', {}).get('id')
+			if not user_id:
+				return JsonResponse({'error': 'User not found'}, status=404)
+
+		# Build tweets URL
+		url = f"https://api.twitter.com/2/users/{user_id}/tweets"
+		
+		# Add parameters
+		params = {
+			'max_results': min(max_results, 100),
+			'tweet.fields': 'id,text,created_at,public_metrics,entities,referenced_tweets'
+		}
+		
+		if exclude_retweets:
+			params['exclude'] = 'retweets'
+		if exclude_replies:
+			params['exclude'] = params.get('exclude', '') + ',replies' if params.get('exclude') else 'replies'
+
+		# Make request to X API
+		headers = {
+			'Authorization': f'Bearer {x_bearer_token}',
+			'Content-Type': 'application/json'
+		}
+
+		try:
+			response = requests.get(url, headers=headers, params=params, timeout=30)
+		except requests.exceptions.RequestException as e:
+			return JsonResponse({'error': f'Upstream X API error (tweets): {str(e)}'}, status=502)
+		
+		if response.status_code == 200:
+			data = response.json()
+			return JsonResponse(data, safe=False)
+		else:
+			rate_remaining = response.headers.get('x-rate-limit-remaining')
+			rate_reset = response.headers.get('x-rate-limit-reset')
+			return JsonResponse({
+				'error': f'X API error: {response.status_code} - {response.text}',
+				'rate_limit_remaining': rate_remaining,
+				'rate_limit_reset': rate_reset
+			}, status=response.status_code)
+			
+	except Exception as e:
+		return JsonResponse({'error': f'Error: {str(e)}'}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def x_api_search_tweets(request):
+	"""Search for tweets using X (Twitter) search API."""
+	try:
+		# Get authenticated user information
+		auth_header = request.headers.get('Authorization')
+		if not auth_header or ' ' not in auth_header:
+			return JsonResponse({'message': 'Authentication required'}, status=401)
+		
+		auth_type, token = auth_header.split(' ', 1)
+		if auth_type.lower() != 'bearer':
+			return JsonResponse({'message': 'Invalid authentication type'}, status=401)
+			
+		# Validate token and get username
+		try:
+			validated = AccessToken(token)
+			username = validated.payload.get('username')
+			
+			if not username:
+				return JsonResponse({'message': 'Invalid token'}, status=401)
+				
+		except Exception as e:
+			return JsonResponse({'message': str(e)}, status=401)
+
+		# Get query parameters
+		query = request.GET.get('query')
+		max_results = int(request.GET.get('max_results', 10))
+		language = request.GET.get('language', 'en')
+		result_type = request.GET.get('result_type', 'recent')
+		
+		if not query:
+			return JsonResponse({'error': 'Query parameter is required'}, status=400)
+
+		# Get X API credentials from environment
+		x_bearer_token = os.environ.get('X_BEARER_TOKEN')
+		# Normalize bearer if URL-encoded in env
+		if x_bearer_token and '%' in x_bearer_token:
+			try:
+				x_bearer_token = urllib.parse.unquote(x_bearer_token)
+			except Exception:
+				pass
+		
+		if not x_bearer_token:
+			return JsonResponse({'error': 'X API credentials not configured'}, status=500)
+
+		# Build search URL
+		url = "https://api.twitter.com/2/tweets/search/recent"
+		
+		# Add parameters
+		params = {
+			'query': query,
+			'max_results': min(max_results, 100),
+			'tweet.fields': 'id,text,created_at,public_metrics,entities,author_id',
+			'user.fields': 'id,name,username,profile_image_url,verified',
+			'expansions': 'author_id'
+		}
+		
+		if language != 'en':
+			params['lang'] = language
+
+		# Make request to X API
+		headers = {
+			'Authorization': f'Bearer {x_bearer_token}',
+			'Content-Type': 'application/json'
+		}
+		
+		response = requests.get(url, headers=headers, params=params, timeout=30)
+		
+		if response.status_code == 200:
+			data = response.json()
+			return JsonResponse(data, safe=False)
+		else:
+			return JsonResponse({'error': f'X API error: {response.status_code} - {response.text}'}, status=response.status_code)
+			
+	except Exception as e:
+		return JsonResponse({'error': f'Error: {str(e)}'}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def x_api_trending_topics(request):
+	"""Get trending topics on X (Twitter) for a specific location."""
+	try:
+		# Get authenticated user information
+		auth_header = request.headers.get('Authorization')
+		if not auth_header or ' ' not in auth_header:
+			return JsonResponse({'message': 'Authentication required'}, status=401)
+		
+		auth_type, token = auth_header.split(' ', 1)
+		if auth_type.lower() != 'bearer':
+			return JsonResponse({'message': 'Invalid authentication type'}, status=401)
+			
+		# Validate token and get username
+		try:
+			validated = AccessToken(token)
+			username = validated.payload.get('username')
+			
+			if not username:
+				return JsonResponse({'message': 'Invalid token'}, status=401)
+				
+		except Exception as e:
+			return JsonResponse({'message': str(e)}, status=401)
+
+		# Get query parameters
+		woeid = request.GET.get('woeid', '1')  # Default to worldwide (1)
+		count = int(request.GET.get('count', 10))
+
+		# Get X API credentials from environment
+		x_api_key = os.environ.get('X_API_KEY')
+		x_api_secret = os.environ.get('X_API_SECRET')
+		
+		if not x_api_key or not x_api_secret:
+			return JsonResponse({'error': 'X API credentials not configured'}, status=500)
+
+		# Build trending topics URL (using v1.1 API for trends)
+		url = f"https://api.twitter.com/1.1/trends/place.json"
+		
+		# Add parameters
+		params = {
+			'id': woeid,
+			'count': min(count, 50)
+		}
+
+		# Create OAuth1 session for v1.1 API
+		from requests_oauthlib import OAuth1Session
+		
+		oauth = OAuth1Session(
+			x_api_key,
+			client_secret=x_api_secret,
+			resource_owner_key="",  # Not needed for app-only auth
+			resource_owner_secret=""  # Not needed for app-only auth
+		)
+		
+		response = oauth.get(url, params=params, timeout=30)
+		
+		if response.status_code == 200:
+			data = response.json()
+			return JsonResponse(data, safe=False)
+		else:
+			return JsonResponse({'error': f'X API error: {response.status_code} - {response.text}'}, status=response.status_code)
+			
+	except Exception as e:
+		return JsonResponse({'error': f'Error: {str(e)}'}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def x_api_post_tweet(request):
+	"""Post a new tweet to X (Twitter)."""
+	try:
+		# Get authenticated user information
+		auth_header = request.headers.get('Authorization')
+		if not auth_header or ' ' not in auth_header:
+			return JsonResponse({'message': 'Authentication required'}, status=401)
+		
+		auth_type, token = auth_header.split(' ', 1)
+		if auth_type.lower() != 'bearer':
+			return JsonResponse({'message': 'Invalid authentication type'}, status=401)
+			
+		# Validate token and get username
+		try:
+			validated = AccessToken(token)
+			username = validated.payload.get('username')
+			
+			if not username:
+				return JsonResponse({'message': 'Invalid token'}, status=401)
+				
+		except Exception as e:
+			return JsonResponse({'message': str(e)}, status=401)
+
+		# Parse request body
+		data = json.loads(request.body) if request.body else {}
+		text = data.get('text')
+		reply_to_tweet_id = data.get('reply_to_tweet_id')
+		media_ids = data.get('media_ids', [])
+		
+		if not text:
+			return JsonResponse({'error': 'Text parameter is required'}, status=400)
+
+		# Get user document from MongoDB to get stored X credentials
+		uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+		client = MongoClient(uri)
+		db = client["NeuraNet"]
+		user_collection = db["users"]
+		
+		# Find the user by username
+		user = user_collection.find_one({"username": username})
+		if not user:
+			return JsonResponse({'message': 'User not found'}, status=404)
+		
+		# Get user's stored X API credentials
+		x_credentials = user.get('x_api_credentials', {})
+		if not x_credentials or not x_credentials.get('access_token'):
+			return JsonResponse({'error': 'No X account connected. Please connect your X account in settings.'}, status=400)
+		
+		# Get X API app credentials from environment
+		x_api_key = os.environ.get('X_API_KEY')
+		x_api_secret = os.environ.get('X_API_SECRET')
+		
+		if not x_api_key or not x_api_secret:
+			return JsonResponse({'error': 'X API credentials not configured'}, status=500)
+
+		# Build tweet URL
+		url = "https://api.twitter.com/2/tweets"
+		
+		# Build payload
+		payload = {
+			'text': text
+		}
+		
+		if reply_to_tweet_id:
+			payload['reply'] = {
+				'in_reply_to_tweet_id': reply_to_tweet_id
+			}
+		
+		if media_ids and len(media_ids) > 0:
+			payload['media'] = {
+				'media_ids': media_ids
+			}
+
+		# Create OAuth1 session for posting using user's stored credentials
+		from requests_oauthlib import OAuth1Session
+		
+		oauth = OAuth1Session(
+			x_api_key,
+			client_secret=x_api_secret,
+			resource_owner_key=x_credentials.get('access_token'),
+			resource_owner_secret=x_credentials.get('access_token_secret')
+		)
+		
+		response = oauth.post(url, json=payload, timeout=30)
+		
+		if response.status_code == 201:
+			data = response.json()
+			return JsonResponse(data, safe=False)
+		else:
+			return JsonResponse({'error': f'X API error: {response.status_code} - {response.text}'}, status=response.status_code)
+			
+	except Exception as e:
+		return JsonResponse({'error': f'Error: {str(e)}'}, status=500)
+
+
+# X API Connection Management
+@csrf_exempt
+@require_http_methods(["GET"])
+def x_api_connection_status(request):
+	"""Get the current X API connection status for the authenticated user."""
+	try:
+		# Get authenticated user information
+		auth_header = request.headers.get('Authorization')
+		if not auth_header or ' ' not in auth_header:
+			return JsonResponse({'message': 'Authentication required'}, status=401)
+		
+		auth_type, token = auth_header.split(' ', 1)
+		if auth_type.lower() != 'bearer':
+			return JsonResponse({'message': 'Invalid authentication type'}, status=401)
+			
+		# Validate token and get username
+		try:
+			validated = AccessToken(token)
+			username = validated.payload.get('username')
+			
+			if not username:
+				return JsonResponse({'message': 'Invalid token'}, status=401)
+				
+		except Exception as e:
+			return JsonResponse({'message': str(e)}, status=401)
+
+		# Get user document from MongoDB
+		uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+		client = MongoClient(uri)
+		db = client["NeuraNet"]
+		user_collection = db["users"]
+		
+		# Find the user by username
+		user = user_collection.find_one({"username": username})
+		if not user:
+			return JsonResponse({'message': 'User not found'}, status=404)
+		
+		# Prefer OAuth2 connection status
+		u_oauth2 = user.get('x_api_oauth2') or {}
+		if u_oauth2.get('access_token'):
+			access_token, updated = _ensure_oauth2_token_fresh(user, user_collection, username)
+			if access_token:
+				try:
+					me_resp = requests.get("https://api.twitter.com/2/users/me?user.fields=id,username,protected", headers={'Authorization': f'Bearer {access_token}'}, timeout=10)
+					if me_resp.status_code == 200:
+						ud = (me_resp.json() or {}).get('data') or {}
+						return JsonResponse({'connected': True, 'username': ud.get('username'), 'user_id': ud.get('id'), 'protected': ud.get('protected', False), 'last_verified': datetime.utcnow().isoformat(), 'auth': 'oauth2'})
+					else:
+						# Treat as disconnected if token invalid
+						return JsonResponse({'connected': False, 'error': f'oauth2 verify failed: {me_resp.status_code}'})
+				except Exception as e:
+					return JsonResponse({'connected': False, 'error': f'oauth2 verify error: {str(e)}'})
+
+		# Fallback to legacy OAuth1
+		x_credentials = user.get('x_api_credentials', {})
+		if not x_credentials or not x_credentials.get('access_token'):
+			return JsonResponse({'connected': False, 'username': None, 'user_id': None, 'last_verified': None})
+		try:
+			x_api_key = os.environ.get('X_API_KEY')
+			x_api_secret = os.environ.get('X_API_SECRET')
+			if not x_api_key or not x_api_secret:
+				return JsonResponse({'error': 'X API credentials not configured'}, status=500)
+			from requests_oauthlib import OAuth1Session
+			oauth = OAuth1Session(x_api_key, client_secret=x_api_secret, resource_owner_key=x_credentials.get('access_token'), resource_owner_secret=x_credentials.get('access_token_secret'))
+			verify_url = "https://api.twitter.com/1.1/account/verify_credentials.json"
+			resp = oauth.get(verify_url, timeout=10)
+			if resp.status_code == 200:
+				ud = resp.json() or {}
+				return JsonResponse({'connected': True, 'username': ud.get('screen_name') or ud.get('username'), 'user_id': str(ud.get('id')) if ud.get('id') is not None else x_credentials.get('user_id'), 'last_verified': datetime.utcnow().isoformat(), 'auth': 'oauth1'})
+			user_collection.update_one({"username": username}, {"$unset": {"x_api_credentials": ""}})
+			return JsonResponse({'connected': False, 'username': None, 'user_id': None, 'last_verified': None, 'error': f'Connection verification failed: HTTP {resp.status_code}'})
+		except Exception as e:
+			return JsonResponse({'connected': False, 'username': None, 'user_id': None, 'last_verified': None, 'error': f'Connection test failed: {str(e)}'})
+			
+	except Exception as e:
+		return JsonResponse({'error': f'Error: {str(e)}'}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def x_api_initiate_oauth(request):
+	"""Initiate X OAuth flow for user connection."""
+	try:
+		# Get authenticated user information
+		auth_header = request.headers.get('Authorization')
+		if not auth_header or ' ' not in auth_header:
+			return JsonResponse({'message': 'Authentication required'}, status=401)
+		
+		auth_type, token = auth_header.split(' ', 1)
+		if auth_type.lower() != 'bearer':
+			return JsonResponse({'message': 'Invalid authentication type'}, status=401)
+			
+		# Validate token and get username
+		try:
+			validated = AccessToken(token)
+			username = validated.payload.get('username')
+			
+			if not username:
+				return JsonResponse({'message': 'Invalid token'}, status=401)
+				
+		except Exception as e:
+			return JsonResponse({'message': str(e)}, status=401)
+
+		# Parse request body
+		data = json.loads(request.body) if request.body else {}
+		callback_url = data.get('callback_url')
+		
+		if not callback_url:
+			return JsonResponse({'error': 'Callback URL is required'}, status=400)
+
+		# Get X API credentials from environment
+		x_api_key = os.environ.get('X_API_KEY')
+		x_api_secret = os.environ.get('X_API_SECRET')
+		
+		if not x_api_key or not x_api_secret:
+			return JsonResponse({'error': 'X API credentials not configured'}, status=500)
+
+		# Create OAuth1 session for authorization
+		from requests_oauthlib import OAuth1Session
+		
+		oauth = OAuth1Session(
+			x_api_key,
+			client_secret=x_api_secret,
+			callback_uri=callback_url
+		)
+		
+		# Get request token
+		request_token_url = "https://api.twitter.com/oauth/request_token"
+		oauth_response = oauth.fetch_request_token(request_token_url)
+		
+		# Store the request token temporarily (in production, use Redis or similar)
+		# For now, we'll store it in the user document
+		uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+		client = MongoClient(uri)
+		db = client["NeuraNet"]
+		user_collection = db["users"]
+		
+		user_collection.update_one(
+			{"username": username},
+			{
+				"$set": {
+					"x_oauth_request_token": oauth_response.get('oauth_token'),
+					"x_oauth_request_token_secret": oauth_response.get('oauth_token_secret')
+				}
+			}
+		)
+		
+		# Generate authorization URL
+		auth_url = oauth.authorization_url("https://api.twitter.com/oauth/authorize")
+		
+		return JsonResponse({
+			'auth_url': auth_url,
+			'oauth_token': oauth_response.get('oauth_token')
+		})
+		
+	except Exception as e:
+		return JsonResponse({'error': f'Error: {str(e)}'}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def x_api_oauth_callback(request):
+	"""Handle X OAuth callback and complete the connection."""
+	try:
+		# Get OAuth parameters
+		oauth_token = request.GET.get('oauth_token')
+		oauth_verifier = request.GET.get('oauth_verifier')
+		denied = request.GET.get('denied')
+		
+		if denied:
+			return JsonResponse({'error': 'User denied authorization'}, status=400)
+		
+		if not oauth_token or not oauth_verifier:
+			return JsonResponse({'error': 'Missing OAuth parameters'}, status=400)
+
+		# Get X API credentials from environment
+		x_api_key = os.environ.get('X_API_KEY')
+		x_api_secret = os.environ.get('X_API_SECRET')
+		
+		if not x_api_key or not x_api_secret:
+			return JsonResponse({'error': 'X API credentials not configured'}, status=500)
+
+		# Find user by OAuth token
+		uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+		client = MongoClient(uri)
+		db = client["NeuraNet"]
+		user_collection = db["users"]
+		
+		user = user_collection.find_one({"x_oauth_request_token": oauth_token})
+		if not user:
+			return JsonResponse({'error': 'Invalid OAuth token'}, status=400)
+		
+		username = user.get('username')
+		
+		# Create OAuth1 session with request token
+		from requests_oauthlib import OAuth1Session
+		
+		oauth = OAuth1Session(
+			x_api_key,
+			client_secret=x_api_secret,
+			resource_owner_key=oauth_token,
+			resource_owner_secret=user.get('x_oauth_request_token_secret')
+		)
+		
+		# Get access token
+		access_token_url = "https://api.twitter.com/oauth/access_token"
+		oauth_response = oauth.fetch_access_token(access_token_url, verifier=oauth_verifier)
+		
+		# Get user info using the access token
+		user_oauth = OAuth1Session(
+			x_api_key,
+			client_secret=x_api_secret,
+			resource_owner_key=oauth_response.get('oauth_token'),
+			resource_owner_secret=oauth_response.get('oauth_token_secret')
+		)
+		
+		# Get user info
+		user_info_url = "https://api.twitter.com/1.1/account/verify_credentials.json"
+		user_response = user_oauth.get(user_info_url)
+		
+		if user_response.status_code == 200:
+			user_data = user_response.json()
+			
+			# Store the credentials
+			user_collection.update_one(
+				{"username": username},
+				{
+					"$set": {
+						"x_api_credentials": {
+							"access_token": oauth_response.get('oauth_token'),
+							"access_token_secret": oauth_response.get('oauth_token_secret'),
+							"user_id": str(user_data.get('id')),
+							"username": user_data.get('screen_name'),
+							"connected_at": datetime.utcnow().isoformat()
+						}
+					},
+					"$unset": {
+						"x_oauth_request_token": "",
+						"x_oauth_request_token_secret": ""
+					}
+				}
+			)
+			
+			# Redirect to frontend settings page with success
+			from django.http import HttpResponseRedirect
+			# Get the frontend URL from environment or use default
+			frontend_url = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
+			return HttpResponseRedirect(f'{frontend_url}/settings?tab=connections&x_connected=true')
+		else:
+			return JsonResponse({'error': 'Failed to verify credentials'}, status=500)
+		
+	except Exception as e:
+		return JsonResponse({'error': f'Error: {str(e)}'}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def x_api_disconnect(request):
+	"""Disconnect user's X account."""
+	try:
+		# Get authenticated user information
+		auth_header = request.headers.get('Authorization')
+		if not auth_header or ' ' not in auth_header:
+			return JsonResponse({'message': 'Authentication required'}, status=401)
+		
+		auth_type, token = auth_header.split(' ', 1)
+		if auth_type.lower() != 'bearer':
+			return JsonResponse({'message': 'Invalid authentication type'}, status=401)
+			
+		# Validate token and get username
+		try:
+			validated = AccessToken(token)
+			username = validated.payload.get('username')
+			
+			if not username:
+				return JsonResponse({'message': 'Invalid token'}, status=401)
+				
+		except Exception as e:
+			return JsonResponse({'message': str(e)}, status=401)
+
+		# Remove X API credentials from user document
+		uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+		client = MongoClient(uri)
+		db = client["NeuraNet"]
+		user_collection = db["users"]
+		
+		user_collection.update_one(
+			{"username": username},
+			{"$unset": {"x_api_credentials": ""}}
+		)
+		
+		return JsonResponse({'success': True, 'message': 'X account disconnected successfully'})
+		
+	except Exception as e:
+		return JsonResponse({'error': f'Error: {str(e)}'}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def x_api_test_connection(request):
+	"""Test the X API connection for the authenticated user."""
+	try:
+		# Get authenticated user information
+		auth_header = request.headers.get('Authorization')
+		if not auth_header or ' ' not in auth_header:
+			return JsonResponse({'message': 'Authentication required'}, status=401)
+		
+		auth_type, token = auth_header.split(' ', 1)
+		if auth_type.lower() != 'bearer':
+			return JsonResponse({'message': 'Invalid authentication type'}, status=401)
+			
+		# Validate token and get username
+		try:
+			validated = AccessToken(token)
+			username = validated.payload.get('username')
+			
+			if not username:
+				return JsonResponse({'message': 'Invalid token'}, status=401)
+				
+		except Exception as e:
+			return JsonResponse({'message': str(e)}, status=401)
+
+		# Get user document from MongoDB
+		uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+		client = MongoClient(uri)
+		db = client["NeuraNet"]
+		user_collection = db["users"]
+		
+		# Find the user by username
+		user = user_collection.find_one({"username": username})
+		if not user:
+			return JsonResponse({'message': 'User not found'}, status=404)
+		
+		# Check if user has X API credentials stored
+		x_credentials = user.get('x_api_credentials', {})
+		
+		if not x_credentials or not x_credentials.get('access_token'):
+			return JsonResponse({'success': False, 'error': 'No X account connected'})
+		
+		# Test the connection by making a simple API call
+		try:
+			user_id = x_credentials.get('user_id')
+			if not user_id:
+				return JsonResponse({'success': False, 'error': 'No user ID stored'})
+			
+			x_bearer_token = os.environ.get('X_BEARER_TOKEN')
+			if not x_bearer_token:
+				return JsonResponse({'error': 'X API credentials not configured'}, status=500)
+			
+			# Test by getting user info
+			url = f"https://api.twitter.com/2/users/{user_id}"
+			headers = {
+				'Authorization': f'Bearer {x_bearer_token}',
+				'Content-Type': 'application/json'
+			}
+			
+			response = requests.get(url, headers=headers, timeout=10)
+			if response.status_code == 200:
+				return JsonResponse({'success': True, 'message': 'Connection test successful'})
+			else:
+				return JsonResponse({'success': False, 'error': f'API call failed: {response.status_code}'})
+				
+		except Exception as e:
+			return JsonResponse({'success': False, 'error': f'Connection test failed: {str(e)}'})
+		
+	except Exception as e:
+		return JsonResponse({'error': f'Error: {str(e)}'}, status=500)
