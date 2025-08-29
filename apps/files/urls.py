@@ -25,6 +25,7 @@ urlpatterns = [
     path("download_s3_file/<str:file_id>/", views.download_s3_file_view, name="download_s3_file"),
     path("delete_s3_file/<str:file_id>/", views.delete_s3_file_view, name="delete_s3_file"),
     path("delete_multiple_s3_files/", views.delete_multiple_s3_files_view, name="delete_multiple_s3_files"),
+    path("update_s3_file/<str:file_id>/", views.update_s3_file_view, name="update_s3_file"),
     # Google Drive endpoints
     path("google_drive/list_files/", views.google_drive_list_files, name="google_drive_list_files"),
     path("google_drive/check_credentials/", views.google_drive_check_credentials, name="google_drive_check_credentials"),

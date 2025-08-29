@@ -14,6 +14,7 @@ from .list_s3_files import list_s3_files
 from .search_s3_files import search_s3_files
 from .download_s3_file import download_s3_file
 from .delete_s3_file import delete_s3_file, delete_multiple_s3_files
+from .update_s3_file import update_s3_file
 from .google_drive_service import (
     list_drive_files, download_drive_file, upload_drive_file,
     create_drive_file, update_drive_file, delete_drive_file,
@@ -1552,6 +1553,32 @@ def delete_multiple_s3_files_view(request):
         
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+
+@csrf_exempt
+@require_http_methods(["PUT", "POST"])
+def update_s3_file_view(request, file_id):
+    """
+    Updates a file in S3 and its metadata in MongoDB.
+    
+    URL Parameters:
+        file_id (str): The ID of the file to update
+        
+    For file updates (multipart/form-data):
+        - file: The new file to upload (optional)
+        - Additional form fields for metadata updates
+        
+    For metadata-only updates (JSON):
+        - file_name (str, optional): New file name
+        - metadata (dict, optional): Additional metadata
+        - tags (list, optional): File tags
+        - description (str, optional): File description
+        
+    Returns:
+        JsonResponse: Result of the update operation
+    """
+    username = request.username_from_token
+    return update_s3_file(username, file_id, request)
 
 
 @csrf_exempt
