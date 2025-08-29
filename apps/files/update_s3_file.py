@@ -5,7 +5,7 @@ from pymongo.mongo_client import MongoClient
 from django.http import JsonResponse
 from datetime import datetime
 import os
-from bson import ObjectId
+from bson.objectid import ObjectId
 
 
 def update_s3_file(username, file_id, request):
@@ -25,7 +25,7 @@ def update_s3_file(username, file_id, request):
         uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
         client = MongoClient(uri)
         db = client["NeuraNet"]
-        s3_files_collection = db["s3_files"]
+        file_collection = db["files"]
         user_collection = db["users"]
 
         # Find the user
@@ -39,13 +39,13 @@ def update_s3_file(username, file_id, request):
         except Exception:
             return JsonResponse({"error": "Invalid file ID format"}, status=400)
 
-        file_doc = s3_files_collection.find_one({
-            "_id": file_object_id,
-            "user_id": user["_id"]
-        })
+        file_doc = file_collection.find_one({"_id": file_object_id, "user_id": user["_id"]})
         
         if not file_doc:
             return JsonResponse({"error": "File not found"}, status=404)
+
+        if not file_doc.get("s3_key"):
+            return JsonResponse({"error": "S3 key not found for file"}, status=404)
 
         # Check if a new file is being uploaded
         if 'file' in request.FILES:
@@ -54,17 +54,19 @@ def update_s3_file(username, file_id, request):
             # AWS S3 configuration
             aws_access_key_id = os.getenv('AWS_ACCESS_KEY_ID')
             aws_secret_access_key = os.getenv('AWS_SECRET_ACCESS_KEY')
-            bucket_name = os.getenv('S3_BUCKET_NAME', 'banbury-cloud-storage')
+            bucket_name = os.getenv('AWS_S3_BUCKET_NAME')
             
             if not aws_access_key_id or not aws_secret_access_key:
                 return JsonResponse({"error": "AWS credentials not configured"}, status=500)
+            if not bucket_name:
+                return JsonResponse({"error": "S3 bucket configuration missing"}, status=500)
 
             # Initialize S3 client
             s3_client = boto3.client(
                 's3',
                 aws_access_key_id=aws_access_key_id,
                 aws_secret_access_key=aws_secret_access_key,
-                region_name='us-east-1'
+                region_name=os.environ.get('AWS_REGION', 'us-east-1')
             )
 
             # Generate S3 key (keep the same key to overwrite the existing file)
@@ -104,7 +106,7 @@ def update_s3_file(username, file_id, request):
                     if metadata:
                         update_data["metadata"] = metadata
 
-                result = s3_files_collection.update_one(
+                result = file_collection.update_one(
                     {"_id": file_object_id},
                     {"$set": update_data}
                 )
@@ -155,7 +157,7 @@ def update_s3_file(username, file_id, request):
             if len(update_data) == 1:  # Only updated_at was set
                 return JsonResponse({"error": "No valid fields to update"}, status=400)
 
-            result = s3_files_collection.update_one(
+            result = file_collection.update_one(
                 {"_id": file_object_id},
                 {"$set": update_data}
             )
