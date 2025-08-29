@@ -924,7 +924,7 @@ def add_site_visitor_info(request):
             # If both services fail, keep default "Unknown" values
             pass
 
-    time = datetime.now()
+    time = datetime.utcnow()
 
     # MongoDB connection
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
@@ -1927,7 +1927,7 @@ def get_site_visitor_info(request):
         cutoff_date = today_start - timedelta(days=days-1)
         
         # Query the database
-        print(f"Main visitors query date range: {cutoff_date} to {datetime.now()}")
+        print(f"Main visitors query date range: {cutoff_date} to {datetime.utcnow()}")
         visitors = list(site_collection.find({
             "time": {"$gte": cutoff_date}
         }).sort("time", -1).limit(limit))
@@ -1959,7 +1959,7 @@ def get_site_visitor_info(request):
         ]))
         
         # Get hourly distribution for the last 24 hours
-        yesterday = datetime.now() - timedelta(days=1)
+        yesterday = datetime.utcnow() - timedelta(days=1)
         hourly_stats = list(site_collection.aggregate([
             {"$match": {"time": {"$gte": yesterday}}},
             {"$group": {"_id": {"$hour": "$time"}, "count": {"$sum": 1}}},
@@ -1973,7 +1973,7 @@ def get_site_visitor_info(request):
             today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
             daily_cutoff = today_start - timedelta(days=days-1)
             print(f"Daily stats date range: {daily_cutoff} to {today_start}")
-            print(f"Current time: {datetime.now()}")
+            print(f"Current time: {datetime.utcnow()}")
             
             daily_stats = list(site_collection.aggregate([
                 {"$match": {"time": {"$gte": daily_cutoff}}},
@@ -2194,7 +2194,7 @@ def get_login_analytics(request):
 		cutoff_date = today_start - timedelta(days=days-1)
 		
 		# Query the database
-		print(f"Login analytics query date range: {cutoff_date} to {datetime.now()}")
+		        print(f"Login analytics query date range: {cutoff_date} to {datetime.utcnow()}")
 		logins = list(login_collection.find({
 			"timestamp": {"$gte": cutoff_date}
 		}).sort("timestamp", -1).limit(limit))
