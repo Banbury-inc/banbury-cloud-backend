@@ -2193,12 +2193,9 @@ def get_login_analytics(request):
 		today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
 		cutoff_date = today_start - timedelta(days=days-1)
 		
-		# Query the database
-		        print(f"Login analytics query date range: {cutoff_date} to {datetime.utcnow()}")
 		logins = list(login_collection.find({
 			"timestamp": {"$gte": cutoff_date}
 		}).sort("timestamp", -1).limit(limit))
-		print(f"Found {len(logins)} logins in date range")
 		
 		# Convert ObjectId to string for JSON serialization
 		for login in logins:
@@ -2256,9 +2253,7 @@ def get_login_analytics(request):
 					"count": 1
 				}}
 			]))
-			print(f"Login daily stats query result: {daily_stats}")
 		except Exception as e:
-			print(f"Error in login daily stats aggregation: {e}")
 			daily_stats = []
 		
 		# Get top users by login count
