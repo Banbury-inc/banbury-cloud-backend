@@ -47,8 +47,10 @@ def update_s3_file(username, file_id, request):
         if not file_doc.get("s3_key"):
             return JsonResponse({"error": "S3 key not found for file"}, status=404)
 
-        # Check if a new file is being uploaded
-        if 'file' in request.FILES:
+        # File-content update path: use POST for multipart uploads
+        if request.method == 'POST':
+            if 'file' not in request.FILES:
+                return JsonResponse({"error": "Missing file in multipart upload"}, status=400)
             uploaded_file = request.FILES['file']
             
             # AWS S3 configuration
@@ -133,7 +135,9 @@ def update_s3_file(username, file_id, request):
                     return JsonResponse({"error": f"S3 upload failed: {str(e)}"}, status=500)
 
         else:
-            # No new file uploaded, just update metadata
+            # Metadata-only update path: use PUT with JSON body
+            if request.method != 'PUT':
+                return JsonResponse({"error": "Unsupported method for metadata update"}, status=405)
             try:
                 data = json.loads(request.body)
             except json.JSONDecodeError:
