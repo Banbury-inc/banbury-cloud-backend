@@ -880,6 +880,8 @@ def add_site_visitor_info(request):
         data = json.loads(request.body)
         # Extract specific data from the JSON (for example: device_id and date_added)
         ip_address = data.get("ip_address")
+        path = data.get("path", "Unknown")
+        client_timestamp = data.get("timestamp")
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
 
@@ -935,6 +937,8 @@ def add_site_visitor_info(request):
     # Prepare the document to insert
     new_visitor = {
         "ip_address": ip_address,
+        "path": path,
+        "client_timestamp": client_timestamp,
         "time": time,
         "city": city,
         "region": region,
