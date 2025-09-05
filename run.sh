@@ -3,6 +3,11 @@
 HTTP_PORT=8080
 CONTAINER_NAME="banbury-backend"
 IMAGE_NAME="banbury-backend-image"
+DAEMON_CONTAINER_NAME="banbury-backend-daemon"
+DAEMON_INTERVAL=${DAEMON_INTERVAL:-30}
+DAEMON_BATCH=${DAEMON_BATCH:-50}
+DAEMON_PID_FILE="taskstudio_daemon.pid"
+DAEMON_LOG_FILE="taskstudio_daemon.log"
 
 # Parse arguments
 USE_DOCKER=false
@@ -14,7 +19,7 @@ for arg in "$@"; do
         --docker)
             USE_DOCKER=true
             ;;
-        start|stop|restart|logs|stream-logs)
+        start|stop|restart|logs|stream-logs|start-daemon|stop-daemon|restart-daemon|logs-daemon|stream-logs-daemon|start-all)
             ACTION=$arg
             ;;
     esac
@@ -142,6 +147,38 @@ stop_container() {
         return $?
     fi
     return 0
+}
+
+# Start daemon container
+start_daemon_container() {
+    echo "Starting daemon container $DAEMON_CONTAINER_NAME..."
+    # Remove any existing daemon container
+    docker rm -f $DAEMON_CONTAINER_NAME > /dev/null 2>&1 || true
+    # Pass through environment needed by the daemon
+    docker run --name $DAEMON_CONTAINER_NAME -d \
+        -e BANBURY_WEBSITE_ORIGIN=${BANBURY_WEBSITE_ORIGIN:-http://localhost:3000} \
+        -e BANBURY_API_BASE=${BANBURY_API_BASE:-http://localhost:8080} \
+        -e DAEMON_BEARER=${DAEMON_BEARER:-} \
+        -e MONGO_URI=${MONGO_URI:-} \
+        $IMAGE_NAME \
+        sh -c "python manage.py process_taskstudio_daemon --interval $DAEMON_INTERVAL --batch $DAEMON_BATCH"
+    if [ $? -ne 0 ]; then
+        echo "Failed to start daemon container."
+        return 1
+    fi
+    echo "Daemon container started successfully."
+    return 0
+}
+
+# Stop daemon container
+stop_daemon_container() {
+    if docker container ls -a --filter "name=$DAEMON_CONTAINER_NAME" --format "{{.Names}}" | grep -q "$DAEMON_CONTAINER_NAME"; then
+        echo "Stopping daemon container $DAEMON_CONTAINER_NAME..."
+        docker rm -f $DAEMON_CONTAINER_NAME > /dev/null 2>&1
+        echo "Daemon container stopped."
+    else
+        echo "No daemon container found to stop."
+    fi
 }
 
 # Verify if a port is actually in use
@@ -353,25 +390,88 @@ else
 
             echo "Starting Daphne server on port $HTTP_PORT"
             # Run Daphne directly on the HTTP_PORT
+            # Start daemon in background first
+            PYTHON_BIN=${PYTHON_BIN:-venv/bin/python}
+            if [ ! -x "$PYTHON_BIN" ]; then
+                PYTHON_BIN=$(command -v python3 || command -v python)
+            fi
+            if [ -z "$PYTHON_BIN" ]; then
+                echo "No python interpreter found (venv/bin/python, python3, or python). Cannot start daemon."
+            else
+                echo "Starting TaskStudio daemon in background (interval=$DAEMON_INTERVALs, batch=$DAEMON_BATCH)"
+                nohup $PYTHON_BIN manage.py process_taskstudio_daemon --interval $DAEMON_INTERVAL --batch $DAEMON_BATCH > "$DAEMON_LOG_FILE" 2>&1 &
+                echo $! > "$DAEMON_PID_FILE"
+                echo "Daemon PID $(cat "$DAEMON_PID_FILE") logging to $DAEMON_LOG_FILE"
+            fi
+
             daphne -p $HTTP_PORT -b 0.0.0.0 core.asgi:application
 
             echo "Server stopped."
             ;;
         "stop")
             kill_process_on_port $HTTP_PORT
+            if [ -f "$DAEMON_PID_FILE" ]; then
+                DAEMON_PID=$(cat "$DAEMON_PID_FILE")
+                if kill -0 $DAEMON_PID 2>/dev/null; then
+                    echo "Stopping daemon PID $DAEMON_PID..."
+                    kill -9 $DAEMON_PID 2>/dev/null || true
+                    echo "Daemon stopped."
+                fi
+                rm -f "$DAEMON_PID_FILE"
+            fi
             echo "Server stopped."
+            ;;
+        "start-daemon")
+            PYTHON_BIN=${PYTHON_BIN:-venv/bin/python}
+            if [ ! -x "$PYTHON_BIN" ]; then
+                PYTHON_BIN=$(command -v python3 || command -v python)
+            fi
+            if [ -z "$PYTHON_BIN" ]; then
+                echo "No python interpreter found (venv/bin/python, python3, or python)."
+                exit 1
+            fi
+            echo "Starting TaskStudio daemon in background (interval=$DAEMON_INTERVALs, batch=$DAEMON_BATCH)"
+            nohup $PYTHON_BIN manage.py process_taskstudio_daemon --interval $DAEMON_INTERVAL --batch $DAEMON_BATCH > "$DAEMON_LOG_FILE" 2>&1 &
+            echo $! > "$DAEMON_PID_FILE"
+            echo "Daemon PID $(cat "$DAEMON_PID_FILE") logging to $DAEMON_LOG_FILE"
+            ;;
+        "stop-daemon")
+            if [ -f "$DAEMON_PID_FILE" ]; then
+                DAEMON_PID=$(cat "$DAEMON_PID_FILE")
+                if kill -0 $DAEMON_PID 2>/dev/null; then
+                    echo "Stopping daemon PID $DAEMON_PID..."
+                    kill -9 $DAEMON_PID 2>/dev/null || true
+                    echo "Daemon stopped."
+                else
+                    echo "No running daemon found."
+                fi
+                rm -f "$DAEMON_PID_FILE"
+            else
+                echo "No daemon PID file found ($DAEMON_PID_FILE)."
+            fi
+            ;;
+        "logs-daemon")
+            if [ -f "$DAEMON_LOG_FILE" ]; then
+                echo "Tailing daemon log ($DAEMON_LOG_FILE). Press Ctrl+C to exit."
+                tail -f "$DAEMON_LOG_FILE"
+            else
+                echo "Daemon log not found ($DAEMON_LOG_FILE)."
+            fi
             ;;
         "logs"|"stream-logs")
             echo "Logs are not available when running directly."
             echo "Use --docker to run in Docker if you need to view logs."
             ;;
         *)
-            echo "Usage: $0 [--docker] [start|stop|restart|logs|stream-logs]"
+            echo "Usage: $0 [--docker] [start|stop|restart|logs|stream-logs|start-daemon|stop-daemon|logs-daemon|start-all]"
             echo "  start       - Start services"
             echo "  stop        - Stop services"
             echo "  restart     - Restart services"
             echo "  logs        - View container logs (past logs only)"
             echo "  stream-logs - Stream container logs in real-time"
+            echo "  start-daemon - Start TaskStudio daemon (direct mode)"
+            echo "  stop-daemon  - Stop TaskStudio daemon (direct mode)"
+            echo "  logs-daemon  - Tail daemon log (direct mode)"
             ;;
     esac
 fi

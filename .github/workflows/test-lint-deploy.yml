@@ -13,6 +13,7 @@ env:
   ECS_CLUSTER: ${{ github.ref == 'refs/heads/main' && 'banbury' || 'banbury' }}
   ECS_TASK_DEFINITION: ${{ github.ref == 'refs/heads/main' && '.aws/deploy-prod.json' || '.aws/deploy-banbury-dev.json' }}
   CONTAINER_NAME: ${{ github.ref == 'refs/heads/main' && 'banbury-cloud-backend-prod' || 'banbury-backend-dev' }}
+  # Daemon runs inside the same container; no separate daemon service needed
 
 jobs:
   lint:
@@ -133,3 +134,5 @@ jobs:
         service: ${{ env.ECS_SERVICE }}
         cluster: ${{ env.ECS_CLUSTER }}
         wait-for-service-stability: true
+
+    # No separate daemon deployment step; daemon starts via container CMD

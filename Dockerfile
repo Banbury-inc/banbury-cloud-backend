@@ -33,7 +33,13 @@ RUN chmod +x /app/healthcheck.sh
 
 # Create startup script
 RUN echo '#!/bin/bash\n\
+set -e\n\
 redis-server --daemonize yes\n\
+# Optionally start the TaskStudio daemon inside the same container (default: enabled)\n\
+if [ "${ENABLE_DAEMON:-true}" != "false" ]; then\n\
+  echo "Starting TaskStudio daemon (interval=${DAEMON_INTERVAL:-30}s, batch=${DAEMON_BATCH:-50})"\n\
+  python manage.py process_taskstudio_daemon --interval ${DAEMON_INTERVAL:-30} --batch ${DAEMON_BATCH:-50} &\n\
+fi\n\
 exec daphne -b 0.0.0.0 -p 8080 core.asgi:application' > /app/startup.sh
 RUN chmod +x /app/startup.sh
 
