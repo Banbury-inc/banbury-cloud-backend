@@ -501,6 +501,54 @@ def list_all_users(request):
             last_login_map = {}
             system_total_logins = 0
 
+        # Build a map of dashboard visit counts and last visit per user_id
+        dashboard_visits_collection = db["dashboard_visits"]
+        try:
+            # Get dashboard visit counts per user
+            dashboard_counts_cursor = dashboard_visits_collection.aggregate([
+                {"$group": {"_id": "$user_id", "count": {"$sum": 1}, "lastVisit": {"$max": "$timestamp"}}}
+            ])
+            dashboard_counts_map = {}
+            last_dashboard_visit_map = {}
+            system_total_dashboard_visits = 0
+            for item in dashboard_counts_cursor:
+                key = str(item.get("_id"))
+                count = int(item.get("count", 0))
+                last_visit = item.get("lastVisit")
+                dashboard_counts_map[key] = count
+                if last_visit:
+                    last_dashboard_visit_map[key] = last_visit.isoformat()
+                system_total_dashboard_visits += count
+        except Exception as e:
+            print(f"Error getting dashboard visit stats: {e}")
+            dashboard_counts_map = {}
+            last_dashboard_visit_map = {}
+            system_total_dashboard_visits = 0
+
+        # Build a map of workspace visit counts and last visit per user_id
+        workspace_visits_collection = db["workspace_visits"]
+        try:
+            # Get workspace visit counts per user
+            workspace_counts_cursor = workspace_visits_collection.aggregate([
+                {"$group": {"_id": "$user_id", "count": {"$sum": 1}, "lastVisit": {"$max": "$timestamp"}}}
+            ])
+            workspace_counts_map = {}
+            last_workspace_visit_map = {}
+            system_total_workspace_visits = 0
+            for item in workspace_counts_cursor:
+                key = str(item.get("_id"))
+                count = int(item.get("count", 0))
+                last_visit = item.get("lastVisit")
+                workspace_counts_map[key] = count
+                if last_visit:
+                    last_workspace_visit_map[key] = last_visit.isoformat()
+                system_total_workspace_visits += count
+        except Exception as e:
+            print(f"Error getting workspace visit stats: {e}")
+            workspace_counts_map = {}
+            last_workspace_visit_map = {}
+            system_total_workspace_visits = 0
+
         # Get all users with basic information including Google credentials, AI usage, and subscription
         users = user_collection.find(
             {},
@@ -517,7 +565,9 @@ def list_all_users(request):
                 "last_ai_message_at": 1,
                 "subscription": 1,
                 "total_file_size": 1,
-                "last_file_upload_at": 1
+                "last_file_upload_at": 1,
+                "last_dashboard_visit": 1,
+                "last_workspace_visit": 1
             }
         )
         
@@ -558,6 +608,10 @@ def list_all_users(request):
                 "lastAiMessageAt": user.get("last_ai_message_at"),
                 "loginCount": login_counts_map.get(user_id_str, 0),
                 "lastLoginDate": last_login_map.get(user_id_str),
+                "dashboardVisitCount": dashboard_counts_map.get(user_id_str, 0),
+                "lastDashboardVisitDate": last_dashboard_visit_map.get(user_id_str) or user.get("last_dashboard_visit"),
+                "workspaceVisitCount": workspace_counts_map.get(user_id_str, 0),
+                "lastWorkspaceVisitDate": last_workspace_visit_map.get(user_id_str) or user.get("last_workspace_visit"),
                 "googleScopes": google_scopes,
                 "scopeCount": scope_count,
                 "hasEmailScope": has_email_scope,
@@ -573,7 +627,9 @@ def list_all_users(request):
             "users": user_list,
             "total_count": len(user_list),
             "system_total_files": system_total_files,
-            "system_total_ai_messages": system_total_ai_messages
+            "system_total_ai_messages": system_total_ai_messages,
+            "system_total_dashboard_visits": system_total_dashboard_visits,
+            "system_total_workspace_visits": system_total_workspace_visits
         })
 
     except Exception as e:
@@ -642,6 +698,130 @@ def ai_message_sent(request):
             'username': username,
             'user_id': str(user.get('_id')),
             'aiMessageCount': count
+        })
+        
+    except Exception as e:
+        return JsonResponse({'message': f'Error: {str(e)}'}, status=500)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def track_dashboard_visit(request):
+    """Track when a user visits the dashboard page."""
+    try:
+        # Authenticate via Bearer token
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or ' ' not in auth_header:
+            return JsonResponse({'message': 'Authentication required'}, status=401)
+        auth_type, token = auth_header.split(' ', 1)
+        if auth_type.lower() != 'bearer':
+            return JsonResponse({'message': 'Invalid authentication type'}, status=401)
+
+        try:
+            from rest_framework_simplejwt.tokens import AccessToken
+            validated = AccessToken(token)
+            username = validated.payload.get('username')
+            if not username:
+                return JsonResponse({'message': 'Invalid token'}, status=401)
+        except Exception as e:
+            return JsonResponse({'message': str(e)}, status=401)
+
+        # DB connections
+        uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+        client = MongoClient(uri)
+        db = client["NeuraNet"]
+        user_collection = db["users"]
+        dashboard_visits_collection = db["dashboard_visits"]
+
+        # Find user
+        user = user_collection.find_one({"username": username})
+        if not user:
+            return JsonResponse({'message': 'User not found'}, status=404)
+
+        # Record dashboard visit
+        from datetime import datetime
+        visit_data = {
+            "user_id": user["_id"],
+            "username": username,
+            "timestamp": datetime.utcnow(),
+            "ip_address": request.META.get('REMOTE_ADDR', ''),
+            "user_agent": request.META.get('HTTP_USER_AGENT', '')
+        }
+        
+        dashboard_visits_collection.insert_one(visit_data)
+
+        # Update user's last dashboard visit timestamp
+        user_collection.update_one(
+            {"username": username},
+            {"$set": {"last_dashboard_visit": datetime.utcnow().isoformat()}}
+        )
+
+        return JsonResponse({
+            'result': 'success',
+            'message': 'Dashboard visit tracked',
+            'username': username,
+            'user_id': str(user.get('_id'))
+        })
+        
+    except Exception as e:
+        return JsonResponse({'message': f'Error: {str(e)}'}, status=500)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def track_workspace_visit(request):
+    """Track when a user visits the workspaces page."""
+    try:
+        # Authenticate via Bearer token
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or ' ' not in auth_header:
+            return JsonResponse({'message': 'Authentication required'}, status=401)
+        auth_type, token = auth_header.split(' ', 1)
+        if auth_type.lower() != 'bearer':
+            return JsonResponse({'message': 'Invalid authentication type'}, status=401)
+
+        try:
+            from rest_framework_simplejwt.tokens import AccessToken
+            validated = AccessToken(token)
+            username = validated.payload.get('username')
+            if not username:
+                return JsonResponse({'message': 'Invalid token'}, status=401)
+        except Exception as e:
+            return JsonResponse({'message': str(e)}, status=401)
+
+        # DB connections
+        uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+        client = MongoClient(uri)
+        db = client["NeuraNet"]
+        user_collection = db["users"]
+        workspace_visits_collection = db["workspace_visits"]
+
+        # Find user
+        user = user_collection.find_one({"username": username})
+        if not user:
+            return JsonResponse({'message': 'User not found'}, status=404)
+
+        # Record workspace visit
+        from datetime import datetime
+        visit_data = {
+            "user_id": user["_id"],
+            "username": username,
+            "timestamp": datetime.utcnow(),
+            "ip_address": request.META.get('REMOTE_ADDR', ''),
+            "user_agent": request.META.get('HTTP_USER_AGENT', '')
+        }
+        
+        workspace_visits_collection.insert_one(visit_data)
+
+        # Update user's last workspace visit timestamp
+        user_collection.update_one(
+            {"username": username},
+            {"$set": {"last_workspace_visit": datetime.utcnow().isoformat()}}
+        )
+
+        return JsonResponse({
+            'result': 'success',
+            'message': 'Workspace visit tracked',
+            'username': username,
+            'user_id': str(user.get('_id'))
         })
         
     except Exception as e:

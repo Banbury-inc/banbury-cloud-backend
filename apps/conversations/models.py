@@ -252,6 +252,168 @@ class Conversation:
                 "error": str(e)
             }
 
+    @staticmethod
+    def get_all_conversations_admin(limit=50, offset=0, days=30, username_filter=""):
+        """
+        Get all conversations across all users for admin analytics
+
+        Args:
+            limit (int): Maximum number of conversations to return
+            offset (int): Number of conversations to skip
+            days (int): Number of days to look back
+            username_filter (str): Filter by specific username (optional)
+
+        Returns:
+            dict: List of conversations with analytics data
+        """
+        try:
+            from datetime import timedelta
+            cutoff_date = datetime.utcnow() - timedelta(days=days)
+
+            # Build match criteria
+            match_criteria = {
+                "created_at": {"$gte": cutoff_date}
+            }
+            
+            # Add username filter if provided
+            if username_filter:
+                match_criteria["username"] = {"$regex": username_filter, "$options": "i"}
+
+            # Get conversations with basic analytics
+            pipeline = [
+                {
+                    "$match": match_criteria
+                },
+                {
+                    "$addFields": {
+                        "message_count": {"$size": "$messages"},
+                        "last_message_at": {
+                            "$max": {
+                                "$map": {
+                                    "input": "$messages",
+                                    "as": "msg",
+                                    "in": "$$msg.timestamp"
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "$sort": {"created_at": -1}
+                },
+                {
+                    "$skip": offset
+                },
+                {
+                    "$limit": limit
+                }
+            ]
+            
+            conversations = list(conversations_collection.aggregate(pipeline))
+            
+            # Get summary statistics
+            summary_pipeline = [
+                {
+                    "$match": match_criteria
+                },
+                {
+                    "$group": {
+                        "_id": None,
+                        "total_conversations": {"$sum": 1},
+                        "unique_users": {"$addToSet": "$username"},
+                        "total_messages": {
+                            "$sum": {"$size": "$messages"}
+                        },
+                        "avg_messages_per_conversation": {
+                            "$avg": {"$size": "$messages"}
+                        }
+                    }
+                },
+                {
+                    "$addFields": {
+                        "unique_user_count": {"$size": "$unique_users"}
+                    }
+                }
+            ]
+            
+            summary_result = list(conversations_collection.aggregate(summary_pipeline))
+            summary = summary_result[0] if summary_result else {
+                "total_conversations": 0,
+                "unique_user_count": 0,
+                "total_messages": 0,
+                "avg_messages_per_conversation": 0
+            }
+            
+            # Convert ObjectId to string for JSON serialization
+            for conv in conversations:
+                conv["_id"] = str(conv["_id"])
+                if "created_at" in conv and hasattr(conv["created_at"], "isoformat"):
+                    conv["created_at"] = conv["created_at"].isoformat()
+                if "updated_at" in conv and hasattr(conv["updated_at"], "isoformat"):
+                    conv["updated_at"] = conv["updated_at"].isoformat()
+            
+            return {
+                "success": True,
+                "conversations": conversations,
+                "summary": {
+                    "total_conversations": summary.get("total_conversations", 0),
+                    "unique_users": summary.get("unique_user_count", 0),
+                    "total_messages": summary.get("total_messages", 0),
+                    "avg_messages_per_conversation": round(summary.get("avg_messages_per_conversation", 0), 1),
+                    "period_days": days
+                }
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e)
+            }
+
+    @staticmethod
+    def get_conversation_users_admin(days=30):
+        """
+        Get list of users who have conversations for admin analytics
+
+        Args:
+            days (int): Number of days to look back
+
+        Returns:
+            dict: List of unique usernames with conversations
+        """
+        try:
+            from datetime import timedelta
+            cutoff_date = datetime.utcnow() - timedelta(days=days)
+
+            # Get unique usernames with conversations in the specified period
+            pipeline = [
+                {
+                    "$match": {
+                        "created_at": {"$gte": cutoff_date}
+                    }
+                },
+                {
+                    "$group": {
+                        "_id": "$username"
+                    }
+                },
+                {
+                    "$sort": {"_id": 1}
+                }
+            ]
+
+            result = list(conversations_collection.aggregate(pipeline))
+            users = [item["_id"] for item in result]
+
+            return {
+                "success": True,
+                "users": users
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e)
+            }
+
 class Memory:
     """Model for storing AI memories in MongoDB"""
     

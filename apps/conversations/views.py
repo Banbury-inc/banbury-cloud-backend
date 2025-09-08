@@ -93,6 +93,90 @@ def get_conversations(request):
 
 @csrf_exempt
 @require_http_methods(["GET"])
+def get_all_conversations_admin(request):
+    """
+    Get all conversations across all users for admin analytics
+
+    Query parameters:
+    - limit: Maximum number of conversations to return (default: 50)
+    - offset: Number of conversations to skip (default: 0)
+    - days: Number of days to look back (default: 30)
+    - username: Filter by specific username (optional)
+    """
+    try:
+        username = request.username_from_token
+
+        # Admin check - only allow mmills and mmills6060@gmail.com
+        if username not in ['mmills', 'mmills6060@gmail.com']:
+            return JsonResponse({
+                "success": False,
+                "error": "Unauthorized - Admin access required"
+            }, status=403)
+
+        limit = int(request.GET.get("limit", 50))
+        offset = int(request.GET.get("offset", 0))
+        days = int(request.GET.get("days", 30))
+        user_filter = request.GET.get("username", "")
+
+        result = Conversation.get_all_conversations_admin(limit, offset, days, user_filter)
+
+        if result["success"]:
+            return JsonResponse(result)
+        else:
+            return JsonResponse(result, status=500)
+
+    except ValueError:
+        return JsonResponse({
+            "success": False,
+            "error": "Invalid limit, offset, or days parameter"
+        }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            "success": False,
+            "error": str(e)
+        }, status=500)
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def get_conversation_users_admin(request):
+    """
+    Get list of users who have conversations for admin analytics
+
+    Query parameters:
+    - days: Number of days to look back (default: 30)
+    """
+    try:
+        username = request.username_from_token
+
+        # Admin check - only allow mmills and mmills6060@gmail.com
+        if username not in ['mmills', 'mmills6060@gmail.com']:
+            return JsonResponse({
+                "success": False,
+                "error": "Unauthorized - Admin access required"
+            }, status=403)
+
+        days = int(request.GET.get("days", 30))
+
+        result = Conversation.get_conversation_users_admin(days)
+
+        if result["success"]:
+            return JsonResponse(result)
+        else:
+            return JsonResponse(result, status=500)
+
+    except ValueError:
+        return JsonResponse({
+            "success": False,
+            "error": "Invalid days parameter"
+        }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            "success": False,
+            "error": str(e)
+        }, status=500)
+
+@csrf_exempt
+@require_http_methods(["GET"])
 def get_conversation(request, conversation_id):
     """
     Get a specific conversation by ID
