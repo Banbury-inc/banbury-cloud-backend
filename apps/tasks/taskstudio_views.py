@@ -13,6 +13,33 @@ uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retr
 client = MongoClient(uri)
 db = client["NeuraNet"]
 taskstudio_collection = db["taskstudio_tasks"]
+users_collection = db["users"]
+
+
+def _store_user_bearer_token(request, username: str):
+    """Extract and store the user's bearer token for daemon access."""
+    try:
+        auth_header = request.headers.get('Authorization')
+        if auth_header and auth_header.startswith('Bearer '):
+            bearer_token = auth_header[7:]  # Remove 'Bearer ' prefix
+            
+            # Store the bearer token in the user document
+            from datetime import datetime
+            users_collection.update_one(
+                {"username": username},
+                {
+                    "$set": {
+                        "bearer_token": bearer_token,
+                        "token_updated_at": datetime.utcnow()
+                    }
+                }
+            )
+            print(f"Updated bearer token for user '{username}'")
+            return True
+    except Exception as e:
+        print(f"Warning: Failed to store bearer token for user {username}: {e}")
+    
+    return False
 
 
 def _run_ai_on_description(username: str, description: str) -> str:
@@ -159,6 +186,9 @@ def create_task(request):
         if not username:
             return JsonResponse({'success': False, 'error': 'Unauthorized'}, status=401)
 
+        # Store/update the user's bearer token for daemon access
+        _store_user_bearer_token(request, username)
+
         data = json.loads(request.body)
 
         required_fields = ['title', 'priority', 'scheduledDate', 'estimatedDuration']
@@ -239,6 +269,9 @@ def update_task(request, task_id):
         username = getattr(request, 'username_from_token', None)
         if not username:
             return JsonResponse({'success': False, 'error': 'Unauthorized'}, status=401)
+
+        # Store/update the user's bearer token for daemon access
+        _store_user_bearer_token(request, username)
 
         data = json.loads(request.body)
 
@@ -375,6 +408,9 @@ def update_task_status(request, task_id):
         username = getattr(request, 'username_from_token', None)
         if not username:
             return JsonResponse({'success': False, 'error': 'Unauthorized'}, status=401)
+
+        # Store/update the user's bearer token for daemon access
+        _store_user_bearer_token(request, username)
 
         data = json.loads(request.body)
         new_status = data.get('status')
