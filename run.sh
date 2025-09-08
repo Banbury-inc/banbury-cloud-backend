@@ -19,7 +19,7 @@ for arg in "$@"; do
         --docker)
             USE_DOCKER=true
             ;;
-        start|stop|restart|logs|stream-logs|start-daemon|stop-daemon|restart-daemon|logs-daemon|stream-logs-daemon|start-all)
+        start|stop|restart|logs|stream-logs|start-daemon|stop-daemon|restart-daemon|logs-daemon|stream-logs-daemon|start-all|start-daemon-foreground)
             ACTION=$arg
             ;;
     esac
@@ -458,20 +458,77 @@ else
                 echo "Daemon log not found ($DAEMON_LOG_FILE)."
             fi
             ;;
+        "start-daemon-foreground")
+            PYTHON_BIN=${PYTHON_BIN:-venv/bin/python}
+            if [ ! -x "$PYTHON_BIN" ]; then
+                PYTHON_BIN=$(command -v python3 || command -v python)
+            fi
+            if [ -z "$PYTHON_BIN" ]; then
+                echo "No python interpreter found (venv/bin/python, python3, or python)."
+                exit 1
+            fi
+            
+            # Kill any existing processes on the ports
+            kill_process_on_port $HTTP_PORT
+            
+            echo "Starting Daphne server AND TaskStudio daemon in FOREGROUND"
+            echo "Server on port $HTTP_PORT, Daemon (interval=$DAEMON_INTERVALs, batch=$DAEMON_BATCH)"
+            echo "Press Ctrl+C to stop both services"
+            echo "=========================================="
+            
+            # Start daemon in background first
+            echo "🔧 Starting TaskStudio daemon..."
+            $PYTHON_BIN manage.py process_taskstudio_daemon --interval $DAEMON_INTERVAL --batch $DAEMON_BATCH &
+            DAEMON_PID=$!
+            echo "✓ Daemon started with PID $DAEMON_PID"
+            
+            # Function to cleanup on exit
+            cleanup() {
+                echo ""
+                echo "🛑 Shutting down services..."
+                if kill -0 $DAEMON_PID 2>/dev/null; then
+                    echo "   Stopping daemon (PID $DAEMON_PID)..."
+                    kill -TERM $DAEMON_PID 2>/dev/null || true
+                    sleep 2
+                    if kill -0 $DAEMON_PID 2>/dev/null; then
+                        kill -KILL $DAEMON_PID 2>/dev/null || true
+                    fi
+                fi
+                kill_process_on_port $HTTP_PORT
+                echo "✓ All services stopped"
+                exit 0
+            }
+            
+            # Set up signal handlers
+            trap cleanup INT TERM
+            
+            # Give daemon a moment to start
+            sleep 2
+            
+            echo "🌐 Starting Daphne server on port $HTTP_PORT..."
+            echo "----------------------------------------"
+            
+            # Start Daphne in foreground (this will block)
+            daphne -p $HTTP_PORT -b 0.0.0.0 core.asgi:application
+            
+            # If we get here, Daphne has stopped, so cleanup
+            cleanup
+            ;;
         "logs"|"stream-logs")
             echo "Logs are not available when running directly."
             echo "Use --docker to run in Docker if you need to view logs."
             ;;
         *)
-            echo "Usage: $0 [--docker] [start|stop|restart|logs|stream-logs|start-daemon|stop-daemon|logs-daemon|start-all]"
+            echo "Usage: $0 [--docker] [start|stop|restart|logs|stream-logs|start-daemon|stop-daemon|logs-daemon|start-daemon-foreground|start-all]"
             echo "  start       - Start services"
             echo "  stop        - Stop services"
             echo "  restart     - Restart services"
             echo "  logs        - View container logs (past logs only)"
             echo "  stream-logs - Stream container logs in real-time"
-            echo "  start-daemon - Start TaskStudio daemon (direct mode)"
+            echo "  start-daemon - Start TaskStudio daemon (direct mode, background)"
             echo "  stop-daemon  - Stop TaskStudio daemon (direct mode)"
             echo "  logs-daemon  - Tail daemon log (direct mode)"
+            echo "  start-daemon-foreground - Start BOTH server and daemon in foreground (see console output)"
             ;;
     esac
 fi

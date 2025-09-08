@@ -750,6 +750,27 @@ def getuserinfo4(request, username, password):
         # Set token expiry to 7 days
         access.set_exp(lifetime=timedelta(days=7))
         token = str(access)
+        
+        # Store the bearer token in the user document for daemon access
+        try:
+            from pymongo.mongo_client import MongoClient
+            import os
+            mongo_uri = os.getenv('MONGO_URI', 'mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority')
+            mongo_client = MongoClient(mongo_uri)
+            mongo_db = mongo_client['NeuraNet']
+            users_collection = mongo_db['users']
+            
+            users_collection.update_one(
+                {"username": username},
+                {
+                    "$set": {
+                        "bearer_token": token,
+                        "token_updated_at": datetime.utcnow()
+                    }
+                }
+            )
+        except Exception as e:
+            print(f"Warning: Failed to store bearer token for user {username}: {e}")
     else:
         result = "fail"
         username = None
