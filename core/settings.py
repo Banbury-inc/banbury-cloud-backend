@@ -74,6 +74,7 @@ INSTALLED_APPS = [
     'apps.users',
     'apps.tasks',
     'apps.analytics',
+    'apps.meeting_agent',
     'rest_framework',
     'corsheaders',
     'rest_framework.authtoken',
@@ -215,6 +216,16 @@ DATABASES = {
         'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
     }
 }
+
+# MongoDB Configuration for Meeting Agent
+# MongoDB connection is handled in the meeting_agent models.py file
+# Environment variables for MongoDB connection:
+# MONGODB_URI - Full MongoDB connection string (optional)
+# MONGODB_HOST - MongoDB host (default: localhost)
+# MONGODB_PORT - MongoDB port (default: 27017)
+# MONGODB_DB - Database name (default: banbury_meetings)
+# MONGODB_USERNAME - Username (optional)
+# MONGODB_PASSWORD - Password (optional)
 
 CHANNEL_LAYERS = {
     'default': {
