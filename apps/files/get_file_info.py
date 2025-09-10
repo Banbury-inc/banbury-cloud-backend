@@ -1,4 +1,4 @@
-from pymongo.mongo_client import MongoClient
+from core.mongodb_manager import get_mongodb_collection
 from bson.objectid import ObjectId
 
 def get_file_info(file_id):
@@ -14,10 +14,12 @@ def get_file_info(file_id):
                       if the file is found, otherwise None.
                       Returns None if the file ID is invalid or the file is not found.
     """
-    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
-    client = MongoClient(uri)
-    db = client["NeuraNet"]
-    file_collection = db["files"]
+    # Get MongoDB collection using centralized manager
+    try:
+        file_collection = get_mongodb_collection('files')
+    except Exception as e:
+        print(f"[get_file_info] MongoDB connection error: {str(e)}")
+        return None
 
     file_name = "csvs_ohio.zip"
 

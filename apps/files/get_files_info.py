@@ -1,4 +1,4 @@
-from pymongo.mongo_client import MongoClient
+from core.mongodb_manager import get_mongodb_collection
 
 def get_files_info(username):
     """
@@ -13,12 +13,14 @@ def get_files_info(username):
                          (name, size, type, path, dates, kind, device_name).
               - "error": An error message string if the user is not found.
     """
-    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
-    client = MongoClient(uri)
-    db = client["NeuraNet"]
-    user_collection = db["users"]
-    device_collection = db["devices"]
-    file_collection = db["files"]
+    # Get MongoDB collections using centralized manager
+    try:
+        user_collection = get_mongodb_collection('users')
+        device_collection = get_mongodb_collection('devices')
+        file_collection = get_mongodb_collection('files')
+    except Exception as e:
+        print(f"[get_files_info] MongoDB connection error: {str(e)}")
+        return {"error": "Database connection failed"}
 
     # Find the user by username
     user = user_collection.find_one({"username": username})

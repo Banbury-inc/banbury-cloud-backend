@@ -1,12 +1,12 @@
-from pymongo.mongo_client import MongoClient
+from core.mongodb_manager import get_mongodb_collection
 
 def declare_device_offline(username, device_name):
     """
     Marks a specific device associated with a user as offline in the database.
 
-    Connects to MongoDB, finds the user by username, then finds the specific
-    device by name belonging to that user. Sets the 'online' field of the
-    device document to False.
+    Uses centralized MongoDB connection manager to find the user by username, 
+    then finds the specific device by name belonging to that user. Sets the 
+    'online' field of the device document to False.
 
     Args:
         username (str): The username of the device owner.
@@ -18,44 +18,47 @@ def declare_device_offline(username, device_name):
                      dictionary indicating success along with the username.
                      Example success: {"result": "success", "username": "user1"}
     """
+    print(f"[declare_device_offline] Starting - User: {username}, Device: {device_name}")
 
-    # MongoDB connection
-    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
-    client = MongoClient(uri)
-    db = client['NeuraNet']
-    user_collection = db['users']
-    device_collection = db['devices']
+    # Get MongoDB collections using centralized manager
+    try:
+        user_collection = get_mongodb_collection('users')
+        device_collection = get_mongodb_collection('devices')
+    except Exception as e:
+        print(f"[declare_device_offline] MongoDB connection error: {str(e)}")
+        return "Database connection failed"
 
     # Find the user by username
     user = user_collection.find_one({'username': username})
     if not user:
-        response = "User not found"
-        return response
+        print(f"[declare_device_offline] User not found: {username}")
+        return "User not found"
 
+    print(f"[declare_device_offline] Found user: {user['_id']}")
 
     # Find the device belonging to the user by device_name
     device = device_collection.find_one({'user_id': user['_id'], 'device_name': device_name})
     if not device:
-        response = "Device not found"
-        return response
+        print(f"[declare_device_offline] Device not found: {device_name}")
+        return "Device not found"
 
-    # Update the "online" field to True
+    print(f"[declare_device_offline] Found device: {device['_id']}")
+
+    # Update the "online" field to False
     try:
-        device_collection.update_one(
+        result = device_collection.update_one(
             {'_id': device['_id']},  # Find the device by its ID
             {'$set': {'online': False}}  # Update only the 'online' field
         )
+        print(f"[declare_device_offline] Update result - Modified: {result.modified_count}")
     except Exception as e:
-        print(f"Error updating device status: {e}")
-        response = "Error updating device status"
-        return response
+        print(f"[declare_device_offline] Error updating device status: {e}")
+        return "Error updating device status"
 
     # Return success response
-    response = {
+    return {
         "result": "success",
         "username": username,
     }
-
-    return response
 
 

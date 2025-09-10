@@ -21,45 +21,57 @@ from apps.files.views import add_file, add_files, handle_delete_files, handle_up
 class DeleteFilesTest(unittest.TestCase):
     """Test suite for the delete_files module."""
 
-    @patch('apps.files.delete_files.MongoClient')
-    def test_delete_files_success(self, mock_mongo_client):
+    @patch('apps.files.delete_files.get_mongodb_collection')
+    def test_delete_files_success(self, mock_get_collection):
         """Test successful deletion of files."""
-        # Set up mock
-        mock_client = MagicMock()
-        mock_mongo_client.return_value = mock_client
+        # Mock collections
+        mock_devices = MagicMock()
+        mock_files = MagicMock()
         
-        mock_db = mock_client.__getitem__.return_value
-        mock_collection = mock_db.__getitem__.return_value
+        # Setup collection mapping
+        def get_collection_side_effect(collection_name):
+            if collection_name == 'devices':
+                return mock_devices
+            elif collection_name == 'files':
+                return mock_files
+            return MagicMock()
+        
+        mock_get_collection.side_effect = get_collection_side_effect
         
         # Mock device collection to return a device with a specific ID
-        mock_device_collection = mock_db.__getitem__.return_value
-        mock_device_collection.find_one.return_value = {'_id': ObjectId('60b6e4b5f429d53a5d7e346a')}
+        mock_devices.find_one.return_value = {'_id': ObjectId('60b6e4b5f429d53a5d7e346a')}
         
         # Mock file collection delete_many to return successful result
-        mock_file_collection = mock_db.__getitem__.return_value
         mock_delete_result = MagicMock()
         mock_delete_result.deleted_count = 2
-        mock_file_collection.delete_many.return_value = mock_delete_result
+        mock_files.delete_many.return_value = mock_delete_result
         
         # Test the function
         result = delete_files('testdevice', [{'file_name': 'file1.txt'}, {'file_name': 'file2.txt'}])
         
         # Assert results
         self.assertEqual(result, 'success')
-        mock_file_collection.delete_many.assert_called_once()
+        mock_files.delete_many.assert_called_once()
 
-    @patch('apps.files.delete_files.MongoClient')
-    def test_device_not_found(self, mock_mongo_client):
+    @patch('apps.files.delete_files.get_mongodb_collection')
+    def test_device_not_found(self, mock_get_collection):
         """Test deletion when device is not found."""
-        # Set up mock
-        mock_client = MagicMock()
-        mock_mongo_client.return_value = mock_client
+        # Mock collections
+        mock_devices = MagicMock()
+        mock_files = MagicMock()
         
-        mock_db = mock_client.__getitem__.return_value
+        # Setup collection mapping
+        def get_collection_side_effect(collection_name):
+            if collection_name == 'devices':
+                return mock_devices
+            elif collection_name == 'files':
+                return mock_files
+            return MagicMock()
+        
+        mock_get_collection.side_effect = get_collection_side_effect
         
         # Mock device collection to return None (device not found)
-        mock_device_collection = mock_db.__getitem__.return_value
-        mock_device_collection.find_one.return_value = None
+        mock_devices.find_one.return_value = None
         
         # Test the function
         result = delete_files('nonexistentdevice', [{'file_name': 'file1.txt'}])
@@ -71,15 +83,19 @@ class DeleteFilesTest(unittest.TestCase):
 class GetFileInfoTest(unittest.TestCase):
     """Test suite for the get_file_info module."""
 
-    @patch('apps.files.get_file_info.MongoClient')
-    def test_get_file_info_success(self, mock_mongo_client):
+    @patch('apps.files.get_file_info.get_mongodb_collection')
+    def test_get_file_info_success(self, mock_get_collection):
         """Test successful retrieval of file info."""
-        # Set up mock
-        mock_client = MagicMock()
-        mock_mongo_client.return_value = mock_client
+        # Mock collections
+        mock_files = MagicMock()
         
-        mock_db = mock_client.__getitem__.return_value
-        mock_file_collection = mock_db.__getitem__.return_value
+        # Setup collection mapping
+        def get_collection_side_effect(collection_name):
+            if collection_name == 'files':
+                return mock_files
+            return MagicMock()
+        
+        mock_get_collection.side_effect = get_collection_side_effect
         
         # Mock file data
         mock_file = {
@@ -95,7 +111,7 @@ class GetFileInfoTest(unittest.TestCase):
             'device_id': ObjectId('60b6e4b5f429d53a5d7e346b')
         }
         
-        mock_file_collection.find_one.return_value = mock_file
+        mock_files.find_one.return_value = mock_file
         
         # Test the function
         result = get_file_info('60b6e4b5f429d53a5d7e346a')
@@ -105,18 +121,22 @@ class GetFileInfoTest(unittest.TestCase):
         self.assertEqual(result['file_size'], 1024)
         self.assertEqual(result['device_id'], str(ObjectId('60b6e4b5f429d53a5d7e346b')))
         
-    @patch('apps.files.get_file_info.MongoClient')
-    def test_get_file_info_not_found(self, mock_mongo_client):
+    @patch('apps.files.get_file_info.get_mongodb_collection')
+    def test_get_file_info_not_found(self, mock_get_collection):
         """Test file info retrieval when file is not found."""
-        # Set up mock
-        mock_client = MagicMock()
-        mock_mongo_client.return_value = mock_client
+        # Mock collections
+        mock_files = MagicMock()
         
-        mock_db = mock_client.__getitem__.return_value
-        mock_file_collection = mock_db.__getitem__.return_value
+        # Setup collection mapping
+        def get_collection_side_effect(collection_name):
+            if collection_name == 'files':
+                return mock_files
+            return MagicMock()
+        
+        mock_get_collection.side_effect = get_collection_side_effect
         
         # Mock file not found
-        mock_file_collection.find_one.return_value = None
+        mock_files.find_one.return_value = None
         
         # Test the function
         result = get_file_info('60b6e4b5f429d53a5d7e346a')
@@ -128,19 +148,28 @@ class GetFileInfoTest(unittest.TestCase):
 class GetFilesInfoTest(unittest.TestCase):
     """Test suite for the get_files_info module."""
     
-    
-    @patch('apps.files.get_files_info.MongoClient')
-    def test_get_files_info_user_not_found(self, mock_mongo_client):
+    @patch('apps.files.get_files_info.get_mongodb_collection')
+    def test_get_files_info_user_not_found(self, mock_get_collection):
         """Test files info retrieval when user is not found."""
-        # Set up mock
-        mock_client = MagicMock()
-        mock_mongo_client.return_value = mock_client
+        # Mock collections
+        mock_users = MagicMock()
+        mock_devices = MagicMock()
+        mock_files = MagicMock()
         
-        mock_db = mock_client.__getitem__.return_value
+        # Setup collection mapping
+        def get_collection_side_effect(collection_name):
+            if collection_name == 'users':
+                return mock_users
+            elif collection_name == 'devices':
+                return mock_devices
+            elif collection_name == 'files':
+                return mock_files
+            return MagicMock()
+        
+        mock_get_collection.side_effect = get_collection_side_effect
         
         # Mock user collection to return None (user not found)
-        mock_user_collection = mock_db.__getitem__.return_value
-        mock_user_collection.find_one.return_value = None
+        mock_users.find_one.return_value = None
         
         # Test the function
         result = get_files_info('nonexistentuser')
@@ -153,16 +182,28 @@ class GetFilesInfoTest(unittest.TestCase):
 class DownloadFileTest(unittest.TestCase):
     """Test suite for the download_file module."""
     
-    @patch('apps.files.download_file.MongoClient')
-    def test_download_file_not_found(self, mock_mongo_client):
+    @patch('apps.files.download_file.get_mongodb_collection')
+    def test_download_file_not_found(self, mock_get_collection):
         """Test download when file is not found."""
-        # Set up MongoDB client mock
-        mock_client = mock_mongo_client.return_value
-        mock_db = mock_client.__getitem__.return_value
+        # Mock collections
+        mock_files = MagicMock()
+        mock_file_sync = MagicMock()
+        mock_devices = MagicMock()
+        
+        # Setup collection mapping
+        def get_collection_side_effect(collection_name):
+            if collection_name == 'files':
+                return mock_files
+            elif collection_name == 'file_sync':
+                return mock_file_sync
+            elif collection_name == 'devices':
+                return mock_devices
+            return MagicMock()
+        
+        mock_get_collection.side_effect = get_collection_side_effect
         
         # Mock file collection to return None (file not found)
-        mock_file_collection = mock_db.__getitem__.return_value
-        mock_file_collection.find_one.return_value = None
+        mock_files.find_one.return_value = None
         
         # Test the function
         result = download_file('nonexistent_file_id', False)

@@ -13,7 +13,6 @@ urlpatterns = [
     path("get_google_scopes_analytics/", views.get_google_scopes_analytics, name="get_google_scopes_analytics"),
     path("get_client_ip/", views.get_client_ip, name="get_client_ip"),
     path("google/", views.google, name="google"),
-    path("auth/callback", views.google_callback, name="google_callback_no_slash"),
     path("auth/callback/", views.google_callback, name="google_callback"),
     path("validate-token/", views.validate_token, name="validate_token"),
     path("refresh-token/", views.refresh_token, name="refresh_token"),

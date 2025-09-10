@@ -1,4 +1,4 @@
-from pymongo import MongoClient
+from core.mongodb_manager import get_mongodb_collection
 
 def delete_files(device_name, files):
     """
@@ -17,12 +17,13 @@ def delete_files(device_name, files):
              "no_files_deleted": If no matching files were found to delete.
              "success": If the deletion operation was initiated successfully.
     """
-    # Connect to MongoDB
-    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
-    client = MongoClient(uri)
-    db = client['NeuraNet']
-    file_collection = db['files']
-    device_collection = db['devices']
+    # Get MongoDB collections using centralized manager
+    try:
+        file_collection = get_mongodb_collection('files')
+        device_collection = get_mongodb_collection('devices')
+    except Exception as e:
+        print(f"[delete_files] MongoDB connection error: {str(e)}")
+        return "database_connection_failed"
 
     # Find the device_id based on device_name
     device = device_collection.find_one({"device_name": device_name})

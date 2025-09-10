@@ -184,23 +184,24 @@ class TestDevices:
             }
         )
 
-    @patch('apps.devices.declare_device_online.MongoClient')
-    def test_declare_device_online_success(self, mock_client, test_data, sample_user_data, sample_device_data):
+    @patch('apps.devices.declare_device_online.get_mongodb_collection')
+    def test_declare_device_online_success(self, mock_get_collection, test_data, sample_user_data, sample_device_data):
         """Test successfully declaring a device online"""
         from apps.devices.declare_device_online import declare_device_online
         
-        # Setup mock database
-        mock_db = MagicMock()
-        mock_client.return_value.__getitem__.return_value = mock_db
-        
         # Mock collections
-        mock_devices = MagicMock()
         mock_users = MagicMock()
+        mock_devices = MagicMock()
         
-        mock_db.__getitem__.side_effect = lambda x: {
-            'devices': mock_devices,
-            'users': mock_users
-        }[x]
+        # Setup collection mapping
+        def get_collection_side_effect(collection_name):
+            if collection_name == 'users':
+                return mock_users
+            elif collection_name == 'devices':
+                return mock_devices
+            return MagicMock()
+        
+        mock_get_collection.side_effect = get_collection_side_effect
         
         # Setup mock returns
         mock_users.find_one.return_value = sample_user_data
@@ -231,23 +232,24 @@ class TestDevices:
             upsert=True
         )
 
-    @patch('apps.devices.declare_device_online.MongoClient')
-    def test_declare_device_online_user_not_found(self, mock_client, test_data):
+    @patch('apps.devices.declare_device_online.get_mongodb_collection')
+    def test_declare_device_online_user_not_found(self, mock_get_collection, test_data):
         """Test declare device online when user is not found"""
         from apps.devices.declare_device_online import declare_device_online
         
-        # Setup mock database
-        mock_db = MagicMock()
-        mock_client.return_value.__getitem__.return_value = mock_db
-        
         # Mock collections
-        mock_devices = MagicMock()
         mock_users = MagicMock()
+        mock_devices = MagicMock()
         
-        mock_db.__getitem__.side_effect = lambda x: {
-            'devices': mock_devices,
-            'users': mock_users
-        }[x]
+        # Setup collection mapping
+        def get_collection_side_effect(collection_name):
+            if collection_name == 'users':
+                return mock_users
+            elif collection_name == 'devices':
+                return mock_devices
+            return MagicMock()
+        
+        mock_get_collection.side_effect = get_collection_side_effect
         
         # Setup mock returns - user not found
         mock_users.find_one.return_value = None
@@ -264,23 +266,24 @@ class TestDevices:
         mock_devices.find_one.assert_not_called()
         mock_devices.update_one.assert_not_called()
 
-    @patch('apps.devices.declare_device_online.MongoClient')
-    def test_declare_device_online_device_not_found(self, mock_client, test_data, sample_user_data):
+    @patch('apps.devices.declare_device_online.get_mongodb_collection')
+    def test_declare_device_online_device_not_found(self, mock_get_collection, test_data, sample_user_data):
         """Test declare device online when device is not found"""
         from apps.devices.declare_device_online import declare_device_online
         
-        # Setup mock database
-        mock_db = MagicMock()
-        mock_client.return_value.__getitem__.return_value = mock_db
-        
         # Mock collections
-        mock_devices = MagicMock()
         mock_users = MagicMock()
+        mock_devices = MagicMock()
         
-        mock_db.__getitem__.side_effect = lambda x: {
-            'devices': mock_devices,
-            'users': mock_users
-        }[x]
+        # Setup collection mapping
+        def get_collection_side_effect(collection_name):
+            if collection_name == 'users':
+                return mock_users
+            elif collection_name == 'devices':
+                return mock_devices
+            return MagicMock()
+        
+        mock_get_collection.side_effect = get_collection_side_effect
         
         # Setup mock returns
         mock_users.find_one.return_value = sample_user_data
@@ -301,23 +304,24 @@ class TestDevices:
         })
         mock_devices.update_one.assert_not_called()
 
-    @patch('apps.devices.declare_device_offline.MongoClient')
-    def test_declare_device_offline_success(self, mock_client, test_data, sample_user_data, sample_device_data):
+    @patch('apps.devices.declare_device_offline.get_mongodb_collection')
+    def test_declare_device_offline_success(self, mock_get_collection, test_data, sample_user_data, sample_device_data):
         """Test successfully declaring a device offline"""
         from apps.devices.declare_device_offline import declare_device_offline
         
-        # Setup mock database
-        mock_db = MagicMock()
-        mock_client.return_value.__getitem__.return_value = mock_db
-        
         # Mock collections
-        mock_devices = MagicMock()
         mock_users = MagicMock()
+        mock_devices = MagicMock()
         
-        mock_db.__getitem__.side_effect = lambda x: {
-            'devices': mock_devices,
-            'users': mock_users
-        }[x]
+        # Setup collection mapping
+        def get_collection_side_effect(collection_name):
+            if collection_name == 'users':
+                return mock_users
+            elif collection_name == 'devices':
+                return mock_devices
+            return MagicMock()
+        
+        mock_get_collection.side_effect = get_collection_side_effect
         
         # Setup mock returns
         mock_users.find_one.return_value = sample_user_data
@@ -341,23 +345,24 @@ class TestDevices:
             {'$set': {'online': False}}
         )
 
-    @patch('apps.devices.declare_device_offline.MongoClient')
-    def test_declare_device_offline_user_not_found(self, mock_client, test_data):
+    @patch('apps.devices.declare_device_offline.get_mongodb_collection')
+    def test_declare_device_offline_user_not_found(self, mock_get_collection, test_data):
         """Test declare device offline when user is not found"""
         from apps.devices.declare_device_offline import declare_device_offline
         
-        # Setup mock database
-        mock_db = MagicMock()
-        mock_client.return_value.__getitem__.return_value = mock_db
-        
         # Mock collections
-        mock_devices = MagicMock()
         mock_users = MagicMock()
+        mock_devices = MagicMock()
         
-        mock_db.__getitem__.side_effect = lambda x: {
-            'devices': mock_devices,
-            'users': mock_users
-        }[x]
+        # Setup collection mapping
+        def get_collection_side_effect(collection_name):
+            if collection_name == 'users':
+                return mock_users
+            elif collection_name == 'devices':
+                return mock_devices
+            return MagicMock()
+        
+        mock_get_collection.side_effect = get_collection_side_effect
         
         # Setup mock returns - user not found
         mock_users.find_one.return_value = None
@@ -373,23 +378,24 @@ class TestDevices:
         mock_devices.find_one.assert_not_called()
         mock_devices.update_one.assert_not_called()
 
-    @patch('apps.devices.declare_device_offline.MongoClient')
-    def test_declare_device_offline_device_not_found(self, mock_client, test_data, sample_user_data):
+    @patch('apps.devices.declare_device_offline.get_mongodb_collection')
+    def test_declare_device_offline_device_not_found(self, mock_get_collection, test_data, sample_user_data):
         """Test declare device offline when device is not found"""
         from apps.devices.declare_device_offline import declare_device_offline
         
-        # Setup mock database
-        mock_db = MagicMock()
-        mock_client.return_value.__getitem__.return_value = mock_db
-        
         # Mock collections
-        mock_devices = MagicMock()
         mock_users = MagicMock()
+        mock_devices = MagicMock()
         
-        mock_db.__getitem__.side_effect = lambda x: {
-            'devices': mock_devices,
-            'users': mock_users
-        }[x]
+        # Setup collection mapping
+        def get_collection_side_effect(collection_name):
+            if collection_name == 'users':
+                return mock_users
+            elif collection_name == 'devices':
+                return mock_devices
+            return MagicMock()
+        
+        mock_get_collection.side_effect = get_collection_side_effect
         
         # Setup mock returns
         mock_users.find_one.return_value = sample_user_data
@@ -409,23 +415,24 @@ class TestDevices:
         })
         mock_devices.update_one.assert_not_called()
 
-    @patch('apps.devices.declare_device_offline.MongoClient')
-    def test_declare_device_offline_update_error(self, mock_client, test_data, sample_user_data, sample_device_data):
+    @patch('apps.devices.declare_device_offline.get_mongodb_collection')
+    def test_declare_device_offline_update_error(self, mock_get_collection, test_data, sample_user_data, sample_device_data):
         """Test declare device offline when update throws an error"""
         from apps.devices.declare_device_offline import declare_device_offline
         
-        # Setup mock database
-        mock_db = MagicMock()
-        mock_client.return_value.__getitem__.return_value = mock_db
-        
         # Mock collections
-        mock_devices = MagicMock()
         mock_users = MagicMock()
+        mock_devices = MagicMock()
         
-        mock_db.__getitem__.side_effect = lambda x: {
-            'devices': mock_devices,
-            'users': mock_users
-        }[x]
+        # Setup collection mapping
+        def get_collection_side_effect(collection_name):
+            if collection_name == 'users':
+                return mock_users
+            elif collection_name == 'devices':
+                return mock_devices
+            return MagicMock()
+        
+        mock_get_collection.side_effect = get_collection_side_effect
         
         # Setup mock returns
         mock_users.find_one.return_value = sample_user_data

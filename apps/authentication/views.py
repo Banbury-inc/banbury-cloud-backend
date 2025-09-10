@@ -196,6 +196,8 @@ def google(request):
     })
 
 @csrf_exempt
+@authentication_classes([])
+@permission_classes([AllowAny])
 @require_http_methods(["GET"])
 def google_callback(request):
     """Handles the callback from Google after OAuth2 authentication."""
