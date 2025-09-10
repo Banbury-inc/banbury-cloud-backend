@@ -1,12 +1,13 @@
-from pymongo.mongo_client import MongoClient
+from core.mongodb_manager import get_mongodb_collection
 
 def declare_device_online(username, device_name):
     """
     Marks a specific device associated with a user as online in the database.
 
-    Connects to MongoDB, finds the user by username, then finds the specific
-    device by name belonging to that user. Sets the 'online' field of the
-    device document to True. Uses upsert=True for the update operation.
+    Uses centralized MongoDB connection manager to find the user by username, 
+    then finds the specific device by name belonging to that user. Sets the 
+    'online' field of the device document to True. Uses upsert=True for the 
+    update operation.
 
     Args:
         username (str): The username of the device owner.
@@ -21,13 +22,10 @@ def declare_device_online(username, device_name):
     """
     print(f"[declare_device_online] Starting - User: {username}, Device: {device_name}")
 
-    # MongoDB connection
-    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    # Get MongoDB collections using centralized manager
     try:
-        client = MongoClient(uri)
-        db = client['NeuraNet']
-        user_collection = db['users']
-        device_collection = db['devices']
+        user_collection = get_mongodb_collection('users')
+        device_collection = get_mongodb_collection('devices')
     except Exception as e:
         print(f"[declare_device_online] MongoDB connection error: {str(e)}")
         return {"result": "error", "message": "Database connection failed"}

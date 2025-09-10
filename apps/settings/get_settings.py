@@ -1,13 +1,10 @@
-from pymongo.mongo_client import MongoClient
+from core.mongodb_manager import get_mongodb_collection
 
 def get_settings(username):
 
-    # MongoDB connection
-    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
-    client = MongoClient(uri)
-    db = client['NeuraNet']
-    user_collection = db['users']
-    settings_collection = db['settings']
+    # Get MongoDB collections using centralized manager
+    user_collection = get_mongodb_collection('users')
+    settings_collection = get_mongodb_collection('settings')
 
     # Find the user by username
     user = user_collection.find_one({'username': username})

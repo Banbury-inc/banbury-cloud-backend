@@ -753,7 +753,6 @@ def getuserinfo4(request, username, password):
         
         # Store the bearer token in the user document for daemon access
         try:
-            from pymongo.mongo_client import MongoClient
             import os
             mongo_uri = os.getenv('MONGO_URI', 'mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority')
             mongo_client = MongoClient(mongo_uri)

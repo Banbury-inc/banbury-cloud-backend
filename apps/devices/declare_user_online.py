@@ -1,14 +1,14 @@
-from pymongo.mongo_client import MongoClient
 from bson.objectid import ObjectId
+from core.mongodb_manager import get_mongodb_collection
 
 def declare_user_online(user_id):
     """
     Marks a user as online in the database using their MongoDB ObjectId.
 
-    Connects to MongoDB, finds the user by their ID, and sets the 'online'
-    field to True. It uses upsert=True, meaning if the user is not found
-    after the initial check, it might create a new user document (though the
-    initial check should prevent this).
+    Uses centralized MongoDB connection manager to find the user by their ID, 
+    and sets the 'online' field to True. It uses upsert=True, meaning if the 
+    user is not found after the initial check, it might create a new user 
+    document (though the initial check should prevent this).
 
     Args:
         user_id (str): The MongoDB ObjectId of the user as a string.
@@ -19,12 +19,9 @@ def declare_user_online(user_id):
     """
     print(f"[declare_user_online] Starting - User ID: {user_id}")
 
-    # MongoDB connection
-    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    # Get MongoDB collection using centralized manager
     try:
-        client = MongoClient(uri)
-        db = client['NeuraNet']
-        user_collection = db['users']
+        user_collection = get_mongodb_collection('users')
     except Exception as e:
         print(f"[declare_user_online] MongoDB connection error: {str(e)}")
         return {"result": "error", "message": "Database connection failed"}

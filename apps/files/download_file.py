@@ -1,13 +1,9 @@
-from pymongo import MongoClient
+from core.mongodb_manager import get_mongodb_collection
 
-
-# Connect to MongoDB
-uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
-client = MongoClient(uri)
-db = client['NeuraNet']
-file_collection = db['files']
-file_sync_collection = db['file_sync']
-device_collection = db['devices']
+# Get MongoDB collections using centralized manager
+file_collection = get_mongodb_collection('files')
+file_sync_collection = get_mongodb_collection('file_sync')
+device_collection = get_mongodb_collection('devices')
 
 def download_file(file_id, is_file_sync):
     """

@@ -1,17 +1,13 @@
 import uuid
 import os
 from django.conf import settings
-from pymongo.mongo_client import MongoClient
 from datetime import datetime
 from bson import ObjectId
+from core.mongodb_manager import get_mongodb_collection
 
-# MongoDB connection
 def get_mongodb_connection():
     """Get MongoDB connection for API keys"""
-    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
-    client = MongoClient(uri)
-    db = client["NeuraNet"]
-    return db["api_keys"]
+    return get_mongodb_collection("api_keys")
 
 def generate_api_key():
     """

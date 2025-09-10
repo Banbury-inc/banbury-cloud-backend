@@ -10,14 +10,57 @@ from apps.conversations.models import Conversation
 
 class Command(BaseCommand):
     help = 'Continuously process due TaskStudio tasks for all users, using LangGraph stream and saving results.'
+    
+    def get_adaptive_interval(self, tasks_col, default_interval):
+        """Calculate smart interval based on next scheduled task"""
+        try:
+            # Find the earliest scheduled task
+            next_task = tasks_col.find_one(
+                {'status': 'scheduled'}, 
+                sort=[('scheduled_date', 1)]
+            )
+            
+            if not next_task:
+                # No scheduled tasks, use longer interval
+                return min(default_interval * 10, 300)  # Max 5 minutes
+            
+            # Calculate time until next task
+            scheduled_date = next_task.get('scheduled_date')
+            if not scheduled_date:
+                return default_interval
+                
+            now = datetime.now(timezone.utc)
+            time_until = (scheduled_date - now).total_seconds()
+            
+            if time_until <= 0:
+                # Task is already due, check immediately
+                return 1
+            elif time_until <= 60:
+                # Task due within a minute, check every 10 seconds
+                return 10
+            elif time_until <= 300:
+                # Task due within 5 minutes, check every 30 seconds
+                return 30
+            elif time_until <= 1800:
+                # Task due within 30 minutes, check every 2 minutes
+                return 120
+            else:
+                # Task due later, check every 5 minutes
+                return 300
+                
+        except Exception as e:
+            print(f"Error calculating adaptive interval: {e}")
+            return default_interval
 
     def add_arguments(self, parser):
-        parser.add_argument('--interval', type=int, default=30, help='Seconds between scans')
+        parser.add_argument('--interval', type=int, default=30, help='Default seconds between scans (adaptive mode will override)')
         parser.add_argument('--batch', type=int, default=50, help='Max tasks per scan')
+        parser.add_argument('--adaptive', action='store_true', help='Use adaptive interval based on next scheduled task')
 
     def handle(self, *args, **options):
-        interval = int(options.get('interval') or 30)
+        default_interval = int(options.get('interval') or 30)
         batch = int(options.get('batch') or 50)
+        adaptive = options.get('adaptive', False)
 
         mongo_uri = os.getenv('MONGO_URI', 'mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority')
         client = MongoClient(mongo_uri)
@@ -25,7 +68,8 @@ class Command(BaseCommand):
         tasks_col = db['taskstudio_tasks']
         users_col = db['users']  # Need access to users collection for bearer tokens
 
-        self.stdout.write(self.style.SUCCESS(f'Starting TaskStudio daemon (interval={interval}s, batch={batch})'))
+        mode_desc = "adaptive" if adaptive else f"fixed {default_interval}s"
+        self.stdout.write(self.style.SUCCESS(f'Starting TaskStudio daemon ({mode_desc} interval, batch={batch})'))
         print(f"Monitoring database: {db.name}")
         print(f"Collection: {tasks_col.name}")
         print("=" * 60)
@@ -101,10 +145,17 @@ class Command(BaseCommand):
                             { '$set': { 'status': 'failed', 'error': error_msg, 'updated_at': datetime.now(timezone.utc) } }
                         )
                 
-                print(f"⏱️  Sleeping for {interval} seconds...")
-                time.sleep(interval)
+                # Calculate next interval
+                if adaptive:
+                    next_interval = self.get_adaptive_interval(tasks_col, default_interval)
+                    print(f"⏱️  Adaptive mode: sleeping for {next_interval} seconds...")
+                else:
+                    next_interval = default_interval
+                    print(f"⏱️  Fixed mode: sleeping for {next_interval} seconds...")
+                
+                time.sleep(next_interval)
             except Exception as e:
                 self.stderr.write(f"Daemon error: {e}")
-                time.sleep(interval)
+                time.sleep(default_interval)
 
 

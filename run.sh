@@ -6,6 +6,7 @@ IMAGE_NAME="banbury-backend-image"
 DAEMON_CONTAINER_NAME="banbury-backend-daemon"
 DAEMON_INTERVAL=${DAEMON_INTERVAL:-30}
 DAEMON_BATCH=${DAEMON_BATCH:-50}
+DAEMON_MODE=${DAEMON_MODE:-"adaptive"}  # "adaptive", "realtime", or "fixed"
 DAEMON_PID_FILE="taskstudio_daemon.pid"
 DAEMON_LOG_FILE="taskstudio_daemon.log"
 
@@ -139,6 +140,103 @@ container_running() {
     return $?
 }
 
+# Function to kill all TaskStudio daemon processes
+kill_all_taskstudio_daemons() {
+    echo "🔍 Checking for existing TaskStudio daemon processes..."
+    
+    # Find all TaskStudio daemon processes using different methods
+    local pids=()
+    
+    # Method 1: Using pgrep
+    if command -v pgrep &> /dev/null; then
+        local pgrep_pids=$(pgrep -f "process_taskstudio_daemon\|process_taskstudio_realtime" 2>/dev/null | tr '\n' ' ')
+        if [ -n "$pgrep_pids" ]; then
+            pids+=($pgrep_pids)
+        fi
+    fi
+    
+    # Method 2: Using ps and grep
+    local ps_pids=$(ps aux | grep -E "(process_taskstudio_daemon|process_taskstudio_realtime)" | grep -v grep | awk '{print $2}' | tr '\n' ' ')
+    if [ -n "$ps_pids" ]; then
+        pids+=($ps_pids)
+    fi
+    
+    # Method 3: Check PID file
+    if [ -f "$DAEMON_PID_FILE" ]; then
+        local file_pid=$(cat "$DAEMON_PID_FILE" 2>/dev/null)
+        if [ -n "$file_pid" ] && kill -0 "$file_pid" 2>/dev/null; then
+            pids+=($file_pid)
+        fi
+    fi
+    
+    # Remove duplicates and empty values
+    local unique_pids=($(printf "%s\n" "${pids[@]}" | sort -u | grep -v '^$'))
+    
+    if [ ${#unique_pids[@]} -eq 0 ]; then
+        echo "✅ No existing TaskStudio daemon processes found"
+        return 0
+    fi
+    
+    echo "🛑 Found ${#unique_pids[@]} TaskStudio daemon process(es): ${unique_pids[*]}"
+    
+    # Kill each process
+    local killed_count=0
+    for pid in "${unique_pids[@]}"; do
+        if kill -0 "$pid" 2>/dev/null; then
+            echo "   Killing daemon PID $pid..."
+            if kill -TERM "$pid" 2>/dev/null; then
+                # Give it a moment to terminate gracefully
+                sleep 2
+                if kill -0 "$pid" 2>/dev/null; then
+                    # Force kill if still running
+                    kill -KILL "$pid" 2>/dev/null || true
+                fi
+                killed_count=$((killed_count + 1))
+                echo "   ✓ Daemon PID $pid stopped"
+            else
+                echo "   ⚠️  Failed to kill daemon PID $pid"
+            fi
+        fi
+    done
+    
+    # Clean up PID file
+    rm -f "$DAEMON_PID_FILE" 2>/dev/null || true
+    
+    echo "✅ Killed $killed_count TaskStudio daemon process(es)"
+    return 0
+}
+
+# Function to get the appropriate daemon command based on DAEMON_MODE
+get_daemon_command() {
+    local python_bin="$1"
+    case "$DAEMON_MODE" in
+        "realtime")
+            echo "$python_bin manage.py process_taskstudio_realtime --initial-scan --batch $DAEMON_BATCH"
+            ;;
+        "fixed")
+            echo "$python_bin manage.py process_taskstudio_daemon --interval $DAEMON_INTERVAL --batch $DAEMON_BATCH"
+            ;;
+        "adaptive"|*)
+            echo "$python_bin manage.py process_taskstudio_daemon --adaptive --batch $DAEMON_BATCH"
+            ;;
+    esac
+}
+
+# Function to get daemon mode description
+get_daemon_description() {
+    case "$DAEMON_MODE" in
+        "realtime")
+            echo "real-time event-driven processing"
+            ;;
+        "fixed")
+            echo "fixed ${DAEMON_INTERVAL}s polling"
+            ;;
+        "adaptive"|*)
+            echo "adaptive polling"
+            ;;
+    esac
+}
+
 # Stop and remove container if it exists
 stop_container() {
     if container_exists; then
@@ -154,6 +252,11 @@ start_daemon_container() {
     echo "Starting daemon container $DAEMON_CONTAINER_NAME..."
     # Remove any existing daemon container
     docker rm -f $DAEMON_CONTAINER_NAME > /dev/null 2>&1 || true
+    
+    # Determine daemon command based on mode preference
+    local daemon_cmd=$(get_daemon_command "python")
+    local daemon_desc=$(get_daemon_description)
+    
     # Pass through environment needed by the daemon
     docker run --name $DAEMON_CONTAINER_NAME -d \
         -e BANBURY_WEBSITE_ORIGIN=${BANBURY_WEBSITE_ORIGIN:-http://localhost:3000} \
@@ -161,12 +264,12 @@ start_daemon_container() {
         -e DAEMON_BEARER=${DAEMON_BEARER:-} \
         -e MONGO_URI=${MONGO_URI:-} \
         $IMAGE_NAME \
-        sh -c "python manage.py process_taskstudio_daemon --interval $DAEMON_INTERVAL --batch $DAEMON_BATCH"
+        sh -c "$daemon_cmd"
     if [ $? -ne 0 ]; then
         echo "Failed to start daemon container."
         return 1
     fi
-    echo "Daemon container started successfully."
+    echo "✅ Daemon container started successfully with $daemon_desc."
     return 0
 }
 
@@ -374,11 +477,19 @@ if [ "$USE_DOCKER" = true ]; then
             ;;
         *)
             echo "Usage: $0 [--docker] [start|stop|restart|logs|stream-logs]"
+            echo ""
+            echo "Actions:"
             echo "  start       - Start services"
             echo "  stop        - Stop services"
             echo "  restart     - Restart services"
             echo "  logs        - View container logs (past logs only)"
             echo "  stream-logs - Stream container logs in real-time"
+            echo ""
+            echo "Environment Variables:"
+            echo "  DAEMON_MODE     - Daemon mode: 'adaptive' (default), 'realtime', or 'fixed'"
+            echo "  DAEMON_BATCH    - Max tasks per batch (default: 50)"
+            echo "  DAEMON_INTERVAL - Polling interval for fixed mode (default: 30s)"
+            echo "  HTTP_PORT       - Server port (default: 8080)"
             ;;
     esac
 else
@@ -387,6 +498,9 @@ else
         "start"|"restart")
             # Kill process on the app port
             kill_process_on_port $HTTP_PORT
+            
+            # Kill all existing TaskStudio daemons
+            kill_all_taskstudio_daemons
 
             echo "Starting Daphne server on port $HTTP_PORT"
             # Run Daphne directly on the HTTP_PORT
@@ -398,10 +512,12 @@ else
             if [ -z "$PYTHON_BIN" ]; then
                 echo "No python interpreter found (venv/bin/python, python3, or python). Cannot start daemon."
             else
-                echo "Starting TaskStudio daemon in background (interval=$DAEMON_INTERVALs, batch=$DAEMON_BATCH)"
-                nohup $PYTHON_BIN manage.py process_taskstudio_daemon --interval $DAEMON_INTERVAL --batch $DAEMON_BATCH > "$DAEMON_LOG_FILE" 2>&1 &
+                local daemon_cmd=$(get_daemon_command "$PYTHON_BIN")
+                local daemon_desc=$(get_daemon_description)
+                echo "🚀 Starting TaskStudio daemon with $daemon_desc (batch=$DAEMON_BATCH)"
+                nohup $daemon_cmd > "$DAEMON_LOG_FILE" 2>&1 &
                 echo $! > "$DAEMON_PID_FILE"
-                echo "Daemon PID $(cat "$DAEMON_PID_FILE") logging to $DAEMON_LOG_FILE"
+                echo "✅ Daemon PID $(cat "$DAEMON_PID_FILE") logging to $DAEMON_LOG_FILE"
             fi
 
             daphne -p $HTTP_PORT -b 0.0.0.0 core.asgi:application
@@ -410,18 +526,13 @@ else
             ;;
         "stop")
             kill_process_on_port $HTTP_PORT
-            if [ -f "$DAEMON_PID_FILE" ]; then
-                DAEMON_PID=$(cat "$DAEMON_PID_FILE")
-                if kill -0 $DAEMON_PID 2>/dev/null; then
-                    echo "Stopping daemon PID $DAEMON_PID..."
-                    kill -9 $DAEMON_PID 2>/dev/null || true
-                    echo "Daemon stopped."
-                fi
-                rm -f "$DAEMON_PID_FILE"
-            fi
+            kill_all_taskstudio_daemons
             echo "Server stopped."
             ;;
         "start-daemon")
+            # Kill all existing TaskStudio daemons first
+            kill_all_taskstudio_daemons
+            
             PYTHON_BIN=${PYTHON_BIN:-venv/bin/python}
             if [ ! -x "$PYTHON_BIN" ]; then
                 PYTHON_BIN=$(command -v python3 || command -v python)
@@ -430,25 +541,15 @@ else
                 echo "No python interpreter found (venv/bin/python, python3, or python)."
                 exit 1
             fi
-            echo "Starting TaskStudio daemon in background (interval=$DAEMON_INTERVALs, batch=$DAEMON_BATCH)"
-            nohup $PYTHON_BIN manage.py process_taskstudio_daemon --interval $DAEMON_INTERVAL --batch $DAEMON_BATCH > "$DAEMON_LOG_FILE" 2>&1 &
+            local daemon_cmd=$(get_daemon_command "$PYTHON_BIN")
+            local daemon_desc=$(get_daemon_description)
+            echo "🚀 Starting TaskStudio daemon with $daemon_desc (batch=$DAEMON_BATCH)"
+            nohup $daemon_cmd > "$DAEMON_LOG_FILE" 2>&1 &
             echo $! > "$DAEMON_PID_FILE"
-            echo "Daemon PID $(cat "$DAEMON_PID_FILE") logging to $DAEMON_LOG_FILE"
+            echo "✅ Daemon PID $(cat "$DAEMON_PID_FILE") logging to $DAEMON_LOG_FILE"
             ;;
         "stop-daemon")
-            if [ -f "$DAEMON_PID_FILE" ]; then
-                DAEMON_PID=$(cat "$DAEMON_PID_FILE")
-                if kill -0 $DAEMON_PID 2>/dev/null; then
-                    echo "Stopping daemon PID $DAEMON_PID..."
-                    kill -9 $DAEMON_PID 2>/dev/null || true
-                    echo "Daemon stopped."
-                else
-                    echo "No running daemon found."
-                fi
-                rm -f "$DAEMON_PID_FILE"
-            else
-                echo "No daemon PID file found ($DAEMON_PID_FILE)."
-            fi
+            kill_all_taskstudio_daemons
             ;;
         "logs-daemon")
             if [ -f "$DAEMON_LOG_FILE" ]; then
@@ -470,15 +571,18 @@ else
             
             # Kill any existing processes on the ports
             kill_process_on_port $HTTP_PORT
+            kill_all_taskstudio_daemons
             
+            local daemon_desc=$(get_daemon_description)
             echo "Starting Daphne server AND TaskStudio daemon in FOREGROUND"
-            echo "Server on port $HTTP_PORT, Daemon (interval=$DAEMON_INTERVALs, batch=$DAEMON_BATCH)"
+            echo "Server on port $HTTP_PORT, Daemon ($daemon_desc, batch=$DAEMON_BATCH)"
             echo "Press Ctrl+C to stop both services"
             echo "=========================================="
             
             # Start daemon in background first
-            echo "🔧 Starting TaskStudio daemon..."
-            $PYTHON_BIN manage.py process_taskstudio_daemon --interval $DAEMON_INTERVAL --batch $DAEMON_BATCH &
+            local daemon_cmd=$(get_daemon_command "$PYTHON_BIN")
+            echo "🔧 Starting TaskStudio daemon with $daemon_desc..."
+            $daemon_cmd &
             DAEMON_PID=$!
             echo "✓ Daemon started with PID $DAEMON_PID"
             
@@ -520,6 +624,8 @@ else
             ;;
         *)
             echo "Usage: $0 [--docker] [start|stop|restart|logs|stream-logs|start-daemon|stop-daemon|logs-daemon|start-daemon-foreground|start-all]"
+            echo ""
+            echo "Actions:"
             echo "  start       - Start services"
             echo "  stop        - Stop services"
             echo "  restart     - Restart services"
@@ -529,6 +635,17 @@ else
             echo "  stop-daemon  - Stop TaskStudio daemon (direct mode)"
             echo "  logs-daemon  - Tail daemon log (direct mode)"
             echo "  start-daemon-foreground - Start BOTH server and daemon in foreground (see console output)"
+            echo ""
+            echo "Environment Variables:"
+            echo "  DAEMON_MODE     - Daemon mode: 'adaptive' (default), 'realtime', or 'fixed'"
+            echo "  DAEMON_BATCH    - Max tasks per batch (default: 50)"
+            echo "  DAEMON_INTERVAL - Polling interval for fixed mode (default: 30s)"
+            echo "  HTTP_PORT       - Server port (default: 8080)"
+            echo ""
+            echo "Examples:"
+            echo "  ./run.sh start                    # Start with adaptive polling (recommended)"
+            echo "  DAEMON_MODE=realtime ./run.sh start   # Start with real-time processing"
+            echo "  DAEMON_MODE=fixed ./run.sh start      # Start with fixed 30s polling"
             ;;
     esac
 fi

@@ -63,6 +63,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'channels',
+    'core',  # Add core app for MongoDB management commands
     'apps.authentication',
     'apps.conversations',
     'apps.devices',

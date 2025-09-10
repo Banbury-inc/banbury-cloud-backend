@@ -1,15 +1,12 @@
 from django.db import models
-from pymongo.mongo_client import MongoClient
 from bson import ObjectId
 from datetime import datetime
 import json
+from core.mongodb_manager import get_mongodb_collection
 
-# MongoDB connection
-uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
-client = MongoClient(uri)
-db = client["NeuraNet"]
-conversations_collection = db["conversations"]
-memories_collection = db["memories"]
+# MongoDB collections using centralized manager
+conversations_collection = get_mongodb_collection("conversations")
+memories_collection = get_mongodb_collection("memories")
 
 class Conversation:
     """Model for storing conversations in MongoDB"""
