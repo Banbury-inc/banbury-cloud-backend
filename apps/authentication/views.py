@@ -979,6 +979,189 @@ def add_site_visitor_info(request):
 
 @csrf_exempt
 @require_http_methods(["POST"])
+def add_site_visitor_info_enhanced(request):
+    """Records enhanced information about site visitors, including referrer source and campaign data."""
+    try:
+        # Parse the JSON body
+        data = json.loads(request.body)
+        
+        # Extract enhanced data from the JSON
+        ip_address = data.get("ip_address")
+        path = data.get("path", "Unknown")
+        client_timestamp = data.get("timestamp")
+        page_title = data.get("page_title", "Unknown")
+        referrer_source = data.get("referrer_source")
+        campaign_id = data.get("campaign_id")
+        content_type = data.get("content_type", "web_page")
+        user_agent = data.get("user_agent", "Unknown")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+    # Fetch location data based on the IP address
+    city = "Unknown"
+    region = "Unknown"
+    country = "Unknown"
+    
+    try:
+        # Try primary service: ipapi.com
+        api_key = "9ab07cc6f5a49eeb6ad0c6f5cc04e34d"
+        geo_response = http_requests.get(f"http://api.ipapi.com/api/{ip_address}?access_key={api_key}")
+        if geo_response.status_code == 200:
+            geo_data = geo_response.json()
+            city = geo_data.get("city", "Unknown")
+            region = geo_data.get("region", "Unknown")
+            country = geo_data.get("country_name", "Unknown")
+        else:
+            # Try fallback service: ip-api.com (free, no API key required)
+            try:
+                fallback_response = http_requests.get(f"http://ip-api.com/json/{ip_address}")
+                if fallback_response.status_code == 200:
+                    fallback_data = fallback_response.json()
+                    if fallback_data.get("status") == "success":
+                        city = fallback_data.get("city", "Unknown")
+                        region = fallback_data.get("regionName", "Unknown")
+                        country = fallback_data.get("country", "Unknown")
+            except http_requests.RequestException:
+                # If fallback also fails, keep default "Unknown" values
+                pass
+    except http_requests.RequestException:
+        # If primary service fails completely, try fallback service
+        try:
+            fallback_response = http_requests.get(f"http://ip-api.com/json/{ip_address}")
+            if fallback_response.status_code == 200:
+                fallback_data = fallback_response.json()
+                if fallback_data.get("status") == "success":
+                    city = fallback_data.get("city", "Unknown")
+                    region = fallback_data.get("regionName", "Unknown")
+                    country = fallback_data.get("country", "Unknown")
+        except http_requests.RequestException:
+            # If both services fail, keep default "Unknown" values
+            pass
+
+    time = datetime.utcnow()
+
+    # MongoDB connection
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client["NeuraNet"]
+    site_collection = db["site_enhanced"]
+
+    # Prepare the enhanced document to insert
+    new_visitor = {
+        "ip_address": ip_address,
+        "path": path,
+        "client_timestamp": client_timestamp,
+        "time": time,
+        "city": city,
+        "region": region,
+        "country": country,
+        "page_title": page_title,
+        "referrer_source": referrer_source,
+        "campaign_id": campaign_id,
+        "content_type": content_type,
+        "user_agent": user_agent,
+        "tracking_version": "2.0"
+    }
+
+    try:
+        site_collection.insert_one(new_visitor)
+        result = "success"
+    except Exception as e:
+        print(f"Error inserting enhanced tracking to MongoDB: {e}")
+        result = "failed"
+
+    # Return the result
+    return JsonResponse({"result": result})
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def get_site_visitor_info_enhanced(request):
+    """Retrieves enhanced site visitor analytics with referrer and campaign data."""
+    try:
+        # Get query parameters
+        limit = int(request.GET.get('limit', 100))
+        days = int(request.GET.get('days', 30))
+        
+        # MongoDB connection
+        uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+        client = MongoClient(uri)
+        db = client["NeuraNet"]
+        site_collection = db["site_enhanced"]
+        
+        # Calculate date filter
+        start_date = datetime.utcnow() - timedelta(days=days)
+        
+        # Query with date filter and limit
+        cursor = site_collection.find({
+            "time": {"$gte": start_date}
+        }).sort("time", -1).limit(limit)
+        
+        # Convert to list and prepare response data
+        visitors = []
+        referrer_stats = {}
+        content_stats = {}
+        campaign_stats = {}
+        
+        for visitor in cursor:
+            # Convert ObjectId to string and datetime to ISO string
+            visitor_data = {
+                "_id": str(visitor["_id"]),
+                "ip_address": visitor.get("ip_address", "Unknown"),
+                "path": visitor.get("path", "Unknown"),
+                "page_title": visitor.get("page_title", "Unknown"),
+                "referrer_source": visitor.get("referrer_source"),
+                "campaign_id": visitor.get("campaign_id"),
+                "content_type": visitor.get("content_type", "web_page"),
+                "user_agent": visitor.get("user_agent", "Unknown"),
+                "city": visitor.get("city", "Unknown"),
+                "region": visitor.get("region", "Unknown"),
+                "country": visitor.get("country", "Unknown"),
+                "time": visitor["time"].isoformat() if isinstance(visitor["time"], datetime) else str(visitor["time"]),
+                "client_timestamp": visitor.get("client_timestamp"),
+                "tracking_version": visitor.get("tracking_version", "2.0")
+            }
+            visitors.append(visitor_data)
+            
+            # Aggregate statistics
+            referrer = visitor.get("referrer_source")
+            if referrer:
+                referrer_stats[referrer] = referrer_stats.get(referrer, 0) + 1
+            
+            content_type = visitor.get("content_type", "web_page")
+            content_stats[content_type] = content_stats.get(content_type, 0) + 1
+            
+            campaign = visitor.get("campaign_id")
+            if campaign:
+                # Truncate long campaign IDs for readability
+                campaign_key = campaign[:50] + "..." if len(campaign) > 50 else campaign
+                campaign_stats[campaign_key] = campaign_stats.get(campaign_key, 0) + 1
+        
+        # Prepare summary statistics
+        total_visitors = len(visitors)
+        unique_ips = len(set(v["ip_address"] for v in visitors if v["ip_address"] != "Unknown"))
+        unique_countries = len(set(v["country"] for v in visitors if v["country"] != "Unknown"))
+        
+        response_data = {
+            "visitors": visitors,
+            "summary": {
+                "total_visitors": total_visitors,
+                "unique_ips": unique_ips,
+                "unique_countries": unique_countries,
+                "date_range_days": days,
+                "referrer_breakdown": referrer_stats,
+                "content_type_breakdown": content_stats,
+                "top_campaigns": dict(sorted(campaign_stats.items(), key=lambda x: x[1], reverse=True)[:10])
+            }
+        }
+        
+        return JsonResponse(response_data)
+        
+    except Exception as e:
+        print(f"Error retrieving enhanced visitor info: {e}")
+        return JsonResponse({"error": "Failed to retrieve visitor information"}, status=500)
+
+@csrf_exempt
+@require_http_methods(["POST"])
 def generate_user_api_key(request):
     """
     Generate a new API key for the authenticated user
