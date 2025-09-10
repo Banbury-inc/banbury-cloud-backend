@@ -25,4 +25,17 @@ urlpatterns = [
     
     # System status
     path('status/', views.agent_status, name='agent_status'),
+    
+    # Recall AI bot management
+    path('recall-bot/create/', views.create_recall_bot, name='create_recall_bot'),
+    path('recall-bot/<str:bot_id>/', views.get_recall_bot, name='get_recall_bot'),
+    path('recall-bot/<str:bot_id>/stop/', views.stop_recall_bot, name='stop_recall_bot'),
+    
+    # Recall AI webhooks
+    path('recall-webhook/', views.recall_webhook, name='recall_webhook'),
+    
+    # Debug endpoints
+    path('debug/create-transcript/<str:recording_id>/', views.debug_create_transcript, name='debug_create_transcript'),
+    path('debug/get-transcript/<str:transcript_id>/', views.debug_get_transcript, name='debug_get_transcript'),
+    path('debug/bot-recordings/<str:bot_id>/', views.debug_bot_recordings, name='debug_bot_recordings'),
 ]

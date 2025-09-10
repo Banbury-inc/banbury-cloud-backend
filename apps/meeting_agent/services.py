@@ -5,6 +5,7 @@ import logging
 from typing import Dict, Any
 from datetime import datetime
 from .models import MeetingSession
+from .recall_service import create_recall_bot_sync, get_recall_bot_sync, stop_recall_bot_sync
 
 logger = logging.getLogger(__name__)
 
@@ -17,39 +18,67 @@ class MeetingAgentService:
     
     def join_meeting(self, session: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Join a meeting session
+        Join a meeting session using Recall AI
         
-        This would typically:
-        1. Launch a browser instance
-        2. Navigate to the meeting URL
-        3. Handle authentication
-        4. Start recording
-        5. Monitor the meeting
+        Creates a Recall AI bot that will:
+        1. Join the meeting automatically
+        2. Start recording video/audio
+        3. Generate real-time transcription
+        4. Handle automatic leaving
         """
         try:
-            logger.info(f"Attempting to join meeting: {session.get('meeting_url')}")
+            meeting_url = session.get('meeting_url')
+            session_id = session.get('session_id')
+            metadata = session.get('metadata', {})
             
-            # Simulate joining logic
-            # In a real implementation, this would:
-            # - Use Playwright/Selenium to control a browser
-            # - Handle platform-specific authentication
-            # - Start screen/audio recording
-            # - Monitor for meeting end
+            logger.info(f"Creating Recall AI bot for meeting: {meeting_url}")
             
-            platform_id = session.get('platform_id')
+            # Prepare bot metadata from session settings
+            bot_metadata = {
+                'bot_name': metadata.get('botName', f'Meeting Recorder - {session_id[:8]}'),
+                'recording_mode': metadata.get('recordingMode', 'speaker_view'),
+                'transcription_enabled': metadata.get('transcriptionEnabled', True),
+                'language': metadata.get('language', 'en'),
+                'session_id': session_id,
+                'platform_id': session.get('platform_id'),
+                'user_id': session.get('user_id'),
+                'title': session.get('title', 'Untitled Meeting')
+            }
             
-            if platform_id == 'zoom':
-                return self._join_zoom_meeting(session)
-            elif platform_id == 'teams':
-                return self._join_teams_meeting(session)
-            elif platform_id == 'meet':
-                return self._join_google_meet(session)
-            elif platform_id == 'webex':
-                return self._join_webex_meeting(session)
+            # Create the Recall AI bot
+            bot_result = create_recall_bot_sync(meeting_url, bot_metadata)
+            
+            if bot_result['success']:
+                bot_id = bot_result['bot_id']
+                bot_data = bot_result['bot_data']
+                
+                logger.info(f"Successfully created Recall bot {bot_id} for session {session_id}")
+                
+                # Update session with bot information
+                session_update = {
+                    'recall_bot_id': bot_id,
+                    'recall_bot_data': bot_data,
+                    'status': 'active',
+                    'agent_join_time': datetime.utcnow()
+                }
+                
+                update_result = MeetingSession.update_session(session_id, session_update)
+                if not update_result.get('success', False):
+                    logger.warning(f"Failed to update session {session_id} with bot data")
+                
+                return {
+                    'success': True,
+                    'message': f'Successfully created Recall bot and joined meeting',
+                    'bot_id': bot_id,
+                    'bot_data': bot_data
+                }
             else:
+                logger.error(f"Failed to create Recall bot: {bot_result.get('message', 'Unknown error')}")
                 return {
                     'success': False,
-                    'message': f'Platform {platform_id} is not yet supported'
+                    'message': f"Failed to create Recall bot: {bot_result.get('message', 'Unknown error')}",
+                    'error': bot_result.get('error'),
+                    'details': bot_result.get('details')
                 }
                 
         except Exception as e:
@@ -60,22 +89,54 @@ class MeetingAgentService:
             }
     
     def leave_meeting(self, session: Dict[str, Any]) -> Dict[str, Any]:
-        """Leave a meeting session and stop recording"""
+        """Leave a meeting session and stop the Recall AI bot"""
         try:
             session_id = session.get('session_id')
+            recall_bot_id = session.get('recall_bot_id')
+            
             logger.info(f"Leaving meeting: {session_id}")
             
-            # Stop recording and cleanup
-            if session_id in self.active_sessions:
-                # Stop browser session
-                # Stop recording
-                # Save files
-                del self.active_sessions[session_id]
-            
-            return {
-                'success': True,
-                'message': 'Successfully left meeting'
-            }
+            if recall_bot_id:
+                logger.info(f"Stopping Recall bot: {recall_bot_id}")
+                
+                # Stop the Recall AI bot
+                stop_result = stop_recall_bot_sync(recall_bot_id)
+                
+                if stop_result['success']:
+                    logger.info(f"Handled Recall bot {recall_bot_id}: {stop_result.get('message')}")
+                    
+                    # Update session status regardless of whether bot was deleted or left automatically
+                    update_data = {
+                        'status': 'completed',
+                        'end_time': datetime.utcnow()
+                    }
+                    MeetingSession.update_session(session_id, update_data)
+                    
+                    return {
+                        'success': True,
+                        'message': stop_result.get('message', 'Successfully handled bot leaving')
+                    }
+                else:
+                    logger.error(f"Failed to stop Recall bot {recall_bot_id}: {stop_result.get('message')}")
+                    
+                    # Still mark session as completed even if bot stop failed
+                    # The bot will leave automatically anyway
+                    update_data = {
+                        'status': 'completed',
+                        'end_time': datetime.utcnow()
+                    }
+                    MeetingSession.update_session(session_id, update_data)
+                    
+                    return {
+                        'success': True,
+                        'message': 'Session ended (bot will leave automatically)'
+                    }
+            else:
+                logger.warning(f"No Recall bot ID found for session {session_id}")
+                return {
+                    'success': True,
+                    'message': 'No active bot to stop'
+                }
             
         except Exception as e:
             logger.error(f"Failed to leave meeting {session.get('session_id')}: {str(e)}")
