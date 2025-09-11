@@ -50,7 +50,33 @@ def download_s3_file(username, file_id):
         # Check if this is a meeting file with Recall AI URL
         s3_url = file.get('s3_url')
         if s3_url and s3_url.startswith('http') and ('recall.ai' in s3_url or 'recallai' in s3_url):
-            # This is a Recall AI URL, return a redirect or the URL
+            # This is a Recall AI URL, try to refresh it if it's expired
+            try:
+                # Check if we have a recall_bot_id in the file metadata
+                recall_bot_id = file.get('recall_bot_id')
+                if recall_bot_id:
+                    # Import here to avoid circular imports
+                    from apps.meeting_agent.recall_service import get_recall_bot_sync
+                    
+                    # Try to get fresh bot data from Recall AI
+                    bot_result = get_recall_bot_sync(recall_bot_id)
+                    if bot_result['success']:
+                        bot_data = bot_result['bot_data']
+                        # Check for updated video URL
+                        updated_video_url = bot_data.get('video_url')
+                        if updated_video_url and updated_video_url != s3_url:
+                            # Update the file record with the new URL
+                            file_collection.update_one(
+                                {"_id": ObjectId(file_id)},
+                                {"$set": {"s3_url": updated_video_url}}
+                            )
+                            s3_url = updated_video_url
+                            print(f"Updated Recall AI video URL for file {file_id}")
+            except Exception as e:
+                print(f"Failed to refresh Recall AI URL for file {file_id}: {str(e)}")
+                # Continue with the original URL
+            
+            # Return the URL (either original or refreshed)
             return JsonResponse({
                 "url": s3_url,
                 "download_url": s3_url,
