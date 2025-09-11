@@ -11,6 +11,7 @@ urlpatterns = [
     path("add_site_visitor_info_enhanced/", views.add_site_visitor_info_enhanced, name="add_site_visitor_info_enhanced"),
     path("get_site_visitor_info/", views.get_site_visitor_info, name="get_site_visitor_info"),
     path("get_site_visitor_info_enhanced/", views.get_site_visitor_info_enhanced, name="get_site_visitor_info_enhanced"),
+    path("get_site_visitor_info_paginated/", views.get_site_visitor_info_paginated, name="get_site_visitor_info_paginated"),
     path("get_login_analytics/", views.get_login_analytics, name="get_login_analytics"),
     path("get_google_scopes_analytics/", views.get_google_scopes_analytics, name="get_google_scopes_analytics"),
     path("get_client_ip/", views.get_client_ip, name="get_client_ip"),

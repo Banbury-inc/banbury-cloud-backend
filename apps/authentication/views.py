@@ -1161,6 +1161,125 @@ def get_site_visitor_info_enhanced(request):
         return JsonResponse({"error": "Failed to retrieve visitor information"}, status=500)
 
 @csrf_exempt
+@require_http_methods(["GET"])
+def get_site_visitor_info_paginated(request):
+    """Retrieves paginated site visitor analytics with filtering support."""
+    try:
+        # Get query parameters
+        page = int(request.GET.get('page', 1))
+        page_size = int(request.GET.get('page_size', 100))
+        days = int(request.GET.get('days', 30))
+        
+        # Filter parameters
+        location_filter = request.GET.get('location', '').strip()
+        source_filter = request.GET.get('source', '').strip()
+        campaign_filter = request.GET.get('campaign', '').strip()
+        content_type_filter = request.GET.get('content_type', '').strip()
+        ip_exclusions = request.GET.get('ip_exclusions', '').strip()
+        
+        # MongoDB connection
+        uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+        client = MongoClient(uri)
+        db = client["NeuraNet"]
+        site_collection = db["site_enhanced"]
+        
+        # Calculate date filter
+        start_date = datetime.utcnow() - timedelta(days=days)
+        
+        # Build query filter
+        query_filter = {"time": {"$gte": start_date}}
+        
+        # Add location filter (city, region, or country)
+        if location_filter:
+            query_filter["$or"] = [
+                {"city": {"$regex": location_filter, "$options": "i"}},
+                {"region": {"$regex": location_filter, "$options": "i"}},
+                {"country": {"$regex": location_filter, "$options": "i"}}
+            ]
+        
+        # Add source filter
+        if source_filter:
+            query_filter["referrer_source"] = {"$regex": source_filter, "$options": "i"}
+        
+        # Add campaign filter
+        if campaign_filter:
+            query_filter["campaign_id"] = {"$regex": campaign_filter, "$options": "i"}
+        
+        # Add content type filter
+        if content_type_filter:
+            query_filter["$or"] = [
+                {"page_title": {"$regex": content_type_filter, "$options": "i"}},
+                {"path": {"$regex": content_type_filter, "$options": "i"}}
+            ]
+        
+        # Add IP exclusions
+        if ip_exclusions:
+            excluded_ips = [ip.strip() for ip in ip_exclusions.split(',') if ip.strip()]
+            if excluded_ips:
+                query_filter["ip_address"] = {"$nin": excluded_ips}
+        
+        # Calculate pagination
+        skip = (page - 1) * page_size
+        
+        # Get total count for pagination info
+        total_count = site_collection.count_documents(query_filter)
+        total_pages = (total_count + page_size - 1) // page_size
+        
+        # Query with pagination
+        cursor = site_collection.find(query_filter).sort("time", -1).skip(skip).limit(page_size)
+        
+        # Convert to list and prepare response data
+        visitors = []
+        for visitor in cursor:
+            # Convert ObjectId to string and datetime to ISO string
+            visitor_data = {
+                "_id": str(visitor["_id"]),
+                "ip_address": visitor.get("ip_address", "Unknown"),
+                "path": visitor.get("path", "Unknown"),
+                "page_title": visitor.get("page_title", "Unknown"),
+                "referrer_source": visitor.get("referrer_source"),
+                "campaign_id": visitor.get("campaign_id"),
+                "content_type": visitor.get("content_type", "web_page"),
+                "user_agent": visitor.get("user_agent", "Unknown"),
+                "city": visitor.get("city", "Unknown"),
+                "region": visitor.get("region", "Unknown"),
+                "country": visitor.get("country", "Unknown"),
+                "time": visitor["time"].isoformat() if isinstance(visitor["time"], datetime) else str(visitor["time"]),
+                "client_timestamp": visitor.get("client_timestamp"),
+                "tracking_version": visitor.get("tracking_version", "2.0")
+            }
+            visitors.append(visitor_data)
+        
+        # Prepare pagination info
+        pagination_info = {
+            "current_page": page,
+            "page_size": page_size,
+            "total_count": total_count,
+            "total_pages": total_pages,
+            "has_next": page < total_pages,
+            "has_previous": page > 1
+        }
+        
+        response_data = {
+            "visitors": visitors,
+            "pagination": pagination_info,
+            "filters": {
+                "location": location_filter,
+                "source": source_filter,
+                "campaign": campaign_filter,
+                "content_type": content_type_filter,
+                "ip_exclusions": ip_exclusions,
+                "days": days
+            }
+        }
+        
+        return JsonResponse(response_data)
+        
+    except Exception as e:
+        print(f"Error retrieving paginated visitor info: {e}")
+        return JsonResponse({"error": "Failed to retrieve visitor information"}, status=500)
+
+@csrf_exempt
 @require_http_methods(["POST"])
 def generate_user_api_key(request):
     """
