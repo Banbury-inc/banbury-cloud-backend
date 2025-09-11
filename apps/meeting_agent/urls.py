@@ -38,4 +38,6 @@ urlpatterns = [
     path('debug/create-transcript/<str:recording_id>/', views.debug_create_transcript, name='debug_create_transcript'),
     path('debug/get-transcript/<str:transcript_id>/', views.debug_get_transcript, name='debug_get_transcript'),
     path('debug/bot-recordings/<str:bot_id>/', views.debug_bot_recordings, name='debug_bot_recordings'),
+    path('sessions/<str:session_id>/update-urls/', views.update_session_urls_from_bot, name='update_session_urls_from_bot'),
+    path('check-and-upload-sessions/', views.check_and_upload_sessions, name='check_and_upload_sessions'),
 ]

@@ -106,6 +106,14 @@ class MeetingSession:
             session_data.setdefault("participants", [])
             session_data.setdefault("transcription_segments", [])
             session_data.setdefault("metadata", {})
+            session_data.setdefault("s3_upload", {
+                "video_uploaded": False,
+                "transcript_uploaded": False,
+                "audio_uploaded": False,
+                "upload_attempted": False,
+                "last_upload_attempt": None,
+                "upload_errors": []
+            })
             
             result = meeting_sessions_collection.insert_one(session_data)
             
@@ -180,6 +188,30 @@ class MeetingSession:
                 "sessions": sessions,
                 "total": total,
                 "has_more": offset + limit < total
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
+    @staticmethod
+    def get_all_sessions():
+        """Get all sessions (for webhook processing)"""
+        try:
+            sessions = list(meeting_sessions_collection.find().sort("start_time", -1))
+            
+            # Convert ObjectIds to strings
+            for session in sessions:
+                session["_id"] = str(session["_id"])
+                if "created_at" in session and hasattr(session["created_at"], "isoformat"):
+                    session["created_at"] = session["created_at"].isoformat()
+                if "updated_at" in session and hasattr(session["updated_at"], "isoformat"):
+                    session["updated_at"] = session["updated_at"].isoformat()
+            
+            return {
+                "success": True,
+                "sessions": sessions
             }
         except Exception as e:
             return {
@@ -342,6 +374,98 @@ class MeetingSession:
             return {
                 "success": True,
                 "count": count
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
+    @staticmethod
+    def get_sessions_needing_s3_upload(limit=50):
+        """Get sessions that need S3 upload"""
+        try:
+            # Find sessions that are completed but haven't been uploaded to S3
+            query = {
+                "status": {"$in": ["completed", "ended"]},
+                "$or": [
+                    {"s3_upload.video_uploaded": False},
+                    {"s3_upload.transcript_uploaded": False},
+                    {"s3_upload.audio_uploaded": False}
+                ]
+            }
+            
+            sessions = list(meeting_sessions_collection.find(query)
+                          .sort("updated_at", -1)
+                          .limit(limit))
+            
+            # Convert ObjectIds to strings
+            for session in sessions:
+                session["_id"] = str(session["_id"])
+                if "created_at" in session and hasattr(session["created_at"], "isoformat"):
+                    session["created_at"] = session["created_at"].isoformat()
+                if "updated_at" in session and hasattr(session["updated_at"], "isoformat"):
+                    session["updated_at"] = session["updated_at"].isoformat()
+            
+            return {
+                "success": True,
+                "sessions": sessions,
+                "count": len(sessions)
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
+    @staticmethod
+    def update_s3_upload_status(session_id, upload_data):
+        """Update S3 upload status for a session"""
+        try:
+            update_data = {
+                "s3_upload": upload_data,
+                "updated_at": datetime.utcnow()
+            }
+            
+            result = meeting_sessions_collection.update_one(
+                {"session_id": session_id},
+                {"$set": update_data}
+            )
+            
+            return {
+                "success": result.modified_count > 0,
+                "message": "S3 upload status updated successfully"
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
+    @staticmethod
+    def mark_s3_upload_attempted(session_id, error_message=None):
+        """Mark that S3 upload was attempted for a session"""
+        try:
+            update_data = {
+                "s3_upload.upload_attempted": True,
+                "s3_upload.last_upload_attempt": datetime.utcnow(),
+                "updated_at": datetime.utcnow()
+            }
+            
+            if error_message:
+                update_data["$push"] = {"s3_upload.upload_errors": {
+                    "error": error_message,
+                    "timestamp": datetime.utcnow()
+                }}
+            
+            result = meeting_sessions_collection.update_one(
+                {"session_id": session_id},
+                {"$set": update_data} if not error_message else {"$set": update_data, "$push": update_data["$push"]}
+            )
+            
+            return {
+                "success": result.modified_count > 0,
+                "message": "S3 upload attempt marked"
             }
         except Exception as e:
             return {

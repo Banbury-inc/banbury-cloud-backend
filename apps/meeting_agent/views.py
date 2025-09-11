@@ -14,7 +14,7 @@ from .models import (
 )
 from .services import MeetingAgentService, TranscriptionService, SummaryService
 from .recall_service import create_recall_bot_sync, get_recall_bot_sync, stop_recall_bot_sync, create_async_transcript_sync, get_transcript_sync
-from .s3_upload_service import trigger_s3_upload_for_completed_meeting
+from .s3_upload_service import trigger_s3_upload_for_completed_meeting, MeetingS3UploadService
 import requests
 
 logger = logging.getLogger(__name__)
@@ -137,8 +137,6 @@ def get_meeting_sessions(request):
                 recall_bot_result = get_recall_bot_sync(recall_bot_id)
                 if recall_bot_result['success']:
                     bot_data = recall_bot_result['bot_data']
-                    logger.info(f"Recall bot {recall_bot_id} full data: {json.dumps(bot_data, indent=2, default=str)}")
-                    logger.info(f"Recall bot {recall_bot_id} summary: status_changes={bot_data.get('status_changes')}, video_url={bool(bot_data.get('video_url'))}, video_url_value={bot_data.get('video_url')}")
                     
                     # Get the current bot status
                     bot_status = 'unknown'
@@ -170,7 +168,6 @@ def get_meeting_sessions(request):
                         if 'transcript' in media_shortcuts and media_shortcuts['transcript']:
                             transcript_data = media_shortcuts['transcript'].get('data', {})
                             transcript_url = transcript_data.get('download_url')
-                            logger.info(f"Found transcript URL in media_shortcuts for bot {recall_bot_id}: {bool(transcript_url)}")
                     
                     # Determine recording status more accurately
                     recording_status = 'not_started'
@@ -201,8 +198,6 @@ def get_meeting_sessions(request):
                     elif recording_status == 'recording':
                         transcription_status = 'processing'
                     
-                    # Extract participants from Recall AI bot data
-                    logger.info(f"Recall bot {recall_bot_id} bot_data keys: {list(bot_data.keys())}")
                     
                     # Try to extract from transcript_segments first
                     if bot_data.get('transcript_segments'):
@@ -390,6 +385,7 @@ def get_meeting_session(request, session_id):
             }, status=404)
         
         session = result["session"]
+        logger.info(f"Session: {session}")
         
         # Transform session for frontend
         platform_result = MeetingPlatform.get_by_id(session.get('platform_id', ''))
@@ -409,6 +405,7 @@ def get_meeting_session(request, session_id):
         recall_bot_id = session.get('recall_bot_id')
         if recall_bot_id:
             recall_bot_result = get_recall_bot_sync(recall_bot_id)
+            logger.info(f"Recall bot result: {recall_bot_result}")
             if recall_bot_result['success']:
                 bot_data = recall_bot_result['bot_data']
                 recall_bot = {
@@ -1011,6 +1008,67 @@ def download_recording(request, session_id):
 
 
 @csrf_exempt
+@require_http_methods(["POST"])
+def trigger_s3_upload(request, session_id):
+    """Manually trigger S3 upload for a completed meeting session"""
+    try:
+        username = getattr(request, 'username_from_token', None)
+        if not username:
+            return JsonResponse({
+                'success': False,
+                'message': 'Authentication required'
+            }, status=401)
+        
+        result = MeetingSession.get_session(session_id, username)
+        
+        if not result["success"]:
+            return JsonResponse({
+                'success': False,
+                'message': 'Session not found'
+            }, status=404)
+        
+        session = result["session"]
+        
+        if session['status'] != 'completed':
+            return JsonResponse({
+                'success': False,
+                'message': 'Meeting must be completed before triggering S3 upload'
+            }, status=400)
+        
+        # Trigger S3 upload for completed meeting
+        try:
+            logger.info(f"Manually triggering S3 upload for session {session_id}")
+            s3_result = trigger_s3_upload_for_completed_meeting(session_id)
+            if s3_result['success']:
+                logger.info(f"S3 upload triggered successfully for session {session_id}")
+                return JsonResponse({
+                    'success': True,
+                    'message': 'S3 upload triggered successfully',
+                    'video_url': s3_result.get('video_upload', {}).get('s3_url') if s3_result.get('video_upload', {}).get('success') else None,
+                    'transcript_url': s3_result.get('transcript_upload', {}).get('s3_url') if s3_result.get('transcript_upload', {}).get('success') else None
+                })
+            else:
+                logger.warning(f"S3 upload failed for session {session_id}: {s3_result.get('error', 'Unknown error')}")
+                return JsonResponse({
+                    'success': False,
+                    'message': f"S3 upload failed: {s3_result.get('error', 'Unknown error')}"
+                }, status=500)
+        except Exception as e:
+            logger.error(f"Error triggering S3 upload for session {session_id}: {str(e)}")
+            return JsonResponse({
+                'success': False,
+                'message': f'Error triggering S3 upload: {str(e)}'
+            }, status=500)
+            
+    except Exception as e:
+        logger.error(f"Failed to trigger S3 upload: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'message': f'Failed to trigger S3 upload: {str(e)}'
+        }, status=500)
+
+
+@csrf_exempt
 @require_http_methods(["DELETE"])
 def delete_meeting_session(request, session_id):
     """Delete a meeting session"""
@@ -1342,7 +1400,7 @@ def recall_webhook(request):
         logger.info(f"Webhook data: {json.dumps(webhook_data, indent=2, default=str)}")
         
         if event_type == 'recording.done':
-            # Handle recording completion - trigger async transcription
+            # Handle recording completion - trigger async transcription and S3 upload
             recording_data = data.get('recording', {})
             recording_id = recording_data.get('id')
             bot_data = data.get('bot')
@@ -1350,12 +1408,92 @@ def recall_webhook(request):
             if recording_id and bot_data:
                 bot_id = bot_data.get('id')
                 
-                # Find the session associated with this bot
-                # Note: We'll need to add this method to the MeetingSession model
                 logger.info(f"Processing recording.done for bot {bot_id}, recording {recording_id}")
                 
-                # For now, we'll create the transcript directly
-                # In production, you'd find the session and check settings
+                # Find the session associated with this bot
+                try:
+                    # Get all sessions and find the one with this bot_id
+                    sessions_result = MeetingSession.get_all_sessions()
+                    if sessions_result.get('success'):
+                        sessions = sessions_result.get('sessions', [])
+                        matching_session = None
+                        for session in sessions:
+                            if session.get('recall_bot_id') == bot_id:
+                                matching_session = session
+                                break
+                        
+                        if matching_session:
+                            session_id = matching_session['session_id']
+                            logger.info(f"Found matching session {session_id} for bot {bot_id}")
+                            
+                            # Extract URLs from bot data (same logic as in get_meeting_sessions)
+                            video_url = None
+                            audio_url = None
+                            transcript_url = None
+                            
+                            recordings = bot_data.get('recordings', [])
+                            if recordings:
+                                # Get the most recent recording
+                                latest_recording = recordings[-1]
+                                media_shortcuts = latest_recording.get('media_shortcuts', {})
+                                
+                                # Extract video URL
+                                if 'video_mixed' in media_shortcuts and media_shortcuts['video_mixed']:
+                                    video_data = media_shortcuts['video_mixed'].get('data', {})
+                                    video_url = video_data.get('download_url')
+                                
+                                # Extract audio URL (if available)
+                                if 'audio_mixed' in media_shortcuts and media_shortcuts['audio_mixed']:
+                                    audio_data = media_shortcuts['audio_mixed'].get('data', {})
+                                    audio_url = audio_data.get('download_url')
+                                
+                                # Extract transcript URL
+                                if 'transcript' in media_shortcuts and media_shortcuts['transcript']:
+                                    transcript_data = media_shortcuts['transcript'].get('data', {})
+                                    transcript_url = transcript_data.get('download_url')
+                                
+                                logger.info(f"Extracted URLs for session {session_id}: video={bool(video_url)}, audio={bool(audio_url)}, transcript={bool(transcript_url)}")
+                                
+                                # Update session with recording URLs from bot data
+                                update_data = {
+                                    'status': 'completed',
+                                    'recall_bot': {
+                                        'video_url': video_url,
+                                        'transcript_url': transcript_url,
+                                        'audio_url': audio_url
+                                    },
+                                    # Also store URLs at the top level for easier access
+                                    'recording_url': video_url,
+                                    'transcription_url': transcript_url,
+                                    'audio_url': audio_url
+                                }
+                                
+                                MeetingSession.update_session(session_id, update_data)
+                                logger.info(f"Updated session {session_id} with recording URLs")
+                                
+                                # Only trigger S3 upload if we have at least one URL
+                                if video_url or transcript_url or audio_url:
+                                    try:
+                                        s3_result = trigger_s3_upload_for_completed_meeting(session_id)
+                                        if s3_result['success']:
+                                            logger.info(f"S3 upload triggered successfully for session {session_id} via webhook")
+                                        else:
+                                            logger.warning(f"S3 upload failed for session {session_id} via webhook: {s3_result.get('error', 'Unknown error')}")
+                                    except Exception as e:
+                                        logger.error(f"Error triggering S3 upload for session {session_id} via webhook: {str(e)}")
+                                else:
+                                    logger.info(f"No URLs available yet for session {session_id}, skipping S3 upload")
+                            else:
+                                logger.info(f"No recordings available yet for session {session_id}, skipping S3 upload")
+                        else:
+                            logger.warning(f"No matching session found for bot {bot_id}")
+                    else:
+                        logger.error(f"Failed to get sessions for bot {bot_id}: {sessions_result.get('error')}")
+                        
+                except Exception as e:
+                    logger.error(f"Error processing recording.done webhook for bot {bot_id}: {str(e)}")
+                
+                # Create transcript
                 transcript_result = create_async_transcript_sync(recording_id, 'en')
                 
                 if transcript_result.get('success'):
@@ -1380,8 +1518,41 @@ def recall_webhook(request):
                     
                     logger.info(f"Transcript data fetched successfully: {download_url}")
                     
-                    # TODO: Update the corresponding session with transcript data
-                    # For now, just log the success
+                    # Find the session associated with this transcript and update it
+                    try:
+                        sessions_result = MeetingSession.get_all_sessions()
+                        if sessions_result.get('success'):
+                            sessions = sessions_result.get('sessions', [])
+                            # Find session by transcript_id or by looking for sessions that need transcript updates
+                            for session in sessions:
+                                if session.get('status') == 'completed' and session.get('recall_bot_id'):
+                                    session_id = session['session_id']
+                                    
+                                    # Update session with transcript URL
+                                    update_data = {
+                                        'recall_bot': {
+                                            **session.get('recall_bot', {}),
+                                            'transcript_url': download_url
+                                        },
+                                        # Also store at top level
+                                        'transcription_url': download_url
+                                    }
+                                    
+                                    MeetingSession.update_session(session_id, update_data)
+                                    logger.info(f"Updated session {session_id} with transcript URL")
+                                    
+                                    # Trigger S3 upload now that we have transcript
+                                    try:
+                                        s3_result = trigger_s3_upload_for_completed_meeting(session_id)
+                                        if s3_result['success']:
+                                            logger.info(f"S3 upload triggered successfully for session {session_id} via transcript.done webhook")
+                                        else:
+                                            logger.warning(f"S3 upload failed for session {session_id} via transcript.done webhook: {s3_result.get('error', 'Unknown error')}")
+                                    except Exception as e:
+                                        logger.error(f"Error triggering S3 upload for session {session_id} via transcript.done webhook: {str(e)}")
+                                    break
+                    except Exception as e:
+                        logger.error(f"Error processing transcript.done webhook: {str(e)}")
                 else:
                     logger.error(f"Failed to fetch transcript data: {transcript_result.get('message')}")
                     
@@ -1502,6 +1673,209 @@ def debug_bot_recordings(request, bot_id):
         return JsonResponse({
             'success': False,
             'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def update_session_urls_from_bot(request, session_id):
+    """Manually update session URLs from Recall AI bot data"""
+    try:
+        username = getattr(request, 'username_from_token', None)
+        if not username:
+            return JsonResponse({
+                'success': False,
+                'message': 'Authentication required'
+            }, status=401)
+        
+        result = MeetingSession.get_session(session_id, username)
+        
+        if not result["success"]:
+            return JsonResponse({
+                'success': False,
+                'message': 'Session not found'
+            }, status=404)
+        
+        session = result["session"]
+        recall_bot_id = session.get('recall_bot_id')
+        
+        if not recall_bot_id:
+            return JsonResponse({
+                'success': False,
+                'message': 'No Recall bot associated with this session'
+            }, status=400)
+        
+        # Get bot data from Recall AI
+        bot_result = get_recall_bot_sync(recall_bot_id)
+        if not bot_result['success']:
+            return JsonResponse({
+                'success': False,
+                'message': 'Failed to fetch bot data from Recall AI'
+            }, status=400)
+        
+        bot_data = bot_result['bot_data']
+        
+        # Extract URLs from bot data (same logic as in get_meeting_sessions)
+        video_url = None
+        audio_url = None
+        transcript_url = None
+        
+        recordings = bot_data.get('recordings', [])
+        if recordings:
+            # Get the most recent recording
+            latest_recording = recordings[-1]
+            media_shortcuts = latest_recording.get('media_shortcuts', {})
+            
+            # Extract video URL
+            if 'video_mixed' in media_shortcuts and media_shortcuts['video_mixed']:
+                video_data = media_shortcuts['video_mixed'].get('data', {})
+                video_url = video_data.get('download_url')
+            
+            # Extract audio URL (if available)
+            if 'audio_mixed' in media_shortcuts and media_shortcuts['audio_mixed']:
+                audio_data = media_shortcuts['audio_mixed'].get('data', {})
+                audio_url = audio_data.get('download_url')
+            
+            # Extract transcript URL
+            if 'transcript' in media_shortcuts and media_shortcuts['transcript']:
+                transcript_data = media_shortcuts['transcript'].get('data', {})
+                transcript_url = transcript_data.get('download_url')
+        
+        # Update session with URLs
+        update_data = {
+            'recall_bot': {
+                'video_url': video_url,
+                'transcript_url': transcript_url,
+                'audio_url': audio_url
+            },
+            # Also store at top level for easier access
+            'recording_url': video_url,
+            'transcription_url': transcript_url,
+            'audio_url': audio_url
+        }
+        
+        MeetingSession.update_session(session_id, update_data)
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Session URLs updated successfully',
+            'video_url': video_url,
+            'transcript_url': transcript_url,
+            'audio_url': audio_url
+        })
+        
+    except Exception as e:
+        logger.error(f"Error updating session URLs: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def check_and_upload_sessions(request):
+    """Check for sessions that need S3 upload and upload them"""
+    try:
+        # Get sessions that need S3 upload
+        sessions_result = MeetingSession.get_sessions_needing_s3_upload(limit=20)
+        
+        if not sessions_result['success']:
+            return JsonResponse({
+                "success": False,
+                "error": f"Failed to get sessions: {sessions_result['error']}"
+            }, status=500)
+        
+        sessions = sessions_result['sessions']
+        logger.info(f"Found {len(sessions)} sessions needing S3 upload")
+        
+        if not sessions:
+            return JsonResponse({
+                "success": True,
+                "message": "No sessions need S3 upload",
+                "uploaded_count": 0,
+                "failed_count": 0
+            })
+        
+        # Initialize S3 upload service
+        s3_service = MeetingS3UploadService()
+        
+        uploaded_count = 0
+        failed_count = 0
+        results = []
+        
+        for session in sessions:
+            session_id = session['session_id']
+            user_id = session.get('user_id', 'unknown')
+            
+            try:
+                logger.info(f"Processing S3 upload for session {session_id}")
+                
+                # Mark that we're attempting upload
+                MeetingSession.mark_s3_upload_attempted(session_id)
+                
+                # Trigger S3 upload
+                upload_result = s3_service.upload_meeting_assets(session_id)
+                
+                if upload_result['success']:
+                    uploaded_count += 1
+                    logger.info(f"S3 upload successful for session {session_id}")
+                    
+                    # Update session with upload status
+                    video_uploaded = upload_result.get('video_upload', {}).get('success', False)
+                    transcript_uploaded = upload_result.get('transcript_upload', {}).get('success', False)
+                    
+                    MeetingSession.update_s3_upload_status(session_id, {
+                        "video_uploaded": video_uploaded,
+                        "transcript_uploaded": transcript_uploaded,
+                        "audio_uploaded": False,  # Not implemented in current service
+                        "upload_attempted": True,
+                        "last_upload_attempt": datetime.utcnow(),
+                        "upload_errors": []
+                    })
+                else:
+                    failed_count += 1
+                    error_msg = upload_result.get('error', 'Unknown error')
+                    logger.error(f"S3 upload failed for session {session_id}: {error_msg}")
+                    
+                    # Mark upload attempt with error
+                    MeetingSession.mark_s3_upload_attempted(session_id, error_msg)
+                
+                results.append({
+                    "session_id": session_id,
+                    "success": upload_result['success'],
+                    "message": upload_result.get('message', ''),
+                    "error": upload_result.get('error', '') if not upload_result['success'] else None
+                })
+                
+            except Exception as e:
+                failed_count += 1
+                error_msg = f"Exception during S3 upload: {str(e)}"
+                logger.error(f"Exception for session {session_id}: {error_msg}")
+                
+                # Mark upload attempt with error
+                MeetingSession.mark_s3_upload_attempted(session_id, error_msg)
+                
+                results.append({
+                    "session_id": session_id,
+                    "success": False,
+                    "message": "",
+                    "error": error_msg
+                })
+        
+        return JsonResponse({
+            "success": True,
+            "message": f"Processed {len(sessions)} sessions",
+            "uploaded_count": uploaded_count,
+            "failed_count": failed_count,
+            "results": results
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in check_and_upload_sessions: {str(e)}")
+        return JsonResponse({
+            "success": False,
+            "error": str(e)
         }, status=500)
 
 

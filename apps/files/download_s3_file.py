@@ -29,12 +29,37 @@ def download_s3_file(username, file_id):
         if not user:
             return JsonResponse({"error": "User not found"}, status=404)
         
-        # Find the file by ID
-        file = file_collection.find_one({"_id": ObjectId(file_id), "s3_url": {"$exists": True}})
-        if not file:
-            return JsonResponse({"error": "File not found or not stored in S3"}, status=404)
+        # Find the file by ObjectId
+        try:
+            file = file_collection.find_one({"_id": ObjectId(file_id), "s3_url": {"$exists": True}})
+        except Exception as e:
+            # Invalid ObjectId format
+            return JsonResponse({"error": "Invalid file ID format"}, status=400)
         
-        # Configure S3 client
+        if not file:
+            # Let's also check if the file exists without the s3_url requirement
+            try:
+                file_without_s3 = file_collection.find_one({"_id": ObjectId(file_id)})
+                if file_without_s3:
+                    return JsonResponse({"error": "File found but no S3 URL available"}, status=404)
+                else:
+                    return JsonResponse({"error": "File not found"}, status=404)
+            except:
+                return JsonResponse({"error": "File not found"}, status=404)
+        
+        # Check if this is a meeting file with Recall AI URL
+        s3_url = file.get('s3_url')
+        if s3_url and s3_url.startswith('http') and ('recall.ai' in s3_url or 'recallai' in s3_url):
+            # This is a Recall AI URL, return a redirect or the URL
+            return JsonResponse({
+                "url": s3_url,
+                "download_url": s3_url,
+                "presigned_url": s3_url,
+                "file_name": file.get("file_name"),
+                "file_type": "recall_ai_url"
+            })
+        
+        # Configure S3 client only for actual S3 files
         s3_client = boto3.client(
             's3',
             aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
@@ -44,9 +69,7 @@ def download_s3_file(username, file_id):
         
         # Get S3 bucket name
         bucket_name = os.environ.get('AWS_S3_BUCKET_NAME')
-        print(f"bucket_name: {bucket_name}")
         if not bucket_name:
-            print(f"Error: AWS_S3_BUCKET_NAME environment variable not set")
             return JsonResponse({"error": "S3 bucket configuration missing"}, status=500)
         
         # Get the S3 object key
@@ -82,5 +105,4 @@ def download_s3_file(username, file_id):
                 return JsonResponse({"error": f"S3 error: {str(e)}"}, status=500)
             
     except Exception as e:
-        print(f"Error downloading S3 file: {e}")
         return JsonResponse({"error": f"Failed to download file: {str(e)}"}, status=500) 
