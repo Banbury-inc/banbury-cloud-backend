@@ -94,6 +94,8 @@ jobs:
         echo "BROWSERBASE_PROJECT_ID=${{ secrets.BROWSERBASE_PROJECT_ID }}" >> .env
         echo "SENDGRID_API_KEY=${{ secrets.SENDGRID_API_KEY }}" >> .env
         echo "STRIPE_SECRET_KEY=${{ secrets.STRIPE_SECRET_KEY }}" >> .env
+        echo "RECALL_API_KEY=${{ secrets.RECALL_API_KEY }}" >> .env
+        echo "RECALL_API_ENDPOINT=${{ secrets.RECALL_API_ENDPOINT }}" >> .env
         echo "X_API_KEY=${{ secrets.X_API_KEY }}" >> .env
         echo "X_API_SECRET=${{ secrets.X_API_SECRET }}" >> .env
         echo "X_BEARER_TOKEN=${{ secrets.X_BEARER_TOKEN }}" >> .env
