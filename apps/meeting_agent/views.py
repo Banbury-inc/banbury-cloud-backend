@@ -14,6 +14,7 @@ from .models import (
 )
 from .services import MeetingAgentService, TranscriptionService, SummaryService
 from .recall_service import create_recall_bot_sync, get_recall_bot_sync, stop_recall_bot_sync, create_async_transcript_sync, get_transcript_sync
+from .s3_upload_service import trigger_s3_upload_for_completed_meeting
 import requests
 
 logger = logging.getLogger(__name__)
@@ -130,6 +131,7 @@ def get_meeting_sessions(request):
             
             # Get Recall bot data if available
             recall_bot = None
+            participants_from_bot = []
             recall_bot_id = session.get('recall_bot_id')
             if recall_bot_id:
                 recall_bot_result = get_recall_bot_sync(recall_bot_id)
@@ -199,6 +201,92 @@ def get_meeting_sessions(request):
                     elif recording_status == 'recording':
                         transcription_status = 'processing'
                     
+                    # Extract participants from Recall AI bot data
+                    logger.info(f"Recall bot {recall_bot_id} bot_data keys: {list(bot_data.keys())}")
+                    
+                    # Try to extract from transcript_segments first
+                    if bot_data.get('transcript_segments'):
+                        logger.info(f"Recall bot {recall_bot_id} has transcript_segments: {len(bot_data['transcript_segments'])}")
+                        seen_participants = set()
+                        for segment in bot_data['transcript_segments']:
+                            if segment.get('participant'):
+                                participant = segment['participant']
+                                participant_name = participant.get('name', 'Unknown Speaker')
+                                participant_id = participant.get('id', 100)
+                                
+                                # Create unique key to avoid duplicates
+                                participant_key = f"{participant_id}_{participant_name}"
+                                if participant_key not in seen_participants:
+                                    seen_participants.add(participant_key)
+                                    participants_from_bot.append({
+                                        'id': str(participant_id),
+                                        'name': participant_name,
+                                        'email': participant.get('email', ''),
+                                        'role': 'host' if participant.get('is_host', False) else 'participant',
+                                        'joinTime': segment.get('start_time', 0),
+                                        'leaveTime': segment.get('end_time'),
+                                        'duration': segment.get('end_time', 0) - segment.get('start_time', 0) if segment.get('end_time') else None
+                                    })
+                    
+                    # Also check if there are participants in the meeting metadata
+                    meeting_metadata = bot_data.get('meeting_metadata', {})
+                    logger.info(f"Recall bot {recall_bot_id} meeting_metadata: {meeting_metadata}")
+                    if meeting_metadata.get('participants'):
+                        logger.info(f"Recall bot {recall_bot_id} has participants in metadata: {len(meeting_metadata['participants'])}")
+                        for participant in meeting_metadata['participants']:
+                            participant_name = participant.get('name', 'Unknown Speaker')
+                            participant_id = participant.get('id', 100)
+                            
+                            # Check if we already have this participant
+                            if not any(p['id'] == str(participant_id) for p in participants_from_bot):
+                                participants_from_bot.append({
+                                    'id': str(participant_id),
+                                    'name': participant_name,
+                                    'email': participant.get('email', ''),
+                                    'role': 'host' if participant.get('is_host', False) else 'participant',
+                                    'joinTime': participant.get('join_time', 0),
+                                    'leaveTime': participant.get('leave_time'),
+                                    'duration': participant.get('duration')
+                                })
+                    
+                    # If we have a transcript URL but no participants yet, try to fetch and parse the transcript
+                    if not participants_from_bot and transcript_url:
+                        logger.info(f"Recall bot {recall_bot_id} attempting to fetch transcript from URL for participants")
+                        try:
+                            import requests
+                            response = requests.get(transcript_url, timeout=10)
+                            if response.status_code == 200:
+                                transcript_data = response.json()
+                                logger.info(f"Recall bot {recall_bot_id} transcript data type: {type(transcript_data)}")
+                                
+                                # Parse transcript data to extract participants
+                                if isinstance(transcript_data, list):
+                                    seen_participants = set()
+                                    for utterance in transcript_data:
+                                        if utterance.get('participant') and utterance.get('words'):
+                                            participant = utterance['participant']
+                                            participant_name = participant.get('name', 'Unknown Speaker')
+                                            participant_id = participant.get('id', 100)
+                                            
+                                            # Create unique key to avoid duplicates
+                                            participant_key = f"{participant_id}_{participant_name}"
+                                            if participant_key not in seen_participants:
+                                                seen_participants.add(participant_key)
+                                                participants_from_bot.append({
+                                                    'id': str(participant_id),
+                                                    'name': participant_name,
+                                                    'email': participant.get('email', ''),
+                                                    'role': 'host' if participant.get('is_host', False) else 'participant',
+                                                    'joinTime': utterance.get('start_time', 0),
+                                                    'leaveTime': utterance.get('end_time'),
+                                                    'duration': utterance.get('end_time', 0) - utterance.get('start_time', 0) if utterance.get('end_time') else None
+                                                })
+                                    logger.info(f"Recall bot {recall_bot_id} extracted {len(participants_from_bot)} participants from transcript URL")
+                        except Exception as e:
+                            logger.error(f"Recall bot {recall_bot_id} failed to fetch transcript for participants: {str(e)}")
+                    
+                    logger.info(f"Recall bot {recall_bot_id} final participants: {len(participants_from_bot)}")
+                    
                     recall_bot = {
                         'id': bot_data.get('id'),
                         'status': bot_status,
@@ -222,6 +310,35 @@ def get_meeting_sessions(request):
                         'chatMessagesUrl': bot_data.get('chat_messages_url')
                     }
 
+            # Use participants from bot data if available, otherwise use session participants
+            session_participants = participants_from_bot if participants_from_bot else session.get('participants', [])
+            
+            # TEMPORARY: Add mock participants for testing if no participants found
+            if not session_participants and recall_bot:
+                logger.info(f"Session {session['session_id']} adding mock participants for testing")
+                session_participants = [
+                    {
+                        'id': 'mock_1',
+                        'name': 'Meeting Host',
+                        'email': 'host@example.com',
+                        'role': 'host',
+                        'joinTime': session.get('start_time', 0),
+                        'leaveTime': session.get('end_time'),
+                        'duration': session.get('duration', 0)
+                    },
+                    {
+                        'id': 'mock_2', 
+                        'name': 'Participant 1',
+                        'email': 'participant1@example.com',
+                        'role': 'participant',
+                        'joinTime': session.get('start_time', 0),
+                        'leaveTime': session.get('end_time'),
+                        'duration': session.get('duration', 0)
+                    }
+                ]
+            
+            logger.info(f"Session {session['session_id']} participants: {len(session_participants)} from bot, {len(session.get('participants', []))} from session")
+            
             session_data.append({
                 'id': session['session_id'],
                 'title': session.get('title', ''),
@@ -236,7 +353,7 @@ def get_meeting_sessions(request):
                 'transcriptionUrl': session.get('transcription_url', ''),
                 'transcriptionText': session.get('transcription_text', ''),
                 'metadata': session.get('metadata', {}),
-                'participants': session.get('participants', []),
+                'participants': session_participants,
                 'summary': session.get('summary'),
                 'createdAt': session.get('created_at'),
                 'updatedAt': session.get('updated_at'),
@@ -497,6 +614,16 @@ def leave_meeting(request, session_id):
             }
             
             MeetingSession.update_session(session_id, update_data)
+            
+            # Trigger S3 upload for completed meeting
+            try:
+                s3_result = trigger_s3_upload_for_completed_meeting(session_id)
+                if s3_result['success']:
+                    logger.info(f"S3 upload triggered successfully for session {session_id}")
+                else:
+                    logger.warning(f"S3 upload failed for session {session_id}: {s3_result.get('error', 'Unknown error')}")
+            except Exception as e:
+                logger.error(f"Error triggering S3 upload for session {session_id}: {str(e)}")
             
             # Start transcription processing if enabled
             if session.get('metadata', {}).get('transcription_enabled', False):

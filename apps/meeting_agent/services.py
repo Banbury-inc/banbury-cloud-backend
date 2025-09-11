@@ -6,6 +6,7 @@ from typing import Dict, Any
 from datetime import datetime
 from .models import MeetingSession
 from .recall_service import create_recall_bot_sync, get_recall_bot_sync, stop_recall_bot_sync
+from .s3_upload_service import trigger_s3_upload_for_completed_meeting
 
 logger = logging.getLogger(__name__)
 
@@ -112,6 +113,16 @@ class MeetingAgentService:
                     }
                     MeetingSession.update_session(session_id, update_data)
                     
+                    # Trigger S3 upload for completed meeting
+                    try:
+                        s3_result = trigger_s3_upload_for_completed_meeting(session_id)
+                        if s3_result['success']:
+                            logger.info(f"S3 upload triggered successfully for session {session_id}")
+                        else:
+                            logger.warning(f"S3 upload failed for session {session_id}: {s3_result.get('error', 'Unknown error')}")
+                    except Exception as e:
+                        logger.error(f"Error triggering S3 upload for session {session_id}: {str(e)}")
+                    
                     return {
                         'success': True,
                         'message': stop_result.get('message', 'Successfully handled bot leaving')
@@ -126,6 +137,16 @@ class MeetingAgentService:
                         'end_time': datetime.utcnow()
                     }
                     MeetingSession.update_session(session_id, update_data)
+                    
+                    # Trigger S3 upload for completed meeting
+                    try:
+                        s3_result = trigger_s3_upload_for_completed_meeting(session_id)
+                        if s3_result['success']:
+                            logger.info(f"S3 upload triggered successfully for session {session_id}")
+                        else:
+                            logger.warning(f"S3 upload failed for session {session_id}: {s3_result.get('error', 'Unknown error')}")
+                    except Exception as e:
+                        logger.error(f"Error triggering S3 upload for session {session_id}: {str(e)}")
                     
                     return {
                         'success': True,
@@ -308,6 +329,16 @@ class TranscriptionService:
                 'status': 'completed'
             })
             
+            # Trigger S3 upload for completed meeting
+            try:
+                s3_result = trigger_s3_upload_for_completed_meeting(session_id)
+                if s3_result['success']:
+                    logger.info(f"S3 upload triggered successfully for session {session_id}")
+                else:
+                    logger.warning(f"S3 upload failed for session {session_id}: {s3_result.get('error', 'Unknown error')}")
+            except Exception as e:
+                logger.error(f"Error triggering S3 upload for session {session_id}: {str(e)}")
+            
             logger.info(f"Whisper transcription completed for session: {session_id}")
             logger.info(f"Processed {len(processed_segments)} segments")
             
@@ -358,6 +389,16 @@ class TranscriptionService:
             'transcription_text': full_text,
             'status': 'completed'
         })
+        
+        # Trigger S3 upload for completed meeting
+        try:
+            s3_result = trigger_s3_upload_for_completed_meeting(session_id)
+            if s3_result['success']:
+                logger.info(f"S3 upload triggered successfully for session {session_id}")
+            else:
+                logger.warning(f"S3 upload failed for session {session_id}: {s3_result.get('error', 'Unknown error')}")
+        except Exception as e:
+            logger.error(f"Error triggering S3 upload for session {session_id}: {str(e)}")
         
         logger.info(f"Simulated transcription completed for session: {session_id}")
     
