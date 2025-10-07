@@ -2048,6 +2048,298 @@ def gmail_list_threads(request):
 
 
 # =============================================================================
+# Google Drive API Proxy Endpoints
+# =============================================================================
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def drive_list_files(request):
+    """
+    List files from Google Drive for the authenticated user.
+    Query Parameters:
+        pageSize: Number of files to return (default: 100)
+        pageToken: Token for pagination
+        q: Query string for filtering files (e.g., 'trashed = false')
+        orderBy: Sort order (e.g., 'modifiedTime desc')
+        fields: Fields to include in response
+    """
+    username = _require_auth_username(request)
+    if not username:
+        return JsonResponse({"message": "Authentication required"}, status=401)
+
+    user_doc = _get_mongo_user_by_username(username)
+    if not user_doc:
+        return JsonResponse({"message": "User not found"}, status=404)
+
+    credentials = user_doc.get("google_drive_credentials") or {}
+    access_token, _ = _refresh_google_access_token_if_needed(credentials, user_doc)
+    if not access_token:
+        return JsonResponse({"message": "No Google credentials on file"}, status=400)
+
+    # Extract query parameters
+    page_size = request.GET.get('pageSize', '100')
+    page_token = request.GET.get('pageToken')
+    query = request.GET.get('q', 'trashed = false')
+    order_by = request.GET.get('orderBy', 'modifiedTime desc')
+    fields = request.GET.get('fields', 'files(id,name,mimeType,modifiedTime,createdTime,size,webViewLink,iconLink,thumbnailLink,parents,trashed,starred),nextPageToken')
+
+    # Build URL with query parameters
+    params = {
+        "pageSize": page_size,
+        "q": query,
+        "orderBy": order_by,
+        "fields": fields
+    }
+    if page_token:
+        params["pageToken"] = page_token
+
+    url = f"https://www.googleapis.com/drive/v3/files?{urlencode(params)}"
+    
+    resp = requests.get(url, headers={"Authorization": f"Bearer {access_token}"}, timeout=20)
+    if resp.status_code != 200:
+        return JsonResponse({
+            "message": "Failed to list files",
+            "status": resp.status_code,
+            "error": resp.text
+        }, status=resp.status_code)
+    
+    return JsonResponse(resp.json())
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def drive_get_file(request, file_id):
+    """
+    Get metadata for a specific Google Drive file.
+    Query Parameters:
+        fields: Fields to include in response
+    """
+    username = _require_auth_username(request)
+    if not username:
+        return JsonResponse({"message": "Authentication required"}, status=401)
+
+    user_doc = _get_mongo_user_by_username(username)
+    if not user_doc:
+        return JsonResponse({"message": "User not found"}, status=404)
+
+    credentials = user_doc.get("google_drive_credentials") or {}
+    access_token, _ = _refresh_google_access_token_if_needed(credentials, user_doc)
+    if not access_token:
+        return JsonResponse({"message": "No Google credentials on file"}, status=400)
+
+    fields = request.GET.get('fields', 'id,name,mimeType,modifiedTime,createdTime,size,webViewLink,iconLink,thumbnailLink,parents,trashed,starred')
+    
+    url = f"https://www.googleapis.com/drive/v3/files/{file_id}?fields={urllib.parse.quote(fields)}"
+    
+    resp = requests.get(url, headers={"Authorization": f"Bearer {access_token}"}, timeout=20)
+    if resp.status_code != 200:
+        return JsonResponse({
+            "message": "Failed to get file",
+            "status": resp.status_code,
+            "error": resp.text
+        }, status=resp.status_code)
+    
+    return JsonResponse(resp.json())
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def drive_download_file(request, file_id):
+    """
+    Download a file from Google Drive.
+    Returns the file content as a binary response.
+    """
+    username = _require_auth_username(request)
+    if not username:
+        return JsonResponse({"message": "Authentication required"}, status=401)
+
+    user_doc = _get_mongo_user_by_username(username)
+    if not user_doc:
+        return JsonResponse({"message": "User not found"}, status=404)
+
+    credentials = user_doc.get("google_drive_credentials") or {}
+    access_token, _ = _refresh_google_access_token_if_needed(credentials, user_doc)
+    if not access_token:
+        return JsonResponse({"message": "No Google credentials on file"}, status=400)
+
+    # First get file metadata to get the name and MIME type
+    metadata_url = f"https://www.googleapis.com/drive/v3/files/{file_id}?fields=name,mimeType"
+    metadata_resp = requests.get(metadata_url, headers={"Authorization": f"Bearer {access_token}"}, timeout=20)
+    
+    if metadata_resp.status_code != 200:
+        return JsonResponse({
+            "message": "Failed to get file metadata",
+            "status": metadata_resp.status_code,
+            "error": metadata_resp.text
+        }, status=metadata_resp.status_code)
+    
+    metadata = metadata_resp.json()
+    file_name = metadata.get('name', 'download')
+    mime_type = metadata.get('mimeType', 'application/octet-stream')
+
+    # Download the file content
+    download_url = f"https://www.googleapis.com/drive/v3/files/{file_id}?alt=media"
+    download_resp = requests.get(download_url, headers={"Authorization": f"Bearer {access_token}"}, timeout=60, stream=True)
+    
+    if download_resp.status_code != 200:
+        return JsonResponse({
+            "message": "Failed to download file",
+            "status": download_resp.status_code,
+            "error": download_resp.text
+        }, status=download_resp.status_code)
+    
+    # Return the file as a streaming response
+    from django.http import HttpResponse
+    response = HttpResponse(download_resp.content, content_type=mime_type)
+    response['Content-Disposition'] = f'attachment; filename="{file_name}"'
+    return response
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def drive_export_file(request, file_id):
+    """
+    Export a Google Workspace file (Docs, Sheets, Slides) to a specified format.
+    Query Parameters:
+        mimeType: The MIME type to export to (e.g., application/vnd.openxmlformats-officedocument.wordprocessingml.document for DOCX)
+    """
+    username = _require_auth_username(request)
+    if not username:
+        return JsonResponse({"message": "Authentication required"}, status=401)
+
+    user_doc = _get_mongo_user_by_username(username)
+    if not user_doc:
+        return JsonResponse({"message": "User not found"}, status=404)
+
+    credentials = user_doc.get("google_drive_credentials") or {}
+    access_token, _ = _refresh_google_access_token_if_needed(credentials, user_doc)
+    if not access_token:
+        return JsonResponse({"message": "No Google credentials on file"}, status=400)
+
+    # Get the export MIME type from query parameters
+    export_mime_type = request.GET.get('mimeType')
+    if not export_mime_type:
+        return JsonResponse({"message": "mimeType parameter is required"}, status=400)
+
+    # First get file metadata to get the name
+    metadata_url = f"https://www.googleapis.com/drive/v3/files/{file_id}?fields=name,mimeType"
+    metadata_resp = requests.get(metadata_url, headers={"Authorization": f"Bearer {access_token}"}, timeout=20)
+    
+    if metadata_resp.status_code != 200:
+        return JsonResponse({
+            "message": "Failed to get file metadata",
+            "status": metadata_resp.status_code,
+            "error": metadata_resp.text
+        }, status=metadata_resp.status_code)
+    
+    metadata = metadata_resp.json()
+    file_name = metadata.get('name', 'export')
+    
+    # Determine file extension based on export MIME type
+    extension_map = {
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation': '.pptx',
+        'application/pdf': '.pdf',
+        'text/plain': '.txt',
+        'text/html': '.html',
+    }
+    extension = extension_map.get(export_mime_type, '')
+    if extension and not file_name.lower().endswith(extension):
+        file_name += extension
+
+    # Export the file
+    export_url = f"https://www.googleapis.com/drive/v3/files/{file_id}/export?mimeType={urllib.parse.quote(export_mime_type)}"
+    export_resp = requests.get(export_url, headers={"Authorization": f"Bearer {access_token}"}, timeout=60, stream=True)
+    
+    if export_resp.status_code != 200:
+        return JsonResponse({
+            "message": "Failed to export file",
+            "status": export_resp.status_code,
+            "error": export_resp.text
+        }, status=export_resp.status_code)
+    
+    # Return the exported file as a streaming response
+    from django.http import HttpResponse
+    response = HttpResponse(export_resp.content, content_type=export_mime_type)
+    response['Content-Disposition'] = f'attachment; filename="{file_name}"'
+    return response
+
+
+@csrf_exempt
+@require_http_methods(["PUT", "POST"])
+def drive_update_file(request, file_id):
+    """
+    Update a file in Google Drive by uploading new content.
+    For Google Workspace files (Docs, Sheets, Slides), this converts the uploaded
+    content to the appropriate Google Workspace format.
+    
+    Expects multipart/form-data with a 'file' field containing the file content.
+    """
+    username = _require_auth_username(request)
+    if not username:
+        return JsonResponse({"message": "Authentication required"}, status=401)
+
+    user_doc = _get_mongo_user_by_username(username)
+    if not user_doc:
+        return JsonResponse({"message": "User not found"}, status=404)
+
+    credentials = user_doc.get("google_drive_credentials") or {}
+    access_token, _ = _refresh_google_access_token_if_needed(credentials, user_doc)
+    if not access_token:
+        return JsonResponse({"message": "No Google credentials on file"}, status=400)
+
+    # Get the uploaded file
+    if 'file' not in request.FILES:
+        return JsonResponse({"message": "No file provided"}, status=400)
+    
+    uploaded_file = request.FILES['file']
+    file_content = uploaded_file.read()
+    content_type = uploaded_file.content_type or 'application/octet-stream'
+
+    # First get the current file metadata to check if it's a Google Workspace file
+    metadata_url = f"https://www.googleapis.com/drive/v3/files/{file_id}?fields=name,mimeType"
+    metadata_resp = requests.get(metadata_url, headers={"Authorization": f"Bearer {access_token}"}, timeout=20)
+    
+    if metadata_resp.status_code != 200:
+        return JsonResponse({
+            "message": "Failed to get file metadata",
+            "status": metadata_resp.status_code,
+            "error": metadata_resp.text
+        }, status=metadata_resp.status_code)
+    
+    metadata = metadata_resp.json()
+    current_mime_type = metadata.get('mimeType', '')
+    
+    # Use Google Drive's update endpoint with media upload
+    # For Google Workspace files, we need to specify the correct mimeType to convert
+    update_url = f"https://www.googleapis.com/upload/drive/v3/files/{file_id}?uploadType=media"
+    
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": content_type
+    }
+    
+    # If uploading to a Google Doc, we need to convert the content
+    # Google Drive will auto-convert based on the source MIME type
+    update_resp = requests.patch(update_url, headers=headers, data=file_content, timeout=60)
+    
+    if update_resp.status_code not in [200, 204]:
+        return JsonResponse({
+            "message": "Failed to update file",
+            "status": update_resp.status_code,
+            "error": update_resp.text
+        }, status=update_resp.status_code)
+    
+    # Get updated file metadata to return
+    metadata_resp = requests.get(metadata_url, headers={"Authorization": f"Bearer {access_token}"}, timeout=20)
+    if metadata_resp.status_code == 200:
+        return JsonResponse(metadata_resp.json())
+    else:
+        return JsonResponse({"message": "File updated successfully", "id": file_id})
+
+
+# =============================================================================
 # Scope Management Endpoints
 # =============================================================================
 

@@ -53,6 +53,12 @@ urlpatterns = [
     path('gmail/reply/', views.gmail_send_reply, name='gmail_send_reply'),
     path('gmail/thread/<str:thread_id>/', views.gmail_get_thread, name='gmail_get_thread'),
     path('gmail/threads/', views.gmail_list_threads, name='gmail_list_threads'),
+    # Google Drive API proxy endpoints
+    path('drive/list_files/', views.drive_list_files, name='drive_list_files'),
+    path('drive/files/<str:file_id>/', views.drive_get_file, name='drive_get_file'),
+    path('drive/files/<str:file_id>/download/', views.drive_download_file, name='drive_download_file'),
+    path('drive/files/<str:file_id>/export/', views.drive_export_file, name='drive_export_file'),
+    path('drive/files/<str:file_id>/update/', views.drive_update_file, name='drive_update_file'),
     # Google Calendar API proxy endpoints
     path('calendar/events/', views.calendar_events, name='calendar_events'),
     path('calendar/events/<str:event_id>/', views.calendar_event_detail, name='calendar_event_detail'),
