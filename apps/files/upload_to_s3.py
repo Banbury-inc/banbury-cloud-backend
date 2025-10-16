@@ -122,14 +122,22 @@ def upload_file_to_s3(request, username):
     object_key = f"{username}/{timestamp}_{file_name}"
     
     try:
+        # Determine if this should be a public file (profile pictures for meeting agents)
+        extra_args = {
+            'ContentType': uploaded_file.content_type
+        }
+        
+        # Make meeting agent profile pictures publicly accessible
+        if 'meeting-agent/profile-pictures' in file_path or 'meeting-agent/profile-pictures' in file_parent:
+            extra_args['ACL'] = 'public-read'
+            print(f"Uploading meeting agent profile picture as public: {object_key}")
+        
         # Upload file to S3
         s3_client.upload_fileobj(
             uploaded_file,
             bucket_name,
             object_key,
-            ExtraArgs={
-                'ContentType': uploaded_file.content_type
-            }
+            ExtraArgs=extra_args
         )
         
         # Generate URL for the uploaded file

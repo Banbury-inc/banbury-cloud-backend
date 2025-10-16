@@ -22,6 +22,7 @@ urlpatterns = [
     
     # Configuration
     path('config/', views.agent_config, name='agent_config'),
+    path('bot-settings/', views.bot_settings, name='bot_settings'),
     
     # System status
     path('status/', views.agent_status, name='agent_status'),

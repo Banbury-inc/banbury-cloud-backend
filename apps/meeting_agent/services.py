@@ -35,16 +35,23 @@ class MeetingAgentService:
             logger.info(f"Creating Recall AI bot for meeting: {meeting_url}")
             
             # Prepare bot metadata from session settings
+            profile_picture_url = metadata.get('profilePictureUrl', '')
             bot_metadata = {
                 'bot_name': metadata.get('botName', f'Meeting Recorder - {session_id[:8]}'),
                 'recording_mode': metadata.get('recordingMode', 'speaker_view'),
                 'transcription_enabled': metadata.get('transcriptionEnabled', True),
                 'language': metadata.get('language', 'en'),
+                'profile_picture_url': profile_picture_url,
                 'session_id': session_id,
                 'platform_id': session.get('platform_id'),
                 'user_id': session.get('user_id'),
                 'title': session.get('title', 'Untitled Meeting')
             }
+            
+            if profile_picture_url:
+                logger.info(f"🖼️ Bot metadata includes profile picture: {profile_picture_url}")
+            else:
+                logger.info(f"⚠️ No profile picture URL in session metadata")
             
             # Create the Recall AI bot
             bot_result = create_recall_bot_sync(meeting_url, bot_metadata)
@@ -54,6 +61,13 @@ class MeetingAgentService:
                 bot_data = bot_result['bot_data']
                 
                 logger.info(f"Successfully created Recall bot {bot_id} for session {session_id}")
+                
+                # Profile picture is automatically set via automatic_video_output during bot creation
+                # No need to wait for bot to join - this prevents request timeouts
+                if profile_picture_url:
+                    logger.info(f"✅ Profile picture will be displayed via automatic_video_output once bot joins")
+                else:
+                    logger.info(f"ℹ️ No profile picture configured for this bot")
                 
                 # Update session with bot information
                 session_update = {

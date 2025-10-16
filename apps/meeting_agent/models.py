@@ -488,6 +488,8 @@ class MeetingAgentConfig:
                     "user_id": user_id,
                     "username": username,
                     "name": "Meeting Agent",
+                    "bot_name": "Meeting Recorder",
+                    "profile_picture_url": "",
                     "default_settings": {
                         "recording_enabled": True,
                         "transcription_enabled": True,
@@ -514,6 +516,26 @@ class MeetingAgentConfig:
                 config["_id"] = str(result.inserted_id)
             else:
                 config["_id"] = str(config["_id"])
+                
+                # Ensure new fields exist in old configs (migration logic)
+                needs_update = False
+                updates = {}
+                
+                if "bot_name" not in config:
+                    updates["bot_name"] = "Meeting Recorder"
+                    needs_update = True
+                    
+                if "profile_picture_url" not in config:
+                    updates["profile_picture_url"] = ""
+                    needs_update = True
+                
+                # Update existing config with missing fields
+                if needs_update:
+                    meeting_configs_collection.update_one(
+                        {"user_id": user_id},
+                        {"$set": updates}
+                    )
+                    config.update(updates)
             
             return {
                 "success": True,
@@ -535,9 +557,11 @@ class MeetingAgentConfig:
                 {"$set": update_data}
             )
             
+            # Consider it successful if the document was matched (even if not modified)
+            # This handles cases where values are the same
             return {
-                "success": result.modified_count > 0,
-                "message": "Configuration updated successfully"
+                "success": result.matched_count > 0,
+                "message": "Configuration updated successfully" if result.matched_count > 0 else "Configuration not found"
             }
         except Exception as e:
             return {

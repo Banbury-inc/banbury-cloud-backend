@@ -17,3 +17,8 @@ class MeetingConfigUpdateSerializer(serializers.Serializer):
     default_settings = serializers.DictField(required=False)
     webhook_url = serializers.URLField(required=False, allow_blank=True)
     notification_settings = serializers.DictField(required=False)
+
+
+class BotSettingsSerializer(serializers.Serializer):
+    profilePictureUrl = serializers.URLField(required=False, allow_blank=True)
+    botName = serializers.CharField(max_length=100, required=False, allow_blank=True)

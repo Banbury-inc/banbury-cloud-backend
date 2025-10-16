@@ -6,8 +6,11 @@ import logging
 import httpx
 import asyncio
 import json
+import base64
+import io
 from typing import Dict, Any, Optional
 from datetime import datetime
+from PIL import Image
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +30,164 @@ class RecallAIService:
             'Content-Type': 'application/json',
             'Accept': 'application/json'
         }
+    
+    async def wait_for_bot_in_call(self, bot_id: str, max_wait_seconds: int = 60) -> dict:
+        """
+        Wait for the bot to be in the call before setting output media
+        
+        Args:
+            bot_id: The Recall bot ID
+            max_wait_seconds: Maximum time to wait for bot to join call
+            
+        Returns:
+            dict with success status and bot state
+        """
+        try:
+            import time
+            start_time = time.time()
+            wait_interval = 2  # Check every 2 seconds
+            
+            logger.info(f"⏳ Waiting for bot {bot_id} to join call (max {max_wait_seconds}s)...")
+            
+            while (time.time() - start_time) < max_wait_seconds:
+                # Get bot status
+                bot_result = await self.get_bot(bot_id)
+                
+                if not bot_result['success']:
+                    logger.warning(f"Failed to get bot status while waiting: {bot_result.get('message')}")
+                    await asyncio.sleep(wait_interval)
+                    continue
+                
+                bot_data = bot_result['bot_data']
+                status_changes = bot_data.get('status_changes', [])
+                
+                if status_changes:
+                    current_status = status_changes[-1].get('code', 'unknown')
+                    logger.info(f"Bot {bot_id} current status: {current_status}")
+                    
+                    # Check if bot is in call (any in_call state is good)
+                    if current_status in ['in_call_not_recording', 'in_call_recording', 'in_call']:
+                        logger.info(f"✅ Bot {bot_id} is now in the call (status: {current_status})")
+                        return {
+                            'success': True,
+                            'in_call': True,
+                            'status': current_status
+                        }
+                    
+                    # Check if bot failed to join
+                    if current_status in ['fatal', 'failed', 'error']:
+                        logger.error(f"❌ Bot {bot_id} failed to join call (status: {current_status})")
+                        return {
+                            'success': False,
+                            'in_call': False,
+                            'status': current_status,
+                            'message': f'Bot failed to join call: {current_status}'
+                        }
+                
+                # Wait before next check
+                await asyncio.sleep(wait_interval)
+            
+            # Timeout reached
+            logger.warning(f"⏱️ Timeout waiting for bot {bot_id} to join call")
+            return {
+                'success': False,
+                'in_call': False,
+                'message': f'Timeout waiting for bot to join call ({max_wait_seconds}s)'
+            }
+            
+        except Exception as e:
+            logger.error(f"Exception waiting for bot {bot_id} to join: {str(e)}")
+            return {
+                'success': False,
+                'in_call': False,
+                'message': f'Exception: {str(e)}'
+            }
+    
+    async def set_output_media(self, bot_id: str, media_url: str) -> dict:
+        """
+        Set the bot's video output to display custom media (like a profile picture)
+        This makes the bot's camera show the image in the meeting
+        
+        Args:
+            bot_id: The Recall bot ID
+            media_url: Direct URL to an image file (jpg, png, etc.)
+            
+        Returns:
+            dict with success status and any error messages
+        """
+        try:
+            logger.info(f"🎥 Setting output_video for bot {bot_id}: {media_url}")
+            
+            # Download and convert image to JPEG format
+            logger.info(f"📥 Downloading image from: {media_url}")
+            async with httpx.AsyncClient(timeout=10.0) as img_client:
+                img_response = await img_client.get(media_url)
+                img_response.raise_for_status()
+                
+                # Convert image to JPEG format using PIL
+                image_data = img_response.content
+                img = Image.open(io.BytesIO(image_data))
+                
+                # Convert RGBA to RGB if necessary (for PNG with transparency)
+                if img.mode in ('RGBA', 'LA', 'P'):
+                    # Create a white background
+                    background = Image.new('RGB', img.size, (255, 255, 255))
+                    if img.mode == 'P':
+                        img = img.convert('RGBA')
+                    background.paste(img, mask=img.split()[-1] if img.mode in ('RGBA', 'LA') else None)
+                    img = background
+                elif img.mode != 'RGB':
+                    img = img.convert('RGB')
+                
+                # Save as JPEG to bytes
+                jpeg_bytes = io.BytesIO()
+                img.save(jpeg_bytes, format='JPEG', quality=85)
+                jpeg_bytes.seek(0)
+                
+                # Encode to base64
+                b64_data = base64.b64encode(jpeg_bytes.read()).decode('utf-8')
+                logger.info(f"✅ Image converted to JPEG and encoded ({len(b64_data)} chars)")
+            
+            payload = {
+                'kind': 'jpeg',
+                'b64_data': b64_data
+            }
+            
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    f'{self.base_url}/bot/{bot_id}/output_video/',
+                    json=payload,
+                    headers=self.headers
+                )
+                
+                logger.info(f"Recall API output_video response: {response.status_code}")
+                
+                if response.status_code in [200, 201]:
+                    logger.info(f"✅ Successfully set output_video for bot {bot_id}")
+                    return {
+                        'success': True,
+                        'message': 'Output video set successfully'
+                    }
+                else:
+                    error_text = response.text
+                    logger.error(f"❌ Failed to set output_video: {response.status_code} - {error_text}")
+                    try:
+                        error_json = response.json()
+                        logger.error(f"Error details: {json.dumps(error_json, indent=2)}")
+                    except:
+                        pass
+                    return {
+                        'success': False,
+                        'message': f'Failed to set output_video: {response.status_code}',
+                        'error': error_text
+                    }
+                    
+        except Exception as e:
+            logger.error(f"Exception setting output_video for bot {bot_id}: {str(e)}")
+            return {
+                'success': False,
+                'message': f'Exception setting output_video: {str(e)}'
+            }
     
     async def create_bot(self, meeting_url: str, metadata: Dict[str, Any] = None) -> Dict[str, Any]:
         """
@@ -48,6 +209,43 @@ class RecallAIService:
             recording_mode = metadata.get('recording_mode', 'speaker_view')
             transcription_enabled = metadata.get('transcription_enabled', True)
             language = metadata.get('language', 'en')
+            profile_picture_url = metadata.get('profile_picture_url', '')
+            
+            # Download and convert profile picture to base64 if URL is provided
+            profile_picture_b64 = None
+            if profile_picture_url and profile_picture_url.strip():
+                try:
+                    logger.info(f"📥 Downloading profile picture from: {profile_picture_url}")
+                    async with httpx.AsyncClient(timeout=10.0) as img_client:
+                        img_response = await img_client.get(profile_picture_url)
+                        img_response.raise_for_status()
+                        
+                        # Convert image to JPEG format using PIL
+                        image_data = img_response.content
+                        img = Image.open(io.BytesIO(image_data))
+                        
+                        # Convert RGBA to RGB if necessary (for PNG with transparency)
+                        if img.mode in ('RGBA', 'LA', 'P'):
+                            # Create a white background
+                            background = Image.new('RGB', img.size, (255, 255, 255))
+                            if img.mode == 'P':
+                                img = img.convert('RGBA')
+                            background.paste(img, mask=img.split()[-1] if img.mode in ('RGBA', 'LA') else None)
+                            img = background
+                        elif img.mode != 'RGB':
+                            img = img.convert('RGB')
+                        
+                        # Save as JPEG to bytes
+                        jpeg_bytes = io.BytesIO()
+                        img.save(jpeg_bytes, format='JPEG', quality=85)
+                        jpeg_bytes.seek(0)
+                        
+                        # Encode to base64
+                        profile_picture_b64 = base64.b64encode(jpeg_bytes.read()).decode('utf-8')
+                        logger.info(f"✅ Profile picture converted to JPEG and encoded ({len(profile_picture_b64)} chars)")
+                except Exception as e:
+                    logger.warning(f"⚠️ Failed to download/convert profile picture: {str(e)}")
+                    profile_picture_b64 = None
             
             # Build comprehensive payload with transcription enabled in recording_config
             payload = {
@@ -59,6 +257,25 @@ class RecallAIService:
                     'everyone_left_timeout': 30    # 30 seconds
                 }
             }
+            
+            # Add automatic_video_output only if profile picture is available
+            if profile_picture_b64:
+                payload["automatic_video_output"] = {
+                    "in_call_recording": {
+                        "kind": "jpeg",
+                        "b64_data": profile_picture_b64
+                    }
+                }
+                logger.info("✅ Profile picture will be set via automatic_video_output")
+            else:
+                logger.info("ℹ️ No profile picture available for automatic_video_output")
+            
+            # Note: Profile picture will be set via output_video endpoint after bot joins
+            # We store the URL in metadata to use later
+            if profile_picture_url and profile_picture_url.strip():
+                logger.info(f"📌 Profile picture URL will be set after bot joins: {profile_picture_url}")
+            else:
+                logger.info("ℹ️ No profile picture URL provided for bot")
             
             # Configure recording with transcription enabled
             recording_config = {
@@ -86,6 +303,9 @@ class RecallAIService:
             logger.info(f"Recording mode configured: {recording_mode or 'speaker_view'}")
             
             logger.info(f"Creating Recall bot for meeting: {meeting_url}")
+            logger.info(f"📦 Bot payload - meeting_url: {meeting_url}")
+            logger.info(f"📦 Bot payload - bot_name: {bot_name}")
+            logger.info(f"📦 Bot payload - bot_image: {payload.get('bot_image', 'NOT SET')}")
             logger.info(f"Final bot configuration: {json.dumps(payload, indent=2, default=str)}")
             
             async with httpx.AsyncClient(timeout=30.0) as client:
@@ -102,6 +322,13 @@ class RecallAIService:
                 if response.status_code == 201:
                     bot_data = response.json()
                     logger.info(f"Successfully created Recall bot: {bot_data.get('id')}")
+                    
+                    # Log automatic_video_output in response to verify it was accepted
+                    if 'automatic_video_output' in bot_data:
+                        logger.info(f"✅ Recall AI accepted automatic_video_output: {bot_data['automatic_video_output']}")
+                    else:
+                        if profile_picture_url:
+                            logger.warning(f"⚠️ automatic_video_output not found in Recall AI response - it may not be supported or was rejected")
                     
                     # Log transcription configuration in response
                     if 'transcription' in bot_data:
@@ -438,6 +665,58 @@ def create_recall_bot_sync(meeting_url: str, metadata: Dict[str, Any] = None) ->
             'success': False,
             'error': str(e),
             'message': 'Failed to create bot'
+        }
+
+
+def wait_for_bot_in_call_sync(bot_id: str, max_wait_seconds: int = 60) -> Dict[str, Any]:
+    """
+    Synchronous wrapper for waiting for bot to join call
+    This is needed for Django views which are not async
+    """
+    try:
+        service = RecallAIService()
+        
+        # Run the async function in a new event loop
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            result = loop.run_until_complete(service.wait_for_bot_in_call(bot_id, max_wait_seconds))
+            return result
+        finally:
+            loop.close()
+            
+    except Exception as e:
+        logger.error(f"Error in sync wrapper for wait_for_bot_in_call: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e),
+            'message': 'Failed to wait for bot to join call'
+        }
+
+
+def set_output_media_sync(bot_id: str, media_url: str) -> Dict[str, Any]:
+    """
+    Synchronous wrapper for setting bot output media
+    This is needed for Django views which are not async
+    """
+    try:
+        service = RecallAIService()
+        
+        # Run the async function in a new event loop
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            result = loop.run_until_complete(service.set_output_media(bot_id, media_url))
+            return result
+        finally:
+            loop.close()
+            
+    except Exception as e:
+        logger.error(f"Error in sync wrapper for set_output_media: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e),
+            'message': 'Failed to set output media'
         }
 
 

@@ -502,6 +502,36 @@ def join_meeting(request):
                 'message': f'Platform {meeting_info["platform"]} not found'
             }, status=400)
         
+        # Get bot settings (profile picture and bot name) from user config
+        logger.info(f"🔍 Fetching bot settings for user: {username}")
+        config_result = MeetingAgentConfig.get_or_create_config(username, username)
+        bot_name = 'Meeting Recorder'
+        profile_picture_url = ''
+        if config_result["success"]:
+            config = config_result["config"]
+            bot_name = config.get('bot_name', 'Meeting Recorder')
+            profile_picture_url = config.get('profile_picture_url', '')
+            
+            logger.info(f"📋 Bot config retrieved - bot_name: {bot_name}, has profile_picture: {bool(profile_picture_url)}")
+            
+            # Profile pictures are uploaded with public-read ACL
+            # No need to generate pre-signed URL - use raw URL directly
+            if profile_picture_url:
+                logger.info(f"✅ Using public profile picture URL for Recall AI bot: {profile_picture_url}")
+            else:
+                logger.info(f"ℹ️ No profile picture URL found in config for user: {username}")
+        else:
+            logger.error(f"❌ Failed to fetch bot config: {config_result.get('error', 'Unknown error')}")
+        
+        # Merge bot settings into metadata
+        merged_settings = {**settings}
+        merged_settings['botName'] = bot_name
+        if profile_picture_url:
+            merged_settings['profilePictureUrl'] = profile_picture_url
+            logger.info(f"🔗 Profile picture URL added to session metadata")
+        else:
+            logger.info(f"⚠️ No profile picture URL to add to session metadata")
+        
         # Create meeting session
         session_data = {
             'user_id': username,  # Use username as user_id following your pattern
@@ -510,7 +540,7 @@ def join_meeting(request):
             'platform_id': meeting_info['platform'],
             'meeting_url': meeting_url,
             'start_time': datetime.fromisoformat(scheduled_start_time.replace('Z', '+00:00')) if scheduled_start_time else datetime.utcnow(),
-            'metadata': settings,
+            'metadata': merged_settings,
             'status': 'joining'
         }
         
@@ -1149,6 +1179,77 @@ def agent_config(request):
         return JsonResponse({
             'success': False,
             'message': f'Failed to handle config request: {str(e)}'
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET", "POST"])
+def bot_settings(request):
+    """Get or update bot settings (profile picture and bot name)"""
+    try:
+        username = getattr(request, 'username_from_token', None)
+        if not username:
+            return JsonResponse({
+                'error': 'Authentication required'
+            }, status=401)
+        
+        if request.method == 'GET':
+            # Get bot settings from config
+            result = MeetingAgentConfig.get_or_create_config(username, username)
+            
+            if not result["success"]:
+                return JsonResponse({
+                    'error': result["error"]
+                }, status=500)
+            
+            config = result["config"]
+            profile_picture_url = config.get('profile_picture_url', '')
+            
+            # Profile pictures are uploaded with public-read ACL, so no pre-signed URL needed
+            # Just return the raw URL which is publicly accessible
+            return JsonResponse({
+                'profilePictureUrl': profile_picture_url,
+                'botName': config.get('bot_name', 'Meeting Recorder')
+            })
+        
+        elif request.method == 'POST':
+            # Update bot settings
+            data = json.loads(request.body)
+            logger.info(f"💾 Updating bot settings for user: {username}")
+            logger.info(f"📝 Request data: profilePictureUrl={data.get('profilePictureUrl', 'not provided')[:100]}, botName={data.get('botName', 'not provided')}")
+            
+            update_data = {}
+            
+            if 'profilePictureUrl' in data:
+                update_data['profile_picture_url'] = data['profilePictureUrl']
+                logger.info(f"🖼️ Updating profile_picture_url to: {data['profilePictureUrl'][:100]}")
+            if 'botName' in data:
+                update_data['bot_name'] = data['botName']
+                logger.info(f"📛 Updating bot_name to: {data['botName']}")
+            
+            if not update_data:
+                logger.warning(f"⚠️ No settings provided to update for user: {username}")
+                return JsonResponse({
+                    'success': False,
+                    'message': 'No settings provided to update'
+                }, status=400)
+            
+            result = MeetingAgentConfig.update_config(username, update_data)
+            
+            if result["success"]:
+                logger.info(f"✅ Bot settings updated successfully for user: {username}")
+            else:
+                logger.error(f"❌ Failed to update bot settings for user {username}: {result.get('error', 'Unknown error')}")
+            
+            return JsonResponse({
+                'success': result["success"],
+                'message': result.get("message", "Bot settings updated successfully")
+            })
+    except Exception as e:
+        logger.error(f"Failed to handle bot settings request: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'message': f'Failed to handle bot settings request: {str(e)}'
         }, status=500)
 
 
