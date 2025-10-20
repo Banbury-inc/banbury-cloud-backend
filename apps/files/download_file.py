@@ -14,6 +14,7 @@ def download_file(file_id, is_file_sync):
     2. If False: Looks for the file in the 'files' collection, verifies the associated device
        and user, checks if the device is online, and (placeholder) sends a download request.
 
+
     Args:
         username (str): The username of the user requesting the download (used for verification).
         file_id (str): The unique identifier of the file to be downloaded.
