@@ -177,6 +177,35 @@ def get_conversation_users_admin(request):
 
 @csrf_exempt
 @require_http_methods(["GET"])
+def get_conversation_admin(request, conversation_id):
+    """
+    Get a specific conversation by ID for admin (no username check)
+    """
+    try:
+        username = request.username_from_token
+
+        # Admin check - only allow mmills and mmills6060@gmail.com
+        if username not in ['mmills', 'mmills6060@gmail.com']:
+            return JsonResponse({
+                "success": False,
+                "error": "Unauthorized - Admin access required"
+            }, status=403)
+        
+        result = Conversation.get_conversation_admin(conversation_id)
+        
+        if result["success"]:
+            return JsonResponse(result)
+        else:
+            return JsonResponse(result, status=404)
+            
+    except Exception as e:
+        return JsonResponse({
+            "success": False,
+            "error": str(e)
+        }, status=500)
+
+@csrf_exempt
+@require_http_methods(["GET"])
 def get_conversation(request, conversation_id):
     """
     Get a specific conversation by ID

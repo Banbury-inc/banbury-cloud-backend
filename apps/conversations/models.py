@@ -367,6 +367,45 @@ class Conversation:
             }
 
     @staticmethod
+    def get_conversation_admin(conversation_id):
+        """
+        Get a specific conversation for admin (without username check)
+        
+        Args:
+            conversation_id (str): The ID of the conversation
+            
+        Returns:
+            dict: The conversation data
+        """
+        try:
+            conversation = conversations_collection.find_one({
+                "_id": ObjectId(conversation_id)
+            })
+            
+            if not conversation:
+                return {
+                    "success": False,
+                    "error": "Conversation not found"
+                }
+            
+            # Convert ObjectId to string for JSON serialization
+            conversation["_id"] = str(conversation["_id"])
+            if "created_at" in conversation and hasattr(conversation["created_at"], "isoformat"):
+                conversation["created_at"] = conversation["created_at"].isoformat()
+            if "updated_at" in conversation and hasattr(conversation["updated_at"], "isoformat"):
+                conversation["updated_at"] = conversation["updated_at"].isoformat()
+            
+            return {
+                "success": True,
+                "conversation": conversation
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e)
+            }
+
+    @staticmethod
     def get_conversation_users_admin(days=30):
         """
         Get list of users who have conversations for admin analytics
