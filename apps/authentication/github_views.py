@@ -117,8 +117,8 @@ def github_initiate_oauth(request):
             return JsonResponse({'error': 'Callback URL is required'}, status=400)
 
         # Get GitHub OAuth credentials from environment
-        github_client_id = os.environ.get('GITHUB_CLIENT_ID')
-        github_client_secret = os.environ.get('GITHUB_CLIENT_SECRET')
+        github_client_id = os.environ.get('GH_CLIENT_ID')
+        github_client_secret = os.environ.get('GH_CLIENT_SECRET')
         
         if not github_client_id or not github_client_secret:
             return JsonResponse({'error': 'GitHub credentials not configured'}, status=500)
@@ -185,8 +185,8 @@ def github_oauth_callback(request):
             return JsonResponse({'error': 'Missing OAuth parameters'}, status=400)
 
         # Get GitHub OAuth credentials from environment
-        github_client_id = os.environ.get('GITHUB_CLIENT_ID')
-        github_client_secret = os.environ.get('GITHUB_CLIENT_SECRET')
+        github_client_id = os.environ.get('GH_CLIENT_ID')
+        github_client_secret = os.environ.get('GH_CLIENT_SECRET')
         
         if not github_client_id or not github_client_secret:
             return JsonResponse({'error': 'GitHub credentials not configured'}, status=500)

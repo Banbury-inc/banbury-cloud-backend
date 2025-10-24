@@ -326,42 +326,45 @@ def slack_disconnect(request):
 @require_http_methods(["GET"])
 def slack_list_channels(request):
     """List all Slack channels the user has access to."""
-    user, error_response = get_user_from_token(request)
-    if error_response:
-        return error_response
-    
-    slack_creds = get_slack_credentials(user)
-    if not slack_creds:
-        return JsonResponse({'error': 'Slack not connected'}, status=400)
-    
-    # Get both public and private channels
-    channels = []
-    
-    # Public channels
-    url = "https://slack.com/api/conversations.list?types=public_channel,private_channel"
-    data, error = make_slack_api_request(url, slack_creds['access_token'])
-    
-    if error:
-        return JsonResponse({'error': error}, status=500)
-    
-    if data.get('ok'):
-        channels = data.get('channels', [])
+    try:
+        user, error_response = get_user_from_token(request)
+        if error_response:
+            return error_response
         
-        # Format channels for frontend
-        formatted_channels = [
-            {
-                'id': ch.get('id'),
-                'name': ch.get('name'),
-                'is_member': ch.get('is_member', False),
-                'num_members': ch.get('num_members', 0),
-                'is_private': ch.get('is_private', False)
-            }
-            for ch in channels
-        ]
+        slack_creds = get_slack_credentials(user)
+        if not slack_creds:
+            return JsonResponse({'error': 'Slack not connected'}, status=400)
         
-        return JsonResponse({'channels': formatted_channels})
-    else:
-        return JsonResponse({'error': data.get('error', 'Failed to fetch channels')}, status=500)
+        # Get both public and private channels
+        channels = []
+        
+        # Public channels
+        url = "https://slack.com/api/conversations.list?types=public_channel,private_channel"
+        data, error = make_slack_api_request(url, slack_creds['access_token'])
+        
+        if error:
+            return JsonResponse({'error': error}, status=500)
+        
+        if data.get('ok'):
+            channels = data.get('channels', [])
+            
+            # Format channels for frontend
+            formatted_channels = [
+                {
+                    'id': ch.get('id'),
+                    'name': ch.get('name'),
+                    'is_member': ch.get('is_member', False),
+                    'num_members': ch.get('num_members', 0),
+                    'is_private': ch.get('is_private', False)
+                }
+                for ch in channels
+            ]
+            
+            return JsonResponse({'channels': formatted_channels})
+        else:
+            return JsonResponse({'error': data.get('error', 'Failed to fetch channels')}, status=500)
+    except Exception as e:
+        return JsonResponse({'error': f'Exception: {str(e)}'}, status=500)
 
 
 @csrf_exempt

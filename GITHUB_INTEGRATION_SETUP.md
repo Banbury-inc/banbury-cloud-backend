@@ -35,8 +35,8 @@ Add the following variables to your backend environment (`.env` file or hosting 
 
 ```bash
 # GitHub OAuth Credentials
-GITHUB_CLIENT_ID=your_client_id_here
-GITHUB_CLIENT_SECRET=your_client_secret_here
+GH_CLIENT_ID=your_client_id_here
+GH_CLIENT_SECRET=your_client_secret_here
 
 # Frontend URL for OAuth redirects
 FRONTEND_URL=http://localhost:3000  # or your production URL
@@ -194,12 +194,12 @@ If you plan to add GitHub webhooks:
 
 ### Issue: "GitHub credentials not configured"
 
-**Solution**: Ensure `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` are set in your environment variables.
+**Solution**: Ensure `GH_CLIENT_ID` and `GH_CLIENT_SECRET` are set in your environment variables.
 
 ```bash
 # Check if variables are set
-echo $GITHUB_CLIENT_ID
-echo $GITHUB_CLIENT_SECRET
+echo $GH_CLIENT_ID
+echo $GH_CLIENT_SECRET
 ```
 
 ### Issue: "Invalid OAuth state"
@@ -232,7 +232,7 @@ Try initiating the OAuth flow again.
 ## Production Deployment Checklist
 
 - [ ] Create production GitHub OAuth App with production callback URL
-- [ ] Set `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` environment variables
+- [ ] Set `GH_CLIENT_ID` and `GH_CLIENT_SECRET` environment variables
 - [ ] Set `FRONTEND_URL` to production frontend URL
 - [ ] Verify callback URL is accessible and HTTPS
 - [ ] Test OAuth flow end-to-end

@@ -93,8 +93,8 @@ The integration requests these scopes:
 
 ```bash
 # Backend .env file
-GITHUB_CLIENT_ID=your_client_id
-GITHUB_CLIENT_SECRET=your_client_secret
+GH_CLIENT_ID=your_client_id
+GH_CLIENT_SECRET=your_client_secret
 FRONTEND_URL=http://localhost:3000  # or production URL
 ```
 
