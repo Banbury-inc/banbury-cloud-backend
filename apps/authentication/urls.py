@@ -1,6 +1,7 @@
 from django.urls import path
 from . import views
 from . import slack_views
+from . import github_views
 
 urlpatterns = [
     path("login/", views.login, name="login"),
@@ -81,4 +82,17 @@ urlpatterns = [
     path('slack/user_info/', slack_views.slack_user_info, name='slack_user_info'),
     path('slack/set_channel_topic/', slack_views.slack_set_channel_topic, name='slack_set_channel_topic'),
     path('slack/add_reaction/', slack_views.slack_add_reaction, name='slack_add_reaction'),
+    # GitHub OAuth endpoints
+    path('github/status/', github_views.github_connection_status, name='github_connection_status'),
+    path('github/initiate_oauth/', github_views.github_initiate_oauth, name='github_initiate_oauth'),
+    path('github/oauth_callback/', github_views.github_oauth_callback, name='github_oauth_callback'),
+    path('github/disconnect/', github_views.github_disconnect, name='github_disconnect'),
+    # GitHub API proxy endpoints
+    path('github/repos/', github_views.github_list_repos, name='github_list_repos'),
+    path('github/repos/<str:owner>/<str:repo>/', github_views.github_get_repo, name='github_get_repo'),
+    path('github/repos/<str:owner>/<str:repo>/issues/', github_views.github_list_issues, name='github_list_issues'),
+    path('github/repos/<str:owner>/<str:repo>/pulls/', github_views.github_list_pull_requests, name='github_list_pull_requests'),
+    path('github/repos/<str:owner>/<str:repo>/contents/', github_views.github_get_file_contents, name='github_get_file_contents'),
+    path('github/issues/create/', github_views.github_create_issue, name='github_create_issue'),
+    path('github/search/code/', github_views.github_search_code, name='github_search_code'),
 ]

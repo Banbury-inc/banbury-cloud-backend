@@ -153,23 +153,25 @@ def slack_initiate_oauth(request):
         )
         
         # Required Slack OAuth scopes
+        # Start with minimal essential scopes
         scopes = [
             'channels:history',
             'channels:read',
             'chat:write',
-            'groups:history',
-            'groups:read',
-            'reactions:write',
-            'search:read',
-            'users:read'
+            'users:read',
+            'reactions:write'
         ]
+        # Optional: Add these if needed for private channels and search
+        # 'groups:history',
+        # 'groups:read',
+        # 'search:read'
         
         # Generate authorization URL
         auth_url = (
             f"https://slack.com/oauth/v2/authorize?"
             f"client_id={slack_client_id}"
             f"&redirect_uri={callback_url}"
-            f"&scope={','.join(scopes)}"
+            f"&scope={' '.join(scopes)}"
             f"&state={state}"
         )
         

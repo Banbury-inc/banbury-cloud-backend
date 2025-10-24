@@ -31,6 +31,8 @@ class AuthenticationTokenMiddleware:
             '/authentication/x_api/oauth_callback/',
             # Slack OAuth callback must be public
             '/authentication/slack/oauth_callback/',
+            # GitHub OAuth callback must be public
+            '/authentication/github/oauth_callback/',
             # favicon should not require auth
             '/favicon.ico'
         ]
