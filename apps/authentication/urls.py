@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from . import slack_views
 
 urlpatterns = [
     path("login/", views.login, name="login"),
@@ -66,4 +67,18 @@ urlpatterns = [
     path('scopes/user/', views.get_user_scopes, name='get_user_scopes'),
     path('scopes/request/', views.request_additional_scopes, name='request_additional_scopes'),
     path('scopes/features/', views.get_available_features, name='get_available_features'),
+    # Slack OAuth endpoints
+    path('slack/status/', slack_views.slack_connection_status, name='slack_connection_status'),
+    path('slack/initiate_oauth/', slack_views.slack_initiate_oauth, name='slack_initiate_oauth'),
+    path('slack/oauth_callback/', slack_views.slack_oauth_callback, name='slack_oauth_callback'),
+    path('slack/disconnect/', slack_views.slack_disconnect, name='slack_disconnect'),
+    # Slack API proxy endpoints
+    path('slack/channels/', slack_views.slack_list_channels, name='slack_list_channels'),
+    path('slack/send_message/', slack_views.slack_send_message, name='slack_send_message'),
+    path('slack/channel_history/', slack_views.slack_channel_history, name='slack_channel_history'),
+    path('slack/thread_replies/', slack_views.slack_thread_replies, name='slack_thread_replies'),
+    path('slack/search/', slack_views.slack_search_messages, name='slack_search_messages'),
+    path('slack/user_info/', slack_views.slack_user_info, name='slack_user_info'),
+    path('slack/set_channel_topic/', slack_views.slack_set_channel_topic, name='slack_set_channel_topic'),
+    path('slack/add_reaction/', slack_views.slack_add_reaction, name='slack_add_reaction'),
 ]

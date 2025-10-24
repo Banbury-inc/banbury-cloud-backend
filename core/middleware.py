@@ -29,6 +29,8 @@ class AuthenticationTokenMiddleware:
             '/authentication/get_site_visitor_info/',
             # X (Twitter) OAuth callback must be public
             '/authentication/x_api/oauth_callback/',
+            # Slack OAuth callback must be public
+            '/authentication/slack/oauth_callback/',
             # favicon should not require auth
             '/favicon.ico'
         ]
