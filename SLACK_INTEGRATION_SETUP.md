@@ -39,7 +39,6 @@ Scroll down to **"Scopes"** > **"Bot Token Scopes"** and add the following scope
 - `reactions:write` - Add emoji reactions
 - `search:read` - Search workspace messages
 - `users:read` - View users in the workspace
-- `channels:manage` - Manage channel properties (for topic updates)
 
 ## Step 3: Get Your Credentials
 

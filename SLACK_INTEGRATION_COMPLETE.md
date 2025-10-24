@@ -87,7 +87,6 @@ Frontend integration was completed in previous steps:
 - [ ] `reactions:write`
 - [ ] `search:read`
 - [ ] `users:read`
-- [ ] `channels:manage`
 
 ### 4. Set Environment Variables
 

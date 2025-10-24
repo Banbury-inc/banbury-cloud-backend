@@ -161,8 +161,7 @@ def slack_initiate_oauth(request):
             'groups:read',
             'reactions:write',
             'search:read',
-            'users:read',
-            'channels:manage'
+            'users:read'
         ]
         
         # Generate authorization URL
