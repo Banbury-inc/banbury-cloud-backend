@@ -99,6 +99,9 @@ jobs:
         echo "X_API_KEY=${{ secrets.X_API_KEY }}" >> .env
         echo "X_API_SECRET=${{ secrets.X_API_SECRET }}" >> .env
         echo "X_BEARER_TOKEN=${{ secrets.X_BEARER_TOKEN }}" >> .env
+        echo "SLACK_CLIENT_ID=${{ secrets.SLACK_CLIENT_ID }}" >> .env
+        echo "SLACK_CLIENT_SECRET=${{ secrets.SLACK_CLIENT_SECRET }}" >> .env
+        echo "FRONTEND_URL=${{ secrets.FRONTEND_URL }}" >> .env
 
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v1
