@@ -86,6 +86,37 @@ def make_slack_api_request(url, access_token, method='GET', data=None):
         return None, str(e)
 
 
+def resolve_channel_id(channel_name_or_id, access_token):
+    """
+    Resolve a channel name to its ID. If already an ID, return as-is.
+    Slack channel IDs start with 'C' or 'G' (for private groups).
+    """
+    # If it looks like a channel ID already, return it
+    if channel_name_or_id and (channel_name_or_id.startswith('C') or channel_name_or_id.startswith('G')):
+        return channel_name_or_id, None
+    
+    # Strip '#' if present
+    channel_name = channel_name_or_id.lstrip('#')
+    
+    # Fetch all channels to find the matching name
+    url = "https://slack.com/api/conversations.list?types=public_channel,private_channel&limit=1000"
+    data, error = make_slack_api_request(url, access_token)
+    
+    if error:
+        return None, f"Failed to resolve channel: {error}"
+    
+    if not data.get('ok'):
+        return None, f"Failed to resolve channel: {data.get('error', 'Unknown error')}"
+    
+    # Find channel by name
+    channels = data.get('channels', [])
+    for channel in channels:
+        if channel.get('name') == channel_name:
+            return channel.get('id'), None
+    
+    return None, f"Channel '{channel_name}' not found"
+
+
 # OAuth Endpoints
 
 @csrf_exempt
@@ -153,18 +184,16 @@ def slack_initiate_oauth(request):
         )
         
         # Required Slack OAuth scopes
-        # Start with minimal essential scopes
         scopes = [
             'channels:history',
             'channels:read',
             'chat:write',
             'users:read',
-            'reactions:write'
+            'reactions:write',
+            'groups:history',
+            'groups:read',
+            'search:read'
         ]
-        # Optional: Add these if needed for private channels and search
-        # 'groups:history',
-        # 'groups:read',
-        # 'search:read'
         
         # Generate authorization URL
         auth_url = (
@@ -327,14 +356,19 @@ def slack_disconnect(request):
 def slack_list_channels(request):
     """List all Slack channels the user has access to."""
     try:
+        print("[SLACK DEBUG] Starting slack_list_channels")
         user, error_response = get_user_from_token(request)
         if error_response:
+            print(f"[SLACK DEBUG] Auth failed: {error_response}")
             return error_response
         
+        print(f"[SLACK DEBUG] User authenticated: {user.get('username')}")
         slack_creds = get_slack_credentials(user)
         if not slack_creds:
+            print("[SLACK DEBUG] No Slack credentials found")
             return JsonResponse({'error': 'Slack not connected'}, status=400)
         
+        print("[SLACK DEBUG] Slack credentials found, making API request")
         # Get both public and private channels
         channels = []
         
@@ -343,8 +377,10 @@ def slack_list_channels(request):
         data, error = make_slack_api_request(url, slack_creds['access_token'])
         
         if error:
+            print(f"[SLACK DEBUG] API request error: {error}")
             return JsonResponse({'error': error}, status=500)
         
+        print(f"[SLACK DEBUG] API response ok: {data.get('ok')}")
         if data.get('ok'):
             channels = data.get('channels', [])
             
@@ -360,26 +396,33 @@ def slack_list_channels(request):
                 for ch in channels
             ]
             
+            print(f"[SLACK DEBUG] Returning {len(formatted_channels)} channels")
             return JsonResponse({'channels': formatted_channels})
         else:
+            print(f"[SLACK DEBUG] Slack API returned error: {data.get('error')}")
             return JsonResponse({'error': data.get('error', 'Failed to fetch channels')}, status=500)
     except Exception as e:
-        return JsonResponse({'error': f'Exception: {str(e)}'}, status=500)
+        import traceback
+        error_msg = f'Exception: {str(e)}'
+        traceback_str = traceback.format_exc()
+        print(f"[SLACK DEBUG] Exception occurred: {error_msg}")
+        print(f"[SLACK DEBUG] Traceback: {traceback_str}")
+        return JsonResponse({'error': error_msg, 'traceback': traceback_str}, status=500)
 
 
 @csrf_exempt
 @require_http_methods(["POST"])
 def slack_send_message(request):
     """Send a message to a Slack channel."""
-    user, error_response = get_user_from_token(request)
-    if error_response:
-        return error_response
-    
-    slack_creds = get_slack_credentials(user)
-    if not slack_creds:
-        return JsonResponse({'error': 'Slack not connected'}, status=400)
-    
     try:
+        user, error_response = get_user_from_token(request)
+        if error_response:
+            return error_response
+        
+        slack_creds = get_slack_credentials(user)
+        if not slack_creds:
+            return JsonResponse({'error': 'Slack not connected'}, status=400)
+        
         data = json.loads(request.body) if request.body else {}
         channel = data.get('channel')
         text = data.get('text')
@@ -388,9 +431,14 @@ def slack_send_message(request):
         if not channel or not text:
             return JsonResponse({'error': 'Channel and text are required'}, status=400)
         
+        # Resolve channel name to ID if needed
+        channel_id, resolve_error = resolve_channel_id(channel, slack_creds['access_token'])
+        if resolve_error:
+            return JsonResponse({'error': resolve_error}, status=400)
+        
         # Prepare message payload
         payload = {
-            'channel': channel,
+            'channel': channel_id,
             'text': text
         }
         
@@ -409,155 +457,195 @@ def slack_send_message(request):
             return JsonResponse({'error': result.get('error', 'Failed to send message')}, status=500)
             
     except Exception as e:
-        return JsonResponse({'error': f'Error: {str(e)}'}, status=500)
+        return JsonResponse({'error': f'Exception: {str(e)}'}, status=500)
 
 
 @csrf_exempt
 @require_http_methods(["GET"])
 def slack_channel_history(request):
     """Get message history from a Slack channel."""
-    user, error_response = get_user_from_token(request)
-    if error_response:
-        return error_response
-    
-    slack_creds = get_slack_credentials(user)
-    if not slack_creds:
-        return JsonResponse({'error': 'Slack not connected'}, status=400)
-    
-    channel = request.GET.get('channel')
-    limit = request.GET.get('limit', '20')
-    oldest = request.GET.get('oldest')
-    latest = request.GET.get('latest')
-    
-    if not channel:
-        return JsonResponse({'error': 'Channel parameter is required'}, status=400)
-    
-    # Build URL with parameters
-    url = f"https://slack.com/api/conversations.history?channel={channel}&limit={limit}"
-    if oldest:
-        url += f"&oldest={oldest}"
-    if latest:
-        url += f"&latest={latest}"
-    
-    data, error = make_slack_api_request(url, slack_creds['access_token'])
-    
-    if error:
-        return JsonResponse({'error': error}, status=500)
-    
-    if data.get('ok'):
-        return JsonResponse({'messages': data.get('messages', [])})
-    else:
-        return JsonResponse({'error': data.get('error', 'Failed to fetch channel history')}, status=500)
+    try:
+        print("[SLACK DEBUG] Starting slack_channel_history")
+        user, error_response = get_user_from_token(request)
+        if error_response:
+            print(f"[SLACK DEBUG] Auth failed")
+            return error_response
+        
+        slack_creds = get_slack_credentials(user)
+        if not slack_creds:
+            print("[SLACK DEBUG] No Slack credentials")
+            return JsonResponse({'error': 'Slack not connected'}, status=400)
+        
+        channel = request.GET.get('channel')
+        limit = request.GET.get('limit', '20')
+        oldest = request.GET.get('oldest')
+        latest = request.GET.get('latest')
+        
+        print(f"[SLACK DEBUG] Channel param: {channel}")
+        
+        if not channel:
+            return JsonResponse({'error': 'Channel parameter is required'}, status=400)
+        
+        # Resolve channel name to ID if needed
+        channel_id, resolve_error = resolve_channel_id(channel, slack_creds['access_token'])
+        if resolve_error:
+            print(f"[SLACK DEBUG] Failed to resolve channel: {resolve_error}")
+            return JsonResponse({'error': resolve_error}, status=400)
+        
+        print(f"[SLACK DEBUG] Resolved channel ID: {channel_id}")
+        
+        # Build URL with parameters
+        url = f"https://slack.com/api/conversations.history?channel={channel_id}&limit={limit}"
+        if oldest:
+            url += f"&oldest={oldest}"
+        if latest:
+            url += f"&latest={latest}"
+        
+        print(f"[SLACK DEBUG] Making API request to: {url}")
+        data, error = make_slack_api_request(url, slack_creds['access_token'])
+        
+        if error:
+            print(f"[SLACK DEBUG] API request error: {error}")
+            return JsonResponse({'error': error}, status=500)
+        
+        print(f"[SLACK DEBUG] API response ok: {data.get('ok')}, error: {data.get('error')}")
+        if data.get('ok'):
+            print(f"[SLACK DEBUG] Returning {len(data.get('messages', []))} messages")
+            return JsonResponse({'messages': data.get('messages', [])})
+        else:
+            print(f"[SLACK DEBUG] Slack API error: {data.get('error')}")
+            return JsonResponse({'error': data.get('error', 'Failed to fetch channel history')}, status=500)
+    except Exception as e:
+        import traceback
+        error_msg = f'Exception: {str(e)}'
+        traceback_str = traceback.format_exc()
+        print(f"[SLACK DEBUG] Exception: {error_msg}")
+        print(f"[SLACK DEBUG] Traceback: {traceback_str}")
+        return JsonResponse({'error': error_msg, 'traceback': traceback_str}, status=500)
 
 
 @csrf_exempt
 @require_http_methods(["GET"])
 def slack_thread_replies(request):
     """Get all replies in a specific Slack thread."""
-    user, error_response = get_user_from_token(request)
-    if error_response:
-        return error_response
-    
-    slack_creds = get_slack_credentials(user)
-    if not slack_creds:
-        return JsonResponse({'error': 'Slack not connected'}, status=400)
-    
-    channel = request.GET.get('channel')
-    thread_ts = request.GET.get('thread_ts')
-    limit = request.GET.get('limit', '20')
-    
-    if not channel or not thread_ts:
-        return JsonResponse({'error': 'Channel and thread_ts parameters are required'}, status=400)
-    
-    url = f"https://slack.com/api/conversations.replies?channel={channel}&ts={thread_ts}&limit={limit}"
-    data, error = make_slack_api_request(url, slack_creds['access_token'])
-    
-    if error:
-        return JsonResponse({'error': error}, status=500)
-    
-    if data.get('ok'):
-        return JsonResponse({'messages': data.get('messages', [])})
-    else:
-        return JsonResponse({'error': data.get('error', 'Failed to fetch thread replies')}, status=500)
+    try:
+        user, error_response = get_user_from_token(request)
+        if error_response:
+            return error_response
+        
+        slack_creds = get_slack_credentials(user)
+        if not slack_creds:
+            return JsonResponse({'error': 'Slack not connected'}, status=400)
+        
+        channel = request.GET.get('channel')
+        thread_ts = request.GET.get('thread_ts')
+        limit = request.GET.get('limit', '20')
+        
+        if not channel or not thread_ts:
+            return JsonResponse({'error': 'Channel and thread_ts parameters are required'}, status=400)
+        
+        # Resolve channel name to ID if needed
+        channel_id, resolve_error = resolve_channel_id(channel, slack_creds['access_token'])
+        if resolve_error:
+            return JsonResponse({'error': resolve_error}, status=400)
+        
+        url = f"https://slack.com/api/conversations.replies?channel={channel_id}&ts={thread_ts}&limit={limit}"
+        data, error = make_slack_api_request(url, slack_creds['access_token'])
+        
+        if error:
+            return JsonResponse({'error': error}, status=500)
+        
+        if data.get('ok'):
+            return JsonResponse({'messages': data.get('messages', [])})
+        else:
+            return JsonResponse({'error': data.get('error', 'Failed to fetch thread replies')}, status=500)
+    except Exception as e:
+        return JsonResponse({'error': f'Exception: {str(e)}'}, status=500)
 
 
 @csrf_exempt
 @require_http_methods(["GET"])
 def slack_search_messages(request):
     """Search for messages across all Slack channels."""
-    user, error_response = get_user_from_token(request)
-    if error_response:
-        return error_response
-    
-    slack_creds = get_slack_credentials(user)
-    if not slack_creds:
-        return JsonResponse({'error': 'Slack not connected'}, status=400)
-    
-    query = request.GET.get('query')
-    count = request.GET.get('count', '20')
-    sort = request.GET.get('sort', 'timestamp')
-    
-    if not query:
-        return JsonResponse({'error': 'Query parameter is required'}, status=400)
-    
-    url = f"https://slack.com/api/search.messages?query={query}&count={count}&sort={sort}"
-    data, error = make_slack_api_request(url, slack_creds['access_token'])
-    
-    if error:
-        return JsonResponse({'error': error}, status=500)
-    
-    if data.get('ok'):
-        messages_data = data.get('messages', {})
-        return JsonResponse({
-            'messages': messages_data.get('matches', []),
-            'total': messages_data.get('total', 0)
-        })
-    else:
-        return JsonResponse({'error': data.get('error', 'Failed to search messages')}, status=500)
+    try:
+        user, error_response = get_user_from_token(request)
+        if error_response:
+            return error_response
+        
+        slack_creds = get_slack_credentials(user)
+        if not slack_creds:
+            return JsonResponse({'error': 'Slack not connected'}, status=400)
+        
+        query = request.GET.get('query')
+        count = request.GET.get('count', '20')
+        sort = request.GET.get('sort', 'timestamp')
+        
+        if not query:
+            return JsonResponse({'error': 'Query parameter is required'}, status=400)
+        
+        url = f"https://slack.com/api/search.messages?query={query}&count={count}&sort={sort}"
+        data, error = make_slack_api_request(url, slack_creds['access_token'])
+        
+        if error:
+            return JsonResponse({'error': error}, status=500)
+        
+        if data.get('ok'):
+            messages_data = data.get('messages', {})
+            return JsonResponse({
+                'messages': messages_data.get('matches', []),
+                'total': messages_data.get('total', 0)
+            })
+        else:
+            return JsonResponse({'error': data.get('error', 'Failed to search messages')}, status=500)
+    except Exception as e:
+        return JsonResponse({'error': f'Exception: {str(e)}'}, status=500)
 
 
 @csrf_exempt
 @require_http_methods(["GET"])
 def slack_user_info(request):
     """Get information about a Slack user by their user ID."""
-    user, error_response = get_user_from_token(request)
-    if error_response:
-        return error_response
-    
-    slack_creds = get_slack_credentials(user)
-    if not slack_creds:
-        return JsonResponse({'error': 'Slack not connected'}, status=400)
-    
-    user_id = request.GET.get('user_id')
-    
-    if not user_id:
-        return JsonResponse({'error': 'user_id parameter is required'}, status=400)
-    
-    url = f"https://slack.com/api/users.info?user={user_id}"
-    data, error = make_slack_api_request(url, slack_creds['access_token'])
-    
-    if error:
-        return JsonResponse({'error': error}, status=500)
-    
-    if data.get('ok'):
-        return JsonResponse({'user': data.get('user', {})})
-    else:
-        return JsonResponse({'error': data.get('error', 'Failed to fetch user info')}, status=500)
+    try:
+        user, error_response = get_user_from_token(request)
+        if error_response:
+            return error_response
+        
+        slack_creds = get_slack_credentials(user)
+        if not slack_creds:
+            return JsonResponse({'error': 'Slack not connected'}, status=400)
+        
+        user_id = request.GET.get('user_id')
+        
+        if not user_id:
+            return JsonResponse({'error': 'user_id parameter is required'}, status=400)
+        
+        url = f"https://slack.com/api/users.info?user={user_id}"
+        data, error = make_slack_api_request(url, slack_creds['access_token'])
+        
+        if error:
+            return JsonResponse({'error': error}, status=500)
+        
+        if data.get('ok'):
+            return JsonResponse({'user': data.get('user', {})})
+        else:
+            return JsonResponse({'error': data.get('error', 'Failed to fetch user info')}, status=500)
+    except Exception as e:
+        return JsonResponse({'error': f'Exception: {str(e)}'}, status=500)
 
 
 @csrf_exempt
 @require_http_methods(["POST"])
 def slack_set_channel_topic(request):
     """Set or update the topic for a Slack channel."""
-    user, error_response = get_user_from_token(request)
-    if error_response:
-        return error_response
-    
-    slack_creds = get_slack_credentials(user)
-    if not slack_creds:
-        return JsonResponse({'error': 'Slack not connected'}, status=400)
-    
     try:
+        user, error_response = get_user_from_token(request)
+        if error_response:
+            return error_response
+        
+        slack_creds = get_slack_credentials(user)
+        if not slack_creds:
+            return JsonResponse({'error': 'Slack not connected'}, status=400)
+        
         data = json.loads(request.body) if request.body else {}
         channel = data.get('channel')
         topic = data.get('topic')
@@ -565,8 +653,13 @@ def slack_set_channel_topic(request):
         if not channel or topic is None:
             return JsonResponse({'error': 'Channel and topic are required'}, status=400)
         
+        # Resolve channel name to ID if needed
+        channel_id, resolve_error = resolve_channel_id(channel, slack_creds['access_token'])
+        if resolve_error:
+            return JsonResponse({'error': resolve_error}, status=400)
+        
         payload = {
-            'channel': channel,
+            'channel': channel_id,
             'topic': topic
         }
         
@@ -582,22 +675,22 @@ def slack_set_channel_topic(request):
             return JsonResponse({'error': result.get('error', 'Failed to set channel topic')}, status=500)
             
     except Exception as e:
-        return JsonResponse({'error': f'Error: {str(e)}'}, status=500)
+        return JsonResponse({'error': f'Exception: {str(e)}'}, status=500)
 
 
 @csrf_exempt
 @require_http_methods(["POST"])
 def slack_add_reaction(request):
     """Add an emoji reaction to a Slack message."""
-    user, error_response = get_user_from_token(request)
-    if error_response:
-        return error_response
-    
-    slack_creds = get_slack_credentials(user)
-    if not slack_creds:
-        return JsonResponse({'error': 'Slack not connected'}, status=400)
-    
     try:
+        user, error_response = get_user_from_token(request)
+        if error_response:
+            return error_response
+        
+        slack_creds = get_slack_credentials(user)
+        if not slack_creds:
+            return JsonResponse({'error': 'Slack not connected'}, status=400)
+        
         data = json.loads(request.body) if request.body else {}
         channel = data.get('channel')
         timestamp = data.get('timestamp')
@@ -606,8 +699,13 @@ def slack_add_reaction(request):
         if not channel or not timestamp or not name:
             return JsonResponse({'error': 'Channel, timestamp, and name are required'}, status=400)
         
+        # Resolve channel name to ID if needed
+        channel_id, resolve_error = resolve_channel_id(channel, slack_creds['access_token'])
+        if resolve_error:
+            return JsonResponse({'error': resolve_error}, status=400)
+        
         payload = {
-            'channel': channel,
+            'channel': channel_id,
             'timestamp': timestamp,
             'name': name
         }
@@ -624,5 +722,5 @@ def slack_add_reaction(request):
             return JsonResponse({'error': result.get('error', 'Failed to add reaction')}, status=500)
             
     except Exception as e:
-        return JsonResponse({'error': f'Error: {str(e)}'}, status=500)
+        return JsonResponse({'error': f'Exception: {str(e)}'}, status=500)
 
