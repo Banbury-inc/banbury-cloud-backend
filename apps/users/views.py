@@ -1117,4 +1117,58 @@ def get_user_friends(request):
         return JsonResponse({"result": "fail", "message": "No friends found"})
 
 
+@csrf_exempt
+@require_http_methods(["POST"])
+def get_realtime_token(request):
+    """Generate an ephemeral token for OpenAI Realtime API."""
+    import os
+    import requests
+    
+    try:
+        username = request.username_from_token
+        if not username:
+            return JsonResponse({"error": "Unauthorized"}, status=401)
+        
+        # Get OpenAI API key from environment
+        openai_api_key = os.environ.get('OPENAI_API_KEY')
+        if not openai_api_key:
+            return JsonResponse({"error": "OpenAI API key not configured"}, status=500)
+        
+        # Parse request body for optional configuration
+        try:
+            body = json.loads(request.body.decode('utf-8')) if request.body else {}
+        except json.JSONDecodeError:
+            body = {}
+        
+        model = body.get('model', 'gpt-4o-realtime-preview-2024-12-17')
+        voice = body.get('voice', 'alloy')
+        
+        # Create ephemeral token by calling OpenAI API
+        response = requests.post(
+            'https://api.openai.com/v1/realtime/sessions',
+            headers={
+                'Authorization': f'Bearer {openai_api_key}',
+                'Content-Type': 'application/json'
+            },
+            json={
+                'model': model,
+                'voice': voice
+            },
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            session_data = response.json()
+            return JsonResponse({
+                "result": "success",
+                "client_secret": session_data
+            })
+        else:
+            return JsonResponse({
+                "error": f"Failed to create session: {response.text}"
+            }, status=response.status_code)
+            
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
 
