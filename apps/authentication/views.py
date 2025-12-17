@@ -2000,18 +2000,16 @@ def gmail_send_reply(request):
 
 @csrf_exempt
 @require_http_methods(["GET"])
-def gmail_get_thread(request):
+def gmail_get_thread(request, thread_id: str):
     """
     Get a specific thread with all its messages.
     
-    Query Parameters:
+    URL Parameters:
         thread_id: The ID of the thread to retrieve
     """
     username = _require_auth_username(request)
     if not username:
         return JsonResponse({"message": "Authentication required"}, status=401)
-    
-    thread_id = request.GET.get('thread_id')
     
     if not thread_id:
         return JsonResponse({
