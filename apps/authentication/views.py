@@ -1574,6 +1574,38 @@ def _require_auth_username(request):
     except Exception:
         return None
 @csrf_exempt
+@require_http_methods(["GET"])
+def calendar_calendars(request):
+    """List Google Calendar calendars for the authenticated user.
+    GET: list calendars from calendarList.list API
+    Returns: { items: CalendarListEntry[], nextPageToken?: string }
+    """
+    username = _require_auth_username(request)
+    if not username:
+        return JsonResponse({"message": "Authentication required"}, status=401)
+
+    user_doc = _get_mongo_user_by_username(username)
+    if not user_doc:
+        return JsonResponse({"message": "User not found"}, status=404)
+
+    credentials = user_doc.get("google_drive_credentials") or {}
+    access_token, _ = _refresh_google_access_token_if_needed(credentials, user_doc)
+    if not access_token:
+        return JsonResponse({"message": "No Google credentials on file"}, status=400)
+
+    url = "https://www.googleapis.com/calendar/v3/users/me/calendarList"
+    params = {}
+    for key in ["maxResults", "pageToken", "minAccessRole", "showDeleted", "showHidden"]:
+        val = request.GET.get(key)
+        if val is not None:
+            params[key] = val
+    if params:
+        url += f"?{urlencode(params)}"
+    resp = requests.get(url, headers={"Authorization": f"Bearer {access_token}"}, timeout=20)
+    return JsonResponse(resp.json(), status=resp.status_code)
+
+
+@csrf_exempt
 @require_http_methods(["GET", "POST", "PUT", "DELETE"])
 def calendar_events(request, event_id: str = None):
     """Proxy Google Calendar events for the authenticated user.
