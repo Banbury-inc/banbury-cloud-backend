@@ -2190,3 +2190,130 @@ def google_calendar_delete_event(request, calendar_id, event_id):
     from .google_calendar_service import delete_calendar_event
     result = delete_calendar_event(username, event_id, calendar_id)
     return JsonResponse(result)
+
+
+# ============ Starred S3 Files Endpoints ============
+
+@csrf_exempt
+@require_http_methods(["POST"])
+@authentication_classes([])
+def get_starred_s3_files(request):
+    """
+    Get all starred S3 file IDs for the authenticated user.
+    
+    Returns:
+        JsonResponse: {"result": "success", "file_ids": [list of file_id strings]}
+    """
+    username = request.username_from_token
+    
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client["NeuraNet"]
+    starred_collection = db["starred_s3_files"]
+    
+    try:
+        starred_docs = list(starred_collection.find({"username": username}))
+        file_ids = [doc.get("file_id") for doc in starred_docs if doc.get("file_id")]
+        
+        return JsonResponse({
+            "result": "success",
+            "file_ids": file_ids
+        })
+    except Exception as e:
+        return JsonResponse({
+            "result": "error",
+            "error": str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+@authentication_classes([])
+def star_s3_file(request):
+    """
+    Star an S3 file for the authenticated user.
+    
+    Expects JSON body: {"file_id": "..."}
+    
+    Returns:
+        JsonResponse: {"result": "success"} or {"result": "error", "error": "..."}
+    """
+    username = request.username_from_token
+    
+    try:
+        data = json.loads(request.body)
+        file_id = data.get("file_id")
+        
+        if not file_id:
+            return JsonResponse({
+                "result": "error",
+                "error": "Missing required field: file_id"
+            }, status=400)
+        
+        uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+        client = MongoClient(uri)
+        db = client["NeuraNet"]
+        starred_collection = db["starred_s3_files"]
+        
+        # Upsert: insert if not exists, otherwise do nothing
+        starred_collection.update_one(
+            {"username": username, "file_id": file_id},
+            {"$setOnInsert": {
+                "username": username,
+                "file_id": file_id,
+                "created_at": datetime.utcnow()
+            }},
+            upsert=True
+        )
+        
+        return JsonResponse({"result": "success"})
+        
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+    except Exception as e:
+        return JsonResponse({
+            "result": "error",
+            "error": str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+@authentication_classes([])
+def unstar_s3_file(request):
+    """
+    Unstar an S3 file for the authenticated user.
+    
+    Expects JSON body: {"file_id": "..."}
+    
+    Returns:
+        JsonResponse: {"result": "success"} or {"result": "error", "error": "..."}
+    """
+    username = request.username_from_token
+    
+    try:
+        data = json.loads(request.body)
+        file_id = data.get("file_id")
+        
+        if not file_id:
+            return JsonResponse({
+                "result": "error",
+                "error": "Missing required field: file_id"
+            }, status=400)
+        
+        uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+        client = MongoClient(uri)
+        db = client["NeuraNet"]
+        starred_collection = db["starred_s3_files"]
+        
+        starred_collection.delete_one({"username": username, "file_id": file_id})
+        
+        return JsonResponse({"result": "success"})
+        
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+    except Exception as e:
+        return JsonResponse({
+            "result": "error",
+            "error": str(e)
+        }, status=500)

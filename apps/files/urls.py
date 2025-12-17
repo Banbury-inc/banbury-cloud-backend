@@ -54,4 +54,8 @@ urlpatterns = [
     path("google_calendar/event", views.google_calendar_create_event, name="google_calendar_create_event"),
     path("google_calendar/event", views.google_calendar_update_event, name="google_calendar_update_event"),
     path("google_calendar/event/<str:calendar_id>/<str:event_id>", views.google_calendar_delete_event, name="google_calendar_delete_event"),
+    # Starred S3 files endpoints
+    path("get_starred_s3_files/", views.get_starred_s3_files, name="get_starred_s3_files"),
+    path("star_s3_file/", views.star_s3_file, name="star_s3_file"),
+    path("unstar_s3_file/", views.unstar_s3_file, name="unstar_s3_file"),
 ]
