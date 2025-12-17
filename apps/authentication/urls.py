@@ -29,6 +29,8 @@ urlpatterns = [
     path('browserbase/session/', views.browserbase_session, name='browserbase_session'),
     # Gmail API proxy endpoints
     path('gmail/list_messages/', views.gmail_list_messages, name='gmail_list_messages'),
+    path('gmail/labels/', views.gmail_labels, name='gmail_labels'),
+    path('gmail/labels/<str:label_id>/', views.gmail_label_detail, name='gmail_label_detail'),
     path('gmail/messages/<str:message_id>/', views.gmail_get_message, name='gmail_get_message'),
     path('gmail/send_message/', views.gmail_send_message, name='gmail_send_message'),
     path('gmail/messages/<str:message_id>/modify/', views.gmail_modify_message, name='gmail_modify_message'),

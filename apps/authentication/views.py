@@ -92,6 +92,7 @@ ALL_SCOPES = {
     ],
     "gmail": [
         "https://www.googleapis.com/auth/gmail.modify",
+        "https://www.googleapis.com/auth/gmail.labels",
         "https://www.googleapis.com/auth/gmail.settings.basic"
     ],
     "calendar": [
@@ -106,6 +107,7 @@ LEGACY_SCOPES = [
     "https://www.googleapis.com/auth/drive",
     "https://www.googleapis.com/auth/drive.file",
     "https://www.googleapis.com/auth/gmail.modify",
+    "https://www.googleapis.com/auth/gmail.labels",
     "https://www.googleapis.com/auth/gmail.settings.basic",
     "https://www.googleapis.com/auth/calendar",
     "openid"
@@ -1707,6 +1709,120 @@ def gmail_list_messages(request):
     if resp.status_code != 200:
         return JsonResponse({"message": "Failed to list messages", "status": resp.status_code, "error": resp.text}, status=resp.status_code)
     return JsonResponse(resp.json())
+
+
+@csrf_exempt
+@require_http_methods(["GET", "POST"])
+def gmail_labels(request):
+    """List or create Gmail labels for the authenticated user.
+
+    GET: returns Gmail API labels list (system + user).
+    POST: create a new user label. Expects JSON: { name, labelListVisibility?, messageListVisibility? }
+    """
+    username = _require_auth_username(request)
+    if not username:
+        return JsonResponse({"message": "Authentication required"}, status=401)
+
+    user_doc = _get_mongo_user_by_username(username)
+    if not user_doc:
+        return JsonResponse({"message": "User not found"}, status=404)
+
+    credentials = user_doc.get("google_drive_credentials") or {}
+    access_token, _ = _refresh_google_access_token_if_needed(credentials, user_doc)
+    if not access_token:
+        return JsonResponse({"message": "No Google credentials on file"}, status=400)
+
+    base_url = "https://gmail.googleapis.com/gmail/v1/users/me/labels"
+
+    if request.method == "GET":
+        # Explicitly request both SYSTEM and USER label types to avoid accidental filtering.
+        resp = requests.get(
+            base_url,
+            headers={"Authorization": f"Bearer {access_token}"},
+            params=[("labelTypes", "system"), ("labelTypes", "user")],
+            timeout=20
+        )
+        if resp.status_code != 200:
+            return JsonResponse(
+                {"message": "Failed to list labels", "status": resp.status_code, "error": resp.text},
+                status=resp.status_code
+            )
+
+        payload = resp.json() if resp.text else {}
+        labels = payload.get("labels", [])
+        # Normalize label type casing just in case.
+        for label in labels:
+            label_type = label.get("type")
+            if isinstance(label_type, str):
+                label["type"] = label_type.lower()
+
+        return JsonResponse({"labels": labels})
+
+    # POST
+    try:
+        payload = json.loads(request.body or "{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"message": "Invalid JSON"}, status=400)
+
+    name = payload.get("name")
+    if not name:
+        return JsonResponse({"message": "Label 'name' is required"}, status=400)
+
+    create_body = {"name": name}
+    if payload.get("labelListVisibility") is not None:
+        create_body["labelListVisibility"] = payload.get("labelListVisibility")
+    if payload.get("messageListVisibility") is not None:
+        create_body["messageListVisibility"] = payload.get("messageListVisibility")
+
+    resp = requests.post(
+        base_url,
+        headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"},
+        json=create_body,
+        timeout=20
+    )
+    if resp.status_code not in (200, 201):
+        return JsonResponse(
+            {"message": "Failed to create label", "status": resp.status_code, "error": resp.text},
+            status=resp.status_code
+        )
+
+    created = resp.json() if resp.text else {}
+    created_type = created.get("type")
+    if isinstance(created_type, str):
+        created["type"] = created_type.lower()
+
+    return JsonResponse(created, status=201)
+
+
+@csrf_exempt
+@require_http_methods(["DELETE"])
+def gmail_label_detail(request, label_id: str):
+    """Delete a Gmail label by ID for the authenticated user."""
+    username = _require_auth_username(request)
+    if not username:
+        return JsonResponse({"message": "Authentication required"}, status=401)
+
+    if not label_id:
+        return JsonResponse({"message": "Label ID is required"}, status=400)
+
+    user_doc = _get_mongo_user_by_username(username)
+    if not user_doc:
+        return JsonResponse({"message": "User not found"}, status=404)
+
+    credentials = user_doc.get("google_drive_credentials") or {}
+    access_token, _ = _refresh_google_access_token_if_needed(credentials, user_doc)
+    if not access_token:
+        return JsonResponse({"message": "No Google credentials on file"}, status=400)
+
+    url = f"https://gmail.googleapis.com/gmail/v1/users/me/labels/{label_id}"
+    resp = requests.delete(url, headers={"Authorization": f"Bearer {access_token}"}, timeout=20)
+    if resp.status_code not in (200, 204):
+        return JsonResponse(
+            {"message": "Failed to delete label", "status": resp.status_code, "error": resp.text},
+            status=resp.status_code
+        )
+
+    return JsonResponse({"success": True})
 
 
 @csrf_exempt

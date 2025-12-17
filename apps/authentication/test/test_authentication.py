@@ -150,3 +150,50 @@ class TestGoogleAuth:
         response_data = json.loads(response.content)
         assert response_data['success'] is False
         assert 'No authorization code provided' in response_data['error'] 
+
+
+@pytest.mark.django_db
+class TestGmailLabels:
+    def test_gmail_labels_requires_auth(self, client):
+        url = reverse('gmail_labels')
+        response = client.get(url)
+        assert response.status_code == 401
+
+    @patch('apps.authentication.views.requests.get')
+    @patch('apps.authentication.views._refresh_google_access_token_if_needed')
+    @patch('apps.authentication.views._get_mongo_user_by_username')
+    @patch('apps.authentication.views._require_auth_username')
+    def test_gmail_labels_includes_user_labels(
+        self,
+        mock_require_auth_username,
+        mock_get_mongo_user_by_username,
+        mock_refresh_google_access_token_if_needed,
+        mock_requests_get,
+        client
+    ):
+        mock_require_auth_username.return_value = "testuser"
+        mock_get_mongo_user_by_username.return_value = {
+            "_id": ObjectId("60d21b4667d0d8992e610c85"),
+            "username": "testuser",
+            "google_drive_credentials": {"access_token": "token"}
+        }
+        mock_refresh_google_access_token_if_needed.return_value = ("ya29.test-token", None)
+
+        mock_resp = Mock()
+        mock_resp.status_code = 200
+        mock_resp.text = "ok"
+        mock_resp.json.return_value = {
+            "labels": [
+                {"id": "INBOX", "name": "INBOX", "type": "system"},
+                {"id": "Label_123", "name": "My Custom", "type": "user"}
+            ]
+        }
+        mock_requests_get.return_value = mock_resp
+
+        url = reverse('gmail_labels')
+        response = client.get(url)
+        assert response.status_code == 200
+
+        data = json.loads(response.content)
+        assert "labels" in data
+        assert any(l.get("type") == "user" and l.get("name") == "My Custom" for l in data["labels"])
