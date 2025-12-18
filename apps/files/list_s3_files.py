@@ -15,8 +15,8 @@ def list_s3_files(username):
     """
     try:
         # Connect to MongoDB
-        uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
-        client = MongoClient(uri)
+        uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority&readPreference=secondaryPreferred"
+        client = MongoClient(uri, serverSelectionTimeoutMS=10000)
         db = client["NeuraNet"]
         user_collection = db["users"]
         file_collection = db["files"]
