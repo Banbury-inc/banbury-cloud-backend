@@ -1635,7 +1635,7 @@ def calendar_events(request, event_id: str = None):
             val = request.GET.get(key)
             if val is not None:
                 params[key] = val
-        url = f"{base}/{calendar_id}/events"
+        url = f"{base}/{urllib.parse.quote(calendar_id, safe='')}/events"
         if params:
             url += f"?{urlencode(params)}"
         resp = requests.get(url, headers={"Authorization": f"Bearer {access_token}"}, timeout=20)
@@ -1648,7 +1648,7 @@ def calendar_events(request, event_id: str = None):
             return JsonResponse({"message": "Invalid JSON"}, status=400)
         calendar_id = payload.get('calendarId', 'primary')
         event = payload.get('event') or {}
-        url = f"{base}/{calendar_id}/events"
+        url = f"{base}/{urllib.parse.quote(calendar_id, safe='')}/events"
         resp = requests.post(url, headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}, json=event, timeout=20)
         return JsonResponse(resp.json(), status=resp.status_code)
 
@@ -1674,7 +1674,7 @@ def calendar_event_detail(request, event_id: str):
 
     calendar_id = request.GET.get('calendarId', 'primary')
     base = "https://www.googleapis.com/calendar/v3/calendars"
-    url = f"{base}/{calendar_id}/events/{event_id}"
+    url = f"{base}/{urllib.parse.quote(calendar_id, safe='')}/events/{event_id}"
 
     if request.method == "GET":
         resp = requests.get(url, headers={"Authorization": f"Bearer {access_token}"}, timeout=20)
