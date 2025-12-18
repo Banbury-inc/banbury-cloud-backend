@@ -2,6 +2,7 @@ from django.urls import path
 from . import views
 from . import slack_views
 from . import github_views
+from . import outlook_views
 
 urlpatterns = [
     path("login/", views.login, name="login"),
@@ -98,4 +99,19 @@ urlpatterns = [
     path('github/repos/<str:owner>/<str:repo>/contents/', github_views.github_get_file_contents, name='github_get_file_contents'),
     path('github/issues/create/', github_views.github_create_issue, name='github_create_issue'),
     path('github/search/code/', github_views.github_search_code, name='github_search_code'),
+    # Outlook OAuth endpoints
+    path('outlook/status/', outlook_views.outlook_connection_status, name='outlook_connection_status'),
+    path('outlook/initiate_oauth/', outlook_views.outlook_initiate_oauth, name='outlook_initiate_oauth'),
+    path('outlook/oauth_callback/', outlook_views.outlook_oauth_callback, name='outlook_oauth_callback'),
+    path('outlook/disconnect/', outlook_views.outlook_disconnect, name='outlook_disconnect'),
+    # Outlook Mail API proxy endpoints
+    path('outlook/list_messages/', outlook_views.outlook_list_messages, name='outlook_list_messages'),
+    path('outlook/messages/<str:message_id>/', outlook_views.outlook_get_message, name='outlook_get_message'),
+    path('outlook/messages/batch', outlook_views.outlook_get_messages_batch, name='outlook_get_messages_batch'),
+    path('outlook/folders/', outlook_views.outlook_list_folders, name='outlook_list_folders'),
+    path('outlook/send_message/', outlook_views.outlook_send_message, name='outlook_send_message'),
+    path('outlook/reply/', outlook_views.outlook_send_reply, name='outlook_send_reply'),
+    path('outlook/messages/<str:message_id>/modify/', outlook_views.outlook_modify_message, name='outlook_modify_message'),
+    path('outlook/messages/<str:message_id>/attachments/<str:attachment_id>', outlook_views.outlook_get_attachment, name='outlook_get_attachment'),
+    path('outlook/thread/<str:conversation_id>/', outlook_views.outlook_get_thread, name='outlook_get_thread'),
 ]
