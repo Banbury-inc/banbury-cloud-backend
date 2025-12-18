@@ -107,7 +107,7 @@ def _refresh_outlook_access_token_if_needed(outlook_credentials, user_doc):
             'client_secret': ms_client_secret,
             'refresh_token': refresh_token,
             'grant_type': 'refresh_token',
-            'scope': outlook_credentials.get('scope', 'Mail.Read Mail.ReadWrite Mail.Send User.Read offline_access')
+            'scope': outlook_credentials.get('scope', 'Mail.Read Mail.ReadWrite Mail.Send User.Read Calendars.ReadWrite offline_access')
         }
         
         response = requests.post(token_url, data=token_data, timeout=30)
@@ -216,6 +216,63 @@ def outlook_connection_status(request):
 
 
 @csrf_exempt
+@require_http_methods(["GET"])
+def outlook_calendar_status(request):
+    """
+    Get the calendar-specific connection status for the authenticated user.
+    Reports whether the account is connected AND whether Calendar scopes are present.
+    """
+    user, error_response = get_user_from_token(request)
+    if error_response:
+        return error_response
+    
+    outlook_creds = get_outlook_credentials(user)
+    
+    if not outlook_creds:
+        return JsonResponse({
+            'connected': False,
+            'hasCalendarScope': False,
+            'needsReconnect': False
+        })
+    
+    # Check if token is still valid
+    access_token, _ = _refresh_outlook_access_token_if_needed(outlook_creds, user)
+    
+    if not access_token:
+        return JsonResponse({
+            'connected': False,
+            'hasCalendarScope': False,
+            'needsReconnect': False
+        })
+    
+    # Verify connection by getting user info
+    url = "https://graph.microsoft.com/v1.0/me"
+    data, error = make_graph_api_request(url, access_token)
+    
+    if not data or error:
+        return JsonResponse({
+            'connected': False,
+            'hasCalendarScope': False,
+            'needsReconnect': False
+        })
+    
+    # Check if calendar scope is present in stored scopes
+    stored_scope = outlook_creds.get('scope', '')
+    has_calendar_scope = 'Calendars.ReadWrite' in stored_scope or 'Calendars.Read' in stored_scope
+    
+    # If connected but missing calendar scope, user needs to reconnect
+    needs_reconnect = not has_calendar_scope
+    
+    return JsonResponse({
+        'connected': True,
+        'hasCalendarScope': has_calendar_scope,
+        'needsReconnect': needs_reconnect,
+        'accountEmail': data.get('mail') or data.get('userPrincipalName'),
+        'accountName': data.get('displayName')
+    })
+
+
+@csrf_exempt
 @require_http_methods(["POST"])
 def outlook_initiate_oauth(request):
     """Initiate Microsoft OAuth flow for Outlook connection."""
@@ -257,7 +314,7 @@ def outlook_initiate_oauth(request):
             }
         )
         
-        # Required Microsoft OAuth scopes for mail
+        # Required Microsoft OAuth scopes for mail and calendar
         scopes = [
             'openid',
             'profile',
@@ -266,7 +323,8 @@ def outlook_initiate_oauth(request):
             'Mail.Read',
             'Mail.ReadWrite',
             'Mail.Send',
-            'User.Read'
+            'User.Read',
+            'Calendars.ReadWrite'
         ]
         
         # Generate authorization URL (using common tenant for multi-tenant)
@@ -920,4 +978,569 @@ def outlook_get_thread(request, conversation_id):
         'id': conversation_id,
         'messages': messages
     })
+
+
+# ============================================================================
+# OUTLOOK CALENDAR API PROXY ENDPOINTS
+# ============================================================================
+
+def _normalize_graph_event_to_calendar_event(graph_event, calendar_id=None):
+    """
+    Normalize a Microsoft Graph calendar event to match the frontend CalendarEvent interface.
+    
+    Graph Event fields → CalendarEvent fields:
+    - subject → summary
+    - bodyPreview / body.content → description
+    - location.displayName → location
+    - start.dateTime + start.timeZone → start
+    - end.dateTime + end.timeZone → end
+    - attendees[] → attendees[]
+    - webLink → htmlLink
+    - organizer → organizer
+    - isOrganizer → (used for creator)
+    """
+    if not graph_event:
+        return None
+    
+    # Build normalized event
+    normalized = {
+        'id': graph_event.get('id'),
+        'calendarId': calendar_id,
+        'status': 'confirmed' if not graph_event.get('isCancelled') else 'cancelled',
+        'summary': graph_event.get('subject'),
+        'description': graph_event.get('bodyPreview') or (graph_event.get('body', {}).get('content') if graph_event.get('body') else None),
+        'htmlLink': graph_event.get('webLink'),
+    }
+    
+    # Location
+    location = graph_event.get('location')
+    if location:
+        normalized['location'] = location.get('displayName') or ''
+    
+    # Start time
+    start = graph_event.get('start')
+    if start:
+        if start.get('dateTime'):
+            normalized['start'] = {
+                'dateTime': start.get('dateTime'),
+                'timeZone': start.get('timeZone')
+            }
+        elif start.get('date'):
+            normalized['start'] = {
+                'date': start.get('date')
+            }
+    
+    # End time
+    end = graph_event.get('end')
+    if end:
+        if end.get('dateTime'):
+            normalized['end'] = {
+                'dateTime': end.get('dateTime'),
+                'timeZone': end.get('timeZone')
+            }
+        elif end.get('date'):
+            normalized['end'] = {
+                'date': end.get('date')
+            }
+    
+    # Organizer
+    organizer = graph_event.get('organizer')
+    if organizer:
+        email_addr = organizer.get('emailAddress', {})
+        normalized['organizer'] = {
+            'email': email_addr.get('address'),
+            'displayName': email_addr.get('name')
+        }
+        # Use organizer as creator too (Graph doesn't have separate creator)
+        normalized['creator'] = normalized['organizer']
+    
+    # Attendees
+    attendees = graph_event.get('attendees', [])
+    if attendees:
+        normalized['attendees'] = []
+        for attendee in attendees:
+            email_addr = attendee.get('emailAddress', {})
+            response_status = attendee.get('status', {}).get('response', 'needsAction')
+            # Map Graph response status to Google Calendar format
+            status_map = {
+                'none': 'needsAction',
+                'organizer': 'accepted',
+                'tentativelyAccepted': 'tentative',
+                'accepted': 'accepted',
+                'declined': 'declined',
+                'notResponded': 'needsAction'
+            }
+            normalized['attendees'].append({
+                'email': email_addr.get('address'),
+                'displayName': email_addr.get('name'),
+                'responseStatus': status_map.get(response_status, 'needsAction')
+            })
+    
+    # Online meeting link (similar to hangoutLink)
+    if graph_event.get('onlineMeeting'):
+        normalized['hangoutLink'] = graph_event.get('onlineMeeting', {}).get('joinUrl')
+    elif graph_event.get('onlineMeetingUrl'):
+        normalized['hangoutLink'] = graph_event.get('onlineMeetingUrl')
+    
+    return normalized
+
+
+def _normalize_graph_calendar_to_calendar_list_entry(graph_calendar):
+    """
+    Normalize a Microsoft Graph calendar to match the frontend CalendarListEntry interface.
+    
+    Graph Calendar fields → CalendarListEntry fields:
+    - id → id
+    - name → summary
+    - color → backgroundColor (map to hex)
+    - isDefaultCalendar → primary
+    - canEdit → accessRole
+    """
+    if not graph_calendar:
+        return None
+    
+    # Map Graph calendar colors to hex values
+    color_map = {
+        'auto': '#0078D4',
+        'lightBlue': '#69AFE5',
+        'lightGreen': '#7BD148',
+        'lightOrange': '#FFB878',
+        'lightGray': '#A4BDFC',
+        'lightYellow': '#FBD75B',
+        'lightTeal': '#51B749',
+        'lightPink': '#DC2127',
+        'lightBrown': '#8D6E63',
+        'lightRed': '#E57373',
+        'maxColor': '#795548'
+    }
+    
+    graph_color = graph_calendar.get('color', 'auto')
+    hex_color = color_map.get(graph_color, '#0078D4')
+    
+    # Determine access role
+    can_edit = graph_calendar.get('canEdit', False)
+    can_share = graph_calendar.get('canShare', False)
+    is_owner = graph_calendar.get('isOwner', False)
+    
+    if is_owner:
+        access_role = 'owner'
+    elif can_share:
+        access_role = 'writer'
+    elif can_edit:
+        access_role = 'writer'
+    else:
+        access_role = 'reader'
+    
+    return {
+        'id': graph_calendar.get('id'),
+        'summary': graph_calendar.get('name'),
+        'description': None,  # Graph calendars don't have descriptions in list
+        'summaryOverride': None,
+        'colorId': graph_color,
+        'backgroundColor': hex_color,
+        'foregroundColor': '#FFFFFF',
+        'hidden': not graph_calendar.get('isVisible', True),
+        'selected': graph_calendar.get('isVisible', True),
+        'primary': graph_calendar.get('isDefaultCalendar', False),
+        'accessRole': access_role,
+        'timeZone': None  # Would need separate call to get this
+    }
+
+
+def _convert_calendar_event_to_graph_event(event_data):
+    """
+    Convert frontend CalendarEvent format to Microsoft Graph event format for create/update.
+    """
+    if not event_data:
+        return {}
+    
+    graph_event = {}
+    
+    # Summary → Subject
+    if 'summary' in event_data:
+        graph_event['subject'] = event_data['summary']
+    
+    # Description → Body
+    if 'description' in event_data:
+        graph_event['body'] = {
+            'contentType': 'HTML' if '<' in str(event_data.get('description', '')) and '>' in str(event_data.get('description', '')) else 'text',
+            'content': event_data['description'] or ''
+        }
+    
+    # Location
+    if 'location' in event_data:
+        graph_event['location'] = {
+            'displayName': event_data['location'] or ''
+        }
+    
+    # Start time
+    if 'start' in event_data:
+        start = event_data['start']
+        if isinstance(start, dict):
+            if start.get('dateTime'):
+                graph_event['start'] = {
+                    'dateTime': start['dateTime'],
+                    'timeZone': start.get('timeZone', 'UTC')
+                }
+            elif start.get('date'):
+                # All-day event
+                graph_event['start'] = {
+                    'dateTime': f"{start['date']}T00:00:00",
+                    'timeZone': start.get('timeZone', 'UTC')
+                }
+                graph_event['isAllDay'] = True
+    
+    # End time
+    if 'end' in event_data:
+        end = event_data['end']
+        if isinstance(end, dict):
+            if end.get('dateTime'):
+                graph_event['end'] = {
+                    'dateTime': end['dateTime'],
+                    'timeZone': end.get('timeZone', 'UTC')
+                }
+            elif end.get('date'):
+                # All-day event
+                graph_event['end'] = {
+                    'dateTime': f"{end['date']}T23:59:59",
+                    'timeZone': end.get('timeZone', 'UTC')
+                }
+    
+    # Attendees
+    if 'attendees' in event_data and event_data['attendees']:
+        graph_event['attendees'] = []
+        for attendee in event_data['attendees']:
+            if isinstance(attendee, dict) and attendee.get('email'):
+                graph_event['attendees'].append({
+                    'emailAddress': {
+                        'address': attendee['email'],
+                        'name': attendee.get('displayName', attendee['email'])
+                    },
+                    'type': 'required'
+                })
+    
+    return graph_event
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def outlook_calendar_status(request):
+    """
+    Get the current Outlook Calendar connection status for the authenticated user.
+    Returns connected status and whether Calendar scopes are present.
+    """
+    user, error_response = get_user_from_token(request)
+    if error_response:
+        return error_response
+    
+    outlook_creds = get_outlook_credentials(user)
+    
+    if not outlook_creds:
+        return JsonResponse({
+            'connected': False,
+            'hasCalendarScope': False
+        })
+    
+    # Check if Calendar scope is present
+    scope = outlook_creds.get('scope', '')
+    has_calendar_scope = 'Calendars.Read' in scope or 'Calendars.ReadWrite' in scope
+    
+    # Verify token is still valid
+    access_token, _ = _refresh_outlook_access_token_if_needed(outlook_creds, user)
+    
+    if access_token:
+        # Try to get user profile from Graph API
+        url = "https://graph.microsoft.com/v1.0/me"
+        data, error = make_graph_api_request(url, access_token)
+        
+        if data and not error:
+            return JsonResponse({
+                'connected': True,
+                'hasCalendarScope': has_calendar_scope,
+                'accountEmail': data.get('mail') or data.get('userPrincipalName'),
+                'accountName': data.get('displayName')
+            })
+    
+    return JsonResponse({
+        'connected': False,
+        'hasCalendarScope': False
+    })
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def outlook_list_calendars(request):
+    """
+    List Outlook calendars for the authenticated user.
+    Returns: { items: CalendarListEntry[], nextPageToken?: string }
+    """
+    user, error_response = get_user_from_token(request)
+    if error_response:
+        return error_response
+    
+    outlook_creds = get_outlook_credentials(user)
+    if not outlook_creds:
+        return JsonResponse({'error': 'Outlook not connected'}, status=400)
+    
+    access_token, error = _refresh_outlook_access_token_if_needed(outlook_creds, user)
+    if error or not access_token:
+        return JsonResponse({'error': error or 'Failed to get access token'}, status=400)
+    
+    # Get query parameters
+    max_results = request.GET.get('maxResults', '100')
+    skip_token = request.GET.get('pageToken')
+    
+    url = "https://graph.microsoft.com/v1.0/me/calendars"
+    params = {
+        '$top': max_results,
+        '$select': 'id,name,color,isDefaultCalendar,canEdit,canShare,canViewPrivateItems,isOwner,owner'
+    }
+    
+    if skip_token:
+        params['$skip'] = skip_token
+    
+    data, error = make_graph_api_request(url, access_token, params=params)
+    
+    if error:
+        return JsonResponse({'error': error}, status=500)
+    
+    # Normalize calendars to CalendarListEntry format
+    calendars = data.get('value', [])
+    normalized_calendars = [
+        _normalize_graph_calendar_to_calendar_list_entry(cal)
+        for cal in calendars
+    ]
+    
+    # Extract next page token
+    next_link = data.get('@odata.nextLink')
+    next_page_token = None
+    if next_link and '$skip=' in next_link:
+        import re
+        match = re.search(r'\$skip=(\d+)', next_link)
+        if match:
+            next_page_token = match.group(1)
+    
+    return JsonResponse({
+        'items': normalized_calendars,
+        'nextPageToken': next_page_token
+    })
+
+
+@csrf_exempt
+@require_http_methods(["GET", "POST"])
+def outlook_calendar_events(request):
+    """
+    List or create Outlook calendar events.
+    
+    GET: list events
+        Query params: calendarId, timeMin, timeMax, maxResults, pageToken, q, singleEvents, orderBy
+        Returns: { items: CalendarEvent[], nextPageToken?: string }
+    
+    POST: create event
+        Body: { calendarId?: string, event: CalendarEvent }
+        Returns: CalendarEvent
+    """
+    user, error_response = get_user_from_token(request)
+    if error_response:
+        return error_response
+    
+    outlook_creds = get_outlook_credentials(user)
+    if not outlook_creds:
+        return JsonResponse({'error': 'Outlook not connected'}, status=400)
+    
+    access_token, error = _refresh_outlook_access_token_if_needed(outlook_creds, user)
+    if error or not access_token:
+        return JsonResponse({'error': error or 'Failed to get access token'}, status=400)
+    
+    if request.method == "GET":
+        return _outlook_list_events(request, access_token)
+    
+    if request.method == "POST":
+        return _outlook_create_event(request, access_token)
+    
+    return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+
+def _outlook_list_events(request, access_token):
+    """List Outlook calendar events."""
+    calendar_id = request.GET.get('calendarId')
+    time_min = request.GET.get('timeMin')
+    time_max = request.GET.get('timeMax')
+    max_results = request.GET.get('maxResults', '250')
+    skip_token = request.GET.get('pageToken')
+    search_query = request.GET.get('q')
+    order_by = request.GET.get('orderBy', 'start/dateTime')
+    
+    # Build URL - use specific calendar or default
+    if calendar_id:
+        url = f"https://graph.microsoft.com/v1.0/me/calendars/{calendar_id}/events"
+    else:
+        url = "https://graph.microsoft.com/v1.0/me/calendar/events"
+    
+    params = {
+        '$top': max_results,
+        '$select': 'id,subject,bodyPreview,body,start,end,location,organizer,attendees,webLink,onlineMeeting,onlineMeetingUrl,isCancelled,isAllDay,recurrence',
+        '$orderby': order_by
+    }
+    
+    # Build filter for time range
+    filters = []
+    if time_min:
+        filters.append(f"start/dateTime ge '{time_min}'")
+    if time_max:
+        filters.append(f"end/dateTime le '{time_max}'")
+    
+    if filters:
+        params['$filter'] = ' and '.join(filters)
+    
+    if skip_token:
+        params['$skip'] = skip_token
+    
+    if search_query:
+        # Use $search for text search (requires different endpoint)
+        params['$search'] = f'"{search_query}"'
+    
+    data, error = make_graph_api_request(url, access_token, params=params)
+    
+    if error:
+        return JsonResponse({'error': error}, status=500)
+    
+    # Normalize events to CalendarEvent format
+    events = data.get('value', [])
+    normalized_events = [
+        _normalize_graph_event_to_calendar_event(evt, calendar_id)
+        for evt in events
+    ]
+    
+    # Extract next page token
+    next_link = data.get('@odata.nextLink')
+    next_page_token = None
+    if next_link:
+        import re
+        # Check for $skip or $skiptoken
+        skip_match = re.search(r'\$skip=(\d+)', next_link)
+        skiptoken_match = re.search(r'\$skiptoken=([^&]+)', next_link)
+        if skip_match:
+            next_page_token = skip_match.group(1)
+        elif skiptoken_match:
+            next_page_token = skiptoken_match.group(1)
+    
+    return JsonResponse({
+        'items': normalized_events,
+        'nextPageToken': next_page_token
+    })
+
+
+def _outlook_create_event(request, access_token):
+    """Create a new Outlook calendar event."""
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+    
+    calendar_id = payload.get('calendarId')
+    event_data = payload.get('event', {})
+    
+    if not event_data:
+        return JsonResponse({'error': 'Event data is required'}, status=400)
+    
+    # Convert to Graph event format
+    graph_event = _convert_calendar_event_to_graph_event(event_data)
+    
+    # Build URL
+    if calendar_id:
+        url = f"https://graph.microsoft.com/v1.0/me/calendars/{calendar_id}/events"
+    else:
+        url = "https://graph.microsoft.com/v1.0/me/calendar/events"
+    
+    data, error = make_graph_api_request(url, access_token, method='POST', data=graph_event)
+    
+    if error:
+        return JsonResponse({'error': error}, status=500)
+    
+    # Return normalized event
+    normalized = _normalize_graph_event_to_calendar_event(data, calendar_id)
+    return JsonResponse(normalized)
+
+
+@csrf_exempt
+@require_http_methods(["GET", "PUT", "DELETE"])
+def outlook_calendar_event_detail(request, event_id):
+    """
+    Get, update, or delete a single Outlook calendar event by ID.
+    
+    GET: get event details
+        Query params: calendarId (optional)
+        Returns: CalendarEvent
+    
+    PUT: update event
+        Query params: calendarId (optional)
+        Body: { calendarId?: string, event: Partial<CalendarEvent> }
+        Returns: CalendarEvent
+    
+    DELETE: delete event
+        Query params: calendarId (optional)
+        Returns: { success: true }
+    """
+    user, error_response = get_user_from_token(request)
+    if error_response:
+        return error_response
+    
+    outlook_creds = get_outlook_credentials(user)
+    if not outlook_creds:
+        return JsonResponse({'error': 'Outlook not connected'}, status=400)
+    
+    access_token, error = _refresh_outlook_access_token_if_needed(outlook_creds, user)
+    if error or not access_token:
+        return JsonResponse({'error': error or 'Failed to get access token'}, status=400)
+    
+    calendar_id = request.GET.get('calendarId')
+    
+    # Build URL
+    if calendar_id:
+        url = f"https://graph.microsoft.com/v1.0/me/calendars/{calendar_id}/events/{event_id}"
+    else:
+        url = f"https://graph.microsoft.com/v1.0/me/events/{event_id}"
+    
+    if request.method == "GET":
+        params = {
+            '$select': 'id,subject,bodyPreview,body,start,end,location,organizer,attendees,webLink,onlineMeeting,onlineMeetingUrl,isCancelled,isAllDay,recurrence'
+        }
+        data, error = make_graph_api_request(url, access_token, params=params)
+        
+        if error:
+            return JsonResponse({'error': error}, status=500)
+        
+        normalized = _normalize_graph_event_to_calendar_event(data, calendar_id)
+        return JsonResponse(normalized)
+    
+    if request.method == "PUT":
+        try:
+            payload = json.loads(request.body or '{}')
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Invalid JSON'}, status=400)
+        
+        event_data = payload.get('event', {})
+        calendar_id = payload.get('calendarId') or calendar_id
+        
+        # Convert to Graph event format
+        graph_event = _convert_calendar_event_to_graph_event(event_data)
+        
+        data, error = make_graph_api_request(url, access_token, method='PATCH', data=graph_event)
+        
+        if error:
+            return JsonResponse({'error': error}, status=500)
+        
+        normalized = _normalize_graph_event_to_calendar_event(data, calendar_id)
+        return JsonResponse(normalized)
+    
+    if request.method == "DELETE":
+        data, error = make_graph_api_request(url, access_token, method='DELETE')
+        
+        if error:
+            return JsonResponse({'error': error}, status=500)
+        
+        return JsonResponse({'success': True})
+    
+    return JsonResponse({'error': 'Method not allowed'}, status=405)
 

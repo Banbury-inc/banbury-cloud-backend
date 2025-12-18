@@ -3,6 +3,7 @@ from . import views
 from . import slack_views
 from . import github_views
 from . import outlook_views
+from . import onedrive_views
 
 urlpatterns = [
     path("login/", views.login, name="login"),
@@ -114,4 +115,36 @@ urlpatterns = [
     path('outlook/messages/<str:message_id>/modify/', outlook_views.outlook_modify_message, name='outlook_modify_message'),
     path('outlook/messages/<str:message_id>/attachments/<str:attachment_id>', outlook_views.outlook_get_attachment, name='outlook_get_attachment'),
     path('outlook/thread/<str:conversation_id>/', outlook_views.outlook_get_thread, name='outlook_get_thread'),
+    # Outlook Calendar API proxy endpoints
+    path('outlook/calendar/status/', outlook_views.outlook_calendar_status, name='outlook_calendar_status'),
+    path('outlook/calendars/', outlook_views.outlook_list_calendars, name='outlook_list_calendars'),
+    path('outlook/calendar/events/', outlook_views.outlook_calendar_events, name='outlook_calendar_events'),
+    path('outlook/calendar/events/<str:event_id>/', outlook_views.outlook_calendar_event_detail, name='outlook_calendar_event_detail'),
+    # OneDrive OAuth endpoints
+    path('onedrive/status/', onedrive_views.onedrive_connection_status, name='onedrive_connection_status'),
+    path('onedrive/initiate_oauth/', onedrive_views.onedrive_initiate_oauth, name='onedrive_initiate_oauth'),
+    path('onedrive/oauth_callback/', onedrive_views.onedrive_oauth_callback, name='onedrive_oauth_callback'),
+    path('onedrive/disconnect/', onedrive_views.onedrive_disconnect, name='onedrive_disconnect'),
+    # OneDrive file proxy endpoints (Microsoft Graph)
+    path('onedrive/root/children/', onedrive_views.onedrive_list_root_children, name='onedrive_list_root_children'),
+    path('onedrive/items/<str:item_id>/children/', onedrive_views.onedrive_list_item_children, name='onedrive_list_item_children'),
+    path('onedrive/recent/', onedrive_views.onedrive_recent_files, name='onedrive_recent_files'),
+    path('onedrive/search/', onedrive_views.onedrive_search_files, name='onedrive_search_files'),
+    path('onedrive/items/<str:item_id>/', onedrive_views.onedrive_get_item, name='onedrive_get_item'),
+    path('onedrive/items/<str:item_id>/download/', onedrive_views.onedrive_download_file, name='onedrive_download_file'),
+    path('onedrive/items/<str:item_id>/update/', onedrive_views.onedrive_update_file, name='onedrive_update_file'),
+    path('onedrive/folders/create/', onedrive_views.onedrive_create_folder, name='onedrive_create_folder'),
+    path('onedrive/files/upload/', onedrive_views.onedrive_upload_file, name='onedrive_upload_file'),
+    path('onedrive/items/<str:item_id>/rename_move/', onedrive_views.onedrive_rename_move, name='onedrive_rename_move'),
+    path('onedrive/items/<str:item_id>/delete/', onedrive_views.onedrive_delete_item, name='onedrive_delete_item'),
+    path('onedrive/items/<str:item_id>/share_link/', onedrive_views.onedrive_create_share_link, name='onedrive_create_share_link'),
+    path('onedrive/items/<str:item_id>/invite/', onedrive_views.onedrive_invite, name='onedrive_invite'),
+    path('onedrive/items/<str:item_id>/permissions/', onedrive_views.onedrive_get_permissions, name='onedrive_get_permissions'),
+    # OneDrive Banbury-managed favorites
+    path('onedrive/favorites/', onedrive_views.onedrive_favorites_list, name='onedrive_favorites_list'),
+    path('onedrive/favorites/<str:item_id>/', onedrive_views.onedrive_favorites_add, name='onedrive_favorites_add'),
+    path('onedrive/favorites/<str:item_id>/remove/', onedrive_views.onedrive_favorites_remove, name='onedrive_favorites_remove'),
+    # OneDrive Banbury-managed trash
+    path('onedrive/trash/', onedrive_views.onedrive_trash_list, name='onedrive_trash_list'),
+    path('onedrive/trash/clear/', onedrive_views.onedrive_trash_clear, name='onedrive_trash_clear'),
 ]
