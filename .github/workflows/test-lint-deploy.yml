@@ -104,6 +104,8 @@ jobs:
         echo "FRONTEND_URL=${{ secrets.FRONTEND_URL }}" >> .env
         echo "GH_CLIENT_ID=${{ secrets.GH_CLIENT_ID }}" >> .env
         echo "GH_CLIENT_SECRET=${{ secrets.GH_CLIENT_SECRET }}" >> .env
+        echo "MS_CLIENT_ID=${{ secrets.MS_CLIENT_ID }}" >> .env
+        echo "MS_CLIENT_SECRET=${{ secrets.MS_CLIENT_SECRET }}" >> .env
 
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v1
