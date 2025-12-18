@@ -35,6 +35,8 @@ class AuthenticationTokenMiddleware:
             '/authentication/github/oauth_callback/',
             # Outlook OAuth callback must be public
             '/authentication/outlook/oauth_callback/',
+            # OneDrive OAuth callback must be public
+            '/authentication/onedrive/oauth_callback/',
             # favicon should not require auth
             '/favicon.ico'
         ]
