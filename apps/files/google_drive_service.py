@@ -353,6 +353,137 @@ def delete_drive_file(username, file_id):
         return JsonResponse({"error": f"Drive API error: {error}"}, status=500)
 
 
+def grant_drive_permission(username, file_id, recipient_email, role="writer"):
+    """
+    Grant permission on a Google Drive file to another user.
+    
+    Args:
+        username (str): The username of the file owner (must have Drive connected)
+        file_id (str): The Google Drive file ID
+        recipient_email (str): The email address of the user to share with
+        role (str): The role to grant - "reader", "writer", or "commenter" (default: "writer")
+        
+    Returns:
+        dict: Result of the permission grant operation
+    """
+    service = get_drive_service(username)
+    if not service:
+        return {"error": "Drive service not available", "status_code": 401}
+    
+    try:
+        # Create the permission
+        permission = {
+            "type": "user",
+            "role": role,
+            "emailAddress": recipient_email
+        }
+        
+        # Create the permission on the file
+        result = service.permissions().create(
+            fileId=file_id,
+            body=permission,
+            sendNotificationEmail=True,  # Notify the user they've been granted access
+            fields="id, type, role, emailAddress"
+        ).execute()
+        
+        return {
+            "result": "success",
+            "permission_id": result.get("id"),
+            "role": result.get("role"),
+            "email": result.get("emailAddress"),
+            "message": f"Permission granted to {recipient_email}"
+        }
+        
+    except HttpError as error:
+        error_reason = error.reason if hasattr(error, 'reason') else str(error)
+        print(f'Error granting Drive permission: {error}')
+        
+        # Handle specific error cases
+        if error.resp.status == 404:
+            return {"error": "File not found", "status_code": 404}
+        elif error.resp.status == 403:
+            return {"error": "You don't have permission to share this file", "status_code": 403}
+        elif error.resp.status == 400:
+            return {"error": f"Invalid request: {error_reason}", "status_code": 400}
+        else:
+            return {"error": f"Drive API error: {error_reason}", "status_code": 500}
+
+
+def share_drive_file_with_users(username, file_id, recipients, role="writer"):
+    """
+    Share a Google Drive file with multiple users.
+    
+    Args:
+        username (str): The username of the file owner
+        file_id (str): The Google Drive file ID
+        recipients (list): List of dicts with "username" or "email" keys
+        role (str): The role to grant (default: "writer")
+        
+    Returns:
+        dict: Result of the share operations
+    """
+    # Get MongoDB connection to lookup user emails
+    uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client["NeuraNet"]
+    user_collection = db["users"]
+    
+    results = []
+    errors = []
+    
+    for recipient in recipients:
+        recipient_email = recipient.get("email")
+        recipient_username = recipient.get("username")
+        
+        # If no email provided, look up by username
+        if not recipient_email and recipient_username:
+            recipient_user = user_collection.find_one({"username": recipient_username})
+            if recipient_user:
+                recipient_email = recipient_user.get("email")
+        
+        if not recipient_email:
+            errors.append({
+                "recipient": recipient_username or "unknown",
+                "error": "Could not find email address for user"
+            })
+            continue
+        
+        # Grant permission
+        result = grant_drive_permission(username, file_id, recipient_email, role)
+        
+        if "error" in result:
+            errors.append({
+                "recipient": recipient_email,
+                "error": result["error"]
+            })
+        else:
+            results.append({
+                "recipient": recipient_email,
+                "permission_id": result.get("permission_id"),
+                "role": result.get("role")
+            })
+    
+    if errors and not results:
+        return {
+            "result": "error",
+            "message": "Failed to share with any recipients",
+            "errors": errors
+        }
+    elif errors:
+        return {
+            "result": "partial_success",
+            "message": f"Shared with {len(results)} user(s), {len(errors)} failed",
+            "successes": results,
+            "errors": errors
+        }
+    else:
+        return {
+            "result": "success",
+            "message": f"Successfully shared with {len(results)} user(s)",
+            "successes": results
+        }
+
+
 def check_user_drive_credentials(username):
     """Check if user has Google Drive credentials stored (without making API calls)."""
     try:

@@ -36,6 +36,7 @@ urlpatterns = [
     path("google_drive/create_file/", views.google_drive_create_file, name="google_drive_create_file"),
     path("google_drive/update_file/<str:file_id>/", views.google_drive_update_file, name="google_drive_update_file"),
     path("google_drive/delete_file/<str:file_id>/", views.google_drive_delete_file, name="google_drive_delete_file"),
+    path("google_drive/share_file/", views.share_drive_file, name="share_drive_file"),
     # Gmail endpoints
     path("gmail/search", views.gmail_search, name="gmail_search"),
     path("gmail/message/<str:message_id>", views.gmail_get_message, name="gmail_get_message"),
@@ -58,4 +59,7 @@ urlpatterns = [
     path("get_starred_s3_files/", views.get_starred_s3_files, name="get_starred_s3_files"),
     path("star_s3_file/", views.star_s3_file, name="star_s3_file"),
     path("unstar_s3_file/", views.unstar_s3_file, name="unstar_s3_file"),
+    # S3 file sharing endpoints
+    path("share_s3_file/", views.share_s3_file, name="share_s3_file"),
+    path("get_shared_s3_files/", views.get_shared_s3_files, name="get_shared_s3_files"),
 ]

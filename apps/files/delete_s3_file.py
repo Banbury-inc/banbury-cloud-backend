@@ -8,6 +8,7 @@ from bson.objectid import ObjectId
 def delete_s3_file(username, file_id):
     """
     Deletes a file from S3 and removes its metadata from MongoDB.
+    Only the file owner can delete files.
     
     Args:
         username (str): The username requesting the deletion
@@ -29,10 +30,17 @@ def delete_s3_file(username, file_id):
         if not user:
             return {"error": "User not found", "status_code": 404}
         
+        user_id = user["_id"]
+        
         # Find the file by ID
         file = file_collection.find_one({"_id": ObjectId(file_id), "s3_url": {"$exists": True}})
         if not file:
             return {"error": "File not found or not stored in S3", "status_code": 404}
+        
+        # Only owner can delete - check ownership
+        file_owner_id = file.get("user_id")
+        if file_owner_id != user_id:
+            return {"error": "Access denied. Only the file owner can delete this file.", "status_code": 403}
         
         # Configure S3 client
         s3_client = boto3.client(

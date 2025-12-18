@@ -13,7 +13,7 @@ def update_s3_file(username, file_id, request):
     Updates a file in S3 and its metadata in MongoDB.
     
     Parameters:
-        username (str): The username of the file owner
+        username (str): The username of the file owner or editor
         file_id (str): The ID of the file to update
         request: Django request object containing the new file data
         
@@ -33,16 +33,29 @@ def update_s3_file(username, file_id, request):
         if not user:
             return JsonResponse({"error": "User not found"}, status=404)
 
+        user_id = user["_id"]
+
         # Find the file in MongoDB
         try:
             file_object_id = ObjectId(file_id)
         except Exception:
             return JsonResponse({"error": "Invalid file ID format"}, status=400)
 
-        file_doc = file_collection.find_one({"_id": file_object_id, "user_id": user["_id"]})
+        # Find the file without restricting to owner only
+        file_doc = file_collection.find_one({"_id": file_object_id, "s3_key": {"$exists": True}})
         
         if not file_doc:
             return JsonResponse({"error": "File not found"}, status=404)
+        
+        # Check access permission: user must be owner OR in shared_with_edit
+        file_owner_id = file_doc.get("user_id")
+        shared_with_edit = file_doc.get("shared_with_edit", [])
+        
+        is_owner = file_owner_id == user_id
+        is_shared_edit = user_id in shared_with_edit
+        
+        if not (is_owner or is_shared_edit):
+            return JsonResponse({"error": "Access denied. You do not have permission to edit this file."}, status=403)
 
         if not file_doc.get("s3_key"):
             return JsonResponse({"error": "S3 key not found for file"}, status=404)

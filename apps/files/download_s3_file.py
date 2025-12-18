@@ -29,6 +29,8 @@ def download_s3_file(username, file_id):
         if not user:
             return JsonResponse({"error": "User not found"}, status=404)
         
+        user_id = user["_id"]
+        
         # Find the file by ObjectId
         try:
             file = file_collection.find_one({"_id": ObjectId(file_id), "s3_url": {"$exists": True}})
@@ -46,6 +48,18 @@ def download_s3_file(username, file_id):
                     return JsonResponse({"error": "File not found"}, status=404)
             except:
                 return JsonResponse({"error": "File not found"}, status=404)
+        
+        # Check access permission: user must be owner OR in shared_with OR in shared_with_edit
+        file_owner_id = file.get("user_id")
+        shared_with = file.get("shared_with", [])
+        shared_with_edit = file.get("shared_with_edit", [])
+        
+        is_owner = file_owner_id == user_id
+        is_shared_view = user_id in shared_with
+        is_shared_edit = user_id in shared_with_edit
+        
+        if not (is_owner or is_shared_view or is_shared_edit):
+            return JsonResponse({"error": "Access denied. You do not have permission to download this file."}, status=403)
         
         # Check if this is a meeting file with Recall AI URL
         s3_url = file.get('s3_url')

@@ -3,6 +3,7 @@ from django.views.decorators.http import require_http_methods
 from django.http import JsonResponse
 from pymongo.mongo_client import MongoClient
 from rest_framework.decorators import authentication_classes
+from bson.objectid import ObjectId
 from .delete_files import delete_files
 from .get_files_from_filepath import get_files_from_filepath as db_get_files_from_filepath
 from .update_files import update_files
@@ -18,7 +19,8 @@ from .update_s3_file import update_s3_file
 from .google_drive_service import (
     list_drive_files, download_drive_file, upload_drive_file,
     create_drive_file, update_drive_file, delete_drive_file,
-    check_user_drive_credentials, remove_user_drive_credentials, update_user_drive_credentials
+    check_user_drive_credentials, remove_user_drive_credentials, update_user_drive_credentials,
+    share_drive_file_with_users
 )
 import json
 import re
@@ -1419,6 +1421,64 @@ def google_drive_delete_file(request, file_id):
 
 @csrf_exempt
 @require_http_methods(["POST"])
+@authentication_classes([])
+def share_drive_file(request):
+    """
+    Share a Google Drive file with other users by granting them Drive permissions.
+    
+    Expects JSON body:
+    {
+        "drive_file_id": "...",
+        "recipients": [{"username": "user1"}, {"username": "user2", "email": "optional@email.com"}],
+        "access": "edit"  # optional, defaults to "edit" (maps to "writer" role)
+    }
+    
+    Returns:
+        JsonResponse: Result of the share operation
+    """
+    username = request.username_from_token
+    
+    try:
+        data = json.loads(request.body)
+        drive_file_id = data.get("drive_file_id")
+        recipients = data.get("recipients", [])
+        access = data.get("access", "edit")
+        
+        if not drive_file_id:
+            return JsonResponse({
+                "result": "error",
+                "error": "Missing required field: drive_file_id"
+            }, status=400)
+        
+        if not recipients or not isinstance(recipients, list):
+            return JsonResponse({
+                "result": "error",
+                "error": "Missing or invalid recipients list"
+            }, status=400)
+        
+        # Map access level to Drive role
+        role = "writer" if access == "edit" else "reader"
+        
+        # Call the share helper
+        result = share_drive_file_with_users(username, drive_file_id, recipients, role)
+        
+        if "error" in result and result.get("result") == "error":
+            status_code = result.get("status_code", 500)
+            return JsonResponse(result, status=status_code)
+        
+        return JsonResponse(result)
+        
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+    except Exception as e:
+        return JsonResponse({
+            "result": "error",
+            "error": str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
 def upload_to_s3(request):
     """
     Wrapper for the upload_file_to_s3 function in upload_to_s3.py.
@@ -2193,6 +2253,230 @@ def google_calendar_delete_event(request, calendar_id, event_id):
 
 
 # ============ Starred S3 Files Endpoints ============
+
+@csrf_exempt
+@require_http_methods(["POST"])
+@authentication_classes([])
+def share_s3_file(request):
+    """
+    Shares an S3 file with other users for edit access.
+    Only the file owner can share files.
+    
+    Expects JSON body:
+    {
+        "file_id": "...",
+        "recipients": [{"username": "user1"}, {"username": "user2"}],
+        "access": "edit"  # optional, defaults to "edit"
+    }
+    
+    Returns:
+        JsonResponse: Result of the share operation
+    """
+    username = request.username_from_token
+    
+    try:
+        data = json.loads(request.body)
+        file_id = data.get("file_id")
+        recipients = data.get("recipients", [])
+        access = data.get("access", "edit")  # Default to edit access
+        
+        if not file_id:
+            return JsonResponse({
+                "result": "error",
+                "error": "Missing required field: file_id"
+            }, status=400)
+        
+        if not recipients or not isinstance(recipients, list):
+            return JsonResponse({
+                "result": "error",
+                "error": "Missing or invalid recipients list"
+            }, status=400)
+        
+        # MongoDB connection
+        uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+        client = MongoClient(uri)
+        db = client["NeuraNet"]
+        user_collection = db["users"]
+        file_collection = db["files"]
+        
+        # Find the owner user
+        owner = user_collection.find_one({"username": username})
+        if not owner:
+            return JsonResponse({
+                "result": "error",
+                "error": "User not found"
+            }, status=404)
+        
+        owner_id = owner["_id"]
+        
+        # Find the file
+        try:
+            file_object_id = ObjectId(file_id)
+        except Exception:
+            return JsonResponse({
+                "result": "error",
+                "error": "Invalid file ID format"
+            }, status=400)
+        
+        file_doc = file_collection.find_one({
+            "_id": file_object_id,
+            "s3_url": {"$exists": True}
+        })
+        
+        if not file_doc:
+            return JsonResponse({
+                "result": "error",
+                "error": "File not found"
+            }, status=404)
+        
+        # Only owner can share
+        if file_doc.get("user_id") != owner_id:
+            return JsonResponse({
+                "result": "error",
+                "error": "Access denied. Only the file owner can share this file."
+            }, status=403)
+        
+        # Collect recipient user IDs
+        recipient_ids = []
+        not_found_users = []
+        
+        for recipient in recipients:
+            recipient_username = recipient.get("username")
+            if not recipient_username:
+                continue
+            
+            recipient_user = user_collection.find_one({"username": recipient_username})
+            if recipient_user:
+                recipient_ids.append(recipient_user["_id"])
+            else:
+                not_found_users.append(recipient_username)
+        
+        if not recipient_ids:
+            return JsonResponse({
+                "result": "error",
+                "error": "No valid recipients found",
+                "not_found_users": not_found_users
+            }, status=400)
+        
+        # Update file with shared users
+        # For edit access, add to shared_with_edit (and also shared_with for readability)
+        update_op = {}
+        if access == "edit":
+            update_op = {
+                "$addToSet": {
+                    "shared_with": {"$each": recipient_ids},
+                    "shared_with_edit": {"$each": recipient_ids}
+                }
+            }
+        else:
+            # View-only access
+            update_op = {
+                "$addToSet": {
+                    "shared_with": {"$each": recipient_ids}
+                }
+            }
+        
+        file_collection.update_one(
+            {"_id": file_object_id},
+            update_op
+        )
+        
+        response = {
+            "result": "success",
+            "message": f"File shared with {len(recipient_ids)} user(s)",
+            "shared_with_count": len(recipient_ids)
+        }
+        
+        if not_found_users:
+            response["not_found_users"] = not_found_users
+        
+        return JsonResponse(response)
+        
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+    except Exception as e:
+        return JsonResponse({
+            "result": "error",
+            "error": str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+@authentication_classes([])
+def get_shared_s3_files(request):
+    """
+    Retrieves all S3 files that have been shared with the authenticated user.
+    
+    Returns:
+        JsonResponse: List of files shared with the user
+    """
+    username = request.username_from_token
+    
+    try:
+        # MongoDB connection
+        uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+        client = MongoClient(uri)
+        db = client["NeuraNet"]
+        user_collection = db["users"]
+        file_collection = db["files"]
+        
+        # Find the user
+        user = user_collection.find_one({"username": username})
+        if not user:
+            return JsonResponse({
+                "result": "error",
+                "error": "User not found"
+            }, status=404)
+        
+        user_id = user["_id"]
+        
+        # Find files where user is in shared_with or shared_with_edit
+        shared_files = list(file_collection.find({
+            "$or": [
+                {"shared_with": user_id},
+                {"shared_with_edit": user_id}
+            ],
+            "s3_url": {"$exists": True}
+        }))
+        
+        # Format the files for response
+        files_list = []
+        for file_doc in shared_files:
+            # Get owner info
+            owner = user_collection.find_one({"_id": file_doc.get("user_id")})
+            owner_username = owner.get("username") if owner else "Unknown"
+            owner_name = f"{owner.get('first_name', '')} {owner.get('last_name', '')}".strip() if owner else "Unknown"
+            
+            # Determine access level
+            has_edit_access = user_id in file_doc.get("shared_with_edit", [])
+            
+            files_list.append({
+                "file_id": str(file_doc["_id"]),
+                "file_name": file_doc.get("file_name"),
+                "file_size": file_doc.get("file_size"),
+                "file_type": file_doc.get("file_type"),
+                "content_type": file_doc.get("content_type"),
+                "s3_url": file_doc.get("s3_url"),
+                "created_at": file_doc.get("created_at"),
+                "last_modified": file_doc.get("last_modified"),
+                "owner_username": owner_username,
+                "owner_name": owner_name,
+                "access_level": "edit" if has_edit_access else "view"
+            })
+        
+        return JsonResponse({
+            "result": "success",
+            "files": files_list,
+            "total_count": len(files_list)
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            "result": "error",
+            "error": str(e)
+        }, status=500)
+
 
 @csrf_exempt
 @require_http_methods(["POST"])
