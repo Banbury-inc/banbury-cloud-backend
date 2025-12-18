@@ -384,9 +384,9 @@ def outlook_oauth_callback(request):
                 }
             )
             
-            # Redirect to frontend settings page with success
+            # Redirect to frontend workspaces page with settings modal open
             frontend_url = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
-            return HttpResponseRedirect(f'{frontend_url}/settings?tab=connections&outlook_connected=true')
+            return HttpResponseRedirect(f'{frontend_url}/workspaces?openSettings=true&settingsTab=connections&outlook_connected=true')
         else:
             error_data = response.json() if response.content else {}
             error_msg = error_data.get('error_description', 'Failed to exchange code for token')
