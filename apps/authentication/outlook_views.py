@@ -1118,14 +1118,14 @@ def _normalize_graph_calendar_to_calendar_list_entry(graph_calendar):
     hex_color = color_map.get(graph_color, '#0078D4')
     
     # Determine access role
+    # Note: isOwner property doesn't exist in Graph API, so we infer ownership from canShare/canEdit
     can_edit = graph_calendar.get('canEdit', False)
     can_share = graph_calendar.get('canShare', False)
-    is_owner = graph_calendar.get('isOwner', False)
+    owner = graph_calendar.get('owner')
     
-    if is_owner:
+    # If user can share, they're likely the owner. Otherwise use canEdit to determine role
+    if can_share:
         access_role = 'owner'
-    elif can_share:
-        access_role = 'writer'
     elif can_edit:
         access_role = 'writer'
     else:
@@ -1293,7 +1293,7 @@ def outlook_list_calendars(request):
     url = "https://graph.microsoft.com/v1.0/me/calendars"
     params = {
         '$top': max_results,
-        '$select': 'id,name,color,isDefaultCalendar,canEdit,canShare,canViewPrivateItems,isOwner,owner'
+        '$select': 'id,name,color,isDefaultCalendar,canEdit,canShare,canViewPrivateItems,owner'
     }
     
     if skip_token:
@@ -1306,10 +1306,15 @@ def outlook_list_calendars(request):
     
     # Normalize calendars to CalendarListEntry format
     calendars = data.get('value', [])
-    normalized_calendars = [
-        _normalize_graph_calendar_to_calendar_list_entry(cal)
-        for cal in calendars
-    ]
+    
+    normalized_calendars = []
+    for cal in calendars:
+        try:
+            normalized = _normalize_graph_calendar_to_calendar_list_entry(cal)
+            if normalized:  # Filter out None values
+                normalized_calendars.append(normalized)
+        except Exception:
+            continue
     
     # Extract next page token
     next_link = data.get('@odata.nextLink')
@@ -1369,7 +1374,12 @@ def _outlook_list_events(request, access_token):
     max_results = request.GET.get('maxResults', '250')
     skip_token = request.GET.get('pageToken')
     search_query = request.GET.get('q')
-    order_by = request.GET.get('orderBy', 'start/dateTime')
+    # Map frontend orderBy values to Microsoft Graph API $orderby format
+    order_by_param = request.GET.get('orderBy', 'startTime')
+    if order_by_param == 'startTime':
+        order_by = 'start/dateTime'  # Graph API uses start/dateTime, not startTime
+    else:
+        order_by = order_by_param
     
     # Build URL - use specific calendar or default
     if calendar_id:
@@ -1407,10 +1417,12 @@ def _outlook_list_events(request, access_token):
     
     # Normalize events to CalendarEvent format
     events = data.get('value', [])
-    normalized_events = [
-        _normalize_graph_event_to_calendar_event(evt, calendar_id)
-        for evt in events
-    ]
+    
+    normalized_events = []
+    for evt in events:
+        normalized = _normalize_graph_event_to_calendar_event(evt, calendar_id)
+        if normalized:
+            normalized_events.append(normalized)
     
     # Extract next page token
     next_link = data.get('@odata.nextLink')
