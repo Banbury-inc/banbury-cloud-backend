@@ -35,7 +35,11 @@ class AnalyticsTrackingMiddleware:
         # Get request info
         endpoint = request.path
         method = request.method
-        username = getattr(request, 'username_from_token', None) or request.user.username if hasattr(request.user, 'username') else None
+        username = getattr(request, 'username_from_token', None)
+        if not username:
+            user = getattr(request, 'user', None)
+            if user and hasattr(user, 'username'):
+                username = user.username
         
         # Process request
         response = self.get_response(request)
