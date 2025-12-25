@@ -341,13 +341,25 @@ class Conversation:
                 "avg_messages_per_conversation": 0
             }
             
-            # Convert ObjectId to string for JSON serialization
+            # Convert ObjectId to string for JSON serialization and extract model information
             for conv in conversations:
                 conv["_id"] = str(conv["_id"])
                 if "created_at" in conv and hasattr(conv["created_at"], "isoformat"):
                     conv["created_at"] = conv["created_at"].isoformat()
                 if "updated_at" in conv and hasattr(conv["updated_at"], "isoformat"):
                     conv["updated_at"] = conv["updated_at"].isoformat()
+                
+                # Extract model information from metadata
+                model_id = None
+                model_provider = None
+                if conv.get("metadata") and isinstance(conv["metadata"], dict):
+                    tool_prefs = conv["metadata"].get("toolPreferences")
+                    if tool_prefs and isinstance(tool_prefs, dict):
+                        model_id = tool_prefs.get("model_id")
+                        model_provider = tool_prefs.get("model_provider")
+                
+                conv["model_id"] = model_id
+                conv["model_provider"] = model_provider
             
             return {
                 "success": True,
