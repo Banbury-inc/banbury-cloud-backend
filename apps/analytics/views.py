@@ -376,12 +376,20 @@ def get_api_usage_analytics(request):
     """Get API usage analytics aggregated by endpoint, user, and time period."""
     try:
         days = int(request.GET.get('days', 30))
+        excluded_users = request.GET.get('excluded_users', '').strip()
         cutoff_date = datetime.utcnow() - timedelta(days=days)
         
+        # Build query filter
+        query_filter = {"timestamp": {"$gte": cutoff_date}}
+        
+        # Add user exclusions if provided
+        if excluded_users:
+            excluded_user_list = [u.strip() for u in excluded_users.split(',') if u.strip()]
+            if excluded_user_list:
+                query_filter["username"] = {"$nin": excluded_user_list}
+        
         # Get all logs in date range
-        logs = list(api_usage_collection.find({
-            "timestamp": {"$gte": cutoff_date}
-        }))
+        logs = list(api_usage_collection.find(query_filter))
         
         if not logs:
             return JsonResponse({
@@ -539,11 +547,19 @@ def get_user_engagement_analytics(request):
     """Get user engagement analytics."""
     try:
         days = int(request.GET.get('days', 30))
+        excluded_users = request.GET.get('excluded_users', '').strip()
         cutoff_date = datetime.utcnow() - timedelta(days=days)
         
-        sessions = list(user_engagement_collection.find({
-            "timestamp": {"$gte": cutoff_date}
-        }))
+        # Build query filter
+        query_filter = {"timestamp": {"$gte": cutoff_date}}
+        
+        # Add user exclusions if provided
+        if excluded_users:
+            excluded_user_list = [u.strip() for u in excluded_users.split(',') if u.strip()]
+            if excluded_user_list:
+                query_filter["username"] = {"$nin": excluded_user_list}
+        
+        sessions = list(user_engagement_collection.find(query_filter))
         
         if not sessions:
             return JsonResponse({
@@ -648,41 +664,52 @@ def get_user_engagement_analytics(request):
 def get_retention_analytics(request):
     """Get retention analytics (DAU/WAU/MAU and cohort retention)."""
     try:
+        excluded_users = request.GET.get('excluded_users', '').strip()
+        
+        # Parse excluded users list
+        excluded_user_list = [u.strip() for u in excluded_users.split(',') if u.strip()] if excluded_users else []
+        
         # Get user activity from various sources
         today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
         week_ago = today - timedelta(days=7)
         month_ago = today - timedelta(days=30)
         
+        # Build base query filter
+        base_filter = {}
+        if excluded_user_list:
+            base_filter["username"] = {"$nin": excluded_user_list}
+        
         # Calculate DAU - unique users active today
         dau_users = set()
-        dau_logs = api_usage_collection.find({
-            "timestamp": {"$gte": today}
-        }, {"username": 1})
+        dau_query = {"timestamp": {"$gte": today}, **base_filter}
+        dau_logs = api_usage_collection.find(dau_query, {"username": 1})
         for log in dau_logs:
-            if log.get('username'):
-                dau_users.add(log.get('username'))
+            username = log.get('username')
+            if username:
+                dau_users.add(username)
         
         # Calculate WAU - unique users active in last 7 days
         wau_users = set()
-        wau_logs = api_usage_collection.find({
-            "timestamp": {"$gte": week_ago}
-        }, {"username": 1})
+        wau_query = {"timestamp": {"$gte": week_ago}, **base_filter}
+        wau_logs = api_usage_collection.find(wau_query, {"username": 1})
         for log in wau_logs:
-            if log.get('username'):
-                wau_users.add(log.get('username'))
+            username = log.get('username')
+            if username:
+                wau_users.add(username)
         
         # Calculate MAU - unique users active in last 30 days
         mau_users = set()
-        mau_logs = api_usage_collection.find({
-            "timestamp": {"$gte": month_ago}
-        }, {"username": 1})
+        mau_query = {"timestamp": {"$gte": month_ago}, **base_filter}
+        mau_logs = api_usage_collection.find(mau_query, {"username": 1})
         for log in mau_logs:
-            if log.get('username'):
-                mau_users.add(log.get('username'))
+            username = log.get('username')
+            if username:
+                mau_users.add(username)
         
         # Daily active users over last 30 days
         daily_active_map = {}
-        for log in api_usage_collection.find({"timestamp": {"$gte": month_ago}}, {"username": 1, "timestamp": 1}):
+        daily_query = {"timestamp": {"$gte": month_ago}, **base_filter}
+        for log in api_usage_collection.find(daily_query, {"username": 1, "timestamp": 1}):
             date_str = log.get('timestamp').strftime('%Y-%m-%d') if isinstance(log.get('timestamp'), datetime) else datetime.fromisoformat(str(log.get('timestamp'))).strftime('%Y-%m-%d')
             username = log.get('username')
             if username:
@@ -716,6 +743,10 @@ def get_retention_analytics(request):
             day_0 = 0
             day_7 = 0
             day_30 = 0
+            
+            # Apply user exclusions to cohort retention checks
+            if excluded_user_list and username in excluded_user_list:
+                continue
             
             # Check if active on signup day
             signup_day_start = created.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -817,11 +848,19 @@ def get_feature_usage_analytics(request):
     """Get feature usage analytics."""
     try:
         days = int(request.GET.get('days', 30))
+        excluded_users = request.GET.get('excluded_users', '').strip()
         cutoff_date = datetime.utcnow() - timedelta(days=days)
         
-        events = list(feature_usage_collection.find({
-            "timestamp": {"$gte": cutoff_date}
-        }))
+        # Build query filter
+        query_filter = {"timestamp": {"$gte": cutoff_date}}
+        
+        # Add user exclusions if provided
+        if excluded_users:
+            excluded_user_list = [u.strip() for u in excluded_users.split(',') if u.strip()]
+            if excluded_user_list:
+                query_filter["username"] = {"$nin": excluded_user_list}
+        
+        events = list(feature_usage_collection.find(query_filter))
         
         if not events:
             return JsonResponse({
@@ -934,21 +973,32 @@ def get_error_analytics(request):
     """Get error analytics."""
     try:
         days = int(request.GET.get('days', 30))
+        excluded_users = request.GET.get('excluded_users', '').strip()
         cutoff_date = datetime.utcnow() - timedelta(days=days)
         
-        errors = list(error_logs_collection.find({
-            "timestamp": {"$gte": cutoff_date}
-        }))
+        # Build query filter
+        query_filter = {"timestamp": {"$gte": cutoff_date}}
+        api_query_filter = {"timestamp": {"$gte": cutoff_date}, "status_code": {"$gte": 400}}
+        
+        # Add user exclusions if provided
+        if excluded_users:
+            excluded_user_list = [u.strip() for u in excluded_users.split(',') if u.strip()]
+            if excluded_user_list:
+                query_filter["username"] = {"$nin": excluded_user_list}
+                api_query_filter["username"] = {"$nin": excluded_user_list}
+        
+        errors = list(error_logs_collection.find(query_filter))
         
         # Also get API errors (status codes >= 400)
-        api_error_count = api_usage_collection.count_documents({
-            "timestamp": {"$gte": cutoff_date},
-            "status_code": {"$gte": 400}
-        })
+        api_error_count = api_usage_collection.count_documents(api_query_filter)
         
-        total_requests = api_usage_collection.count_documents({
-            "timestamp": {"$gte": cutoff_date}
-        })
+        # Get total requests for error rate calculation
+        total_requests_filter = {"timestamp": {"$gte": cutoff_date}}
+        if excluded_users:
+            excluded_user_list = [u.strip() for u in excluded_users.split(',') if u.strip()]
+            if excluded_user_list:
+                total_requests_filter["username"] = {"$nin": excluded_user_list}
+        total_requests = api_usage_collection.count_documents(total_requests_filter)
         
         if not errors and api_error_count == 0:
             return JsonResponse({
