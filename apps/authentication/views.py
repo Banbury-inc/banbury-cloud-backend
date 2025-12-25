@@ -996,6 +996,7 @@ def add_site_visitor_info_enhanced(request):
         campaign_id = data.get("campaign_id")
         content_type = data.get("content_type", "web_page")
         user_agent = data.get("user_agent", "Unknown")
+        device_type = data.get("device_type", "Unknown")
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
 
@@ -1062,6 +1063,7 @@ def add_site_visitor_info_enhanced(request):
         "campaign_id": campaign_id,
         "content_type": content_type,
         "user_agent": user_agent,
+        "device_type": device_type,
         "tracking_version": "2.0"
     }
 
@@ -1115,6 +1117,7 @@ def get_site_visitor_info_enhanced(request):
                 "campaign_id": visitor.get("campaign_id"),
                 "content_type": visitor.get("content_type", "web_page"),
                 "user_agent": visitor.get("user_agent", "Unknown"),
+                "device_type": visitor.get("device_type", "Unknown"),
                 "city": visitor.get("city", "Unknown"),
                 "region": visitor.get("region", "Unknown"),
                 "country": visitor.get("country", "Unknown"),
