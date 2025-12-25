@@ -1100,11 +1100,65 @@ def get_site_visitor_info_enhanced(request):
             "time": {"$gte": start_date}
         }).sort("time", -1).limit(limit)
         
+        # Helper functions to parse user agent
+        def parse_browser(user_agent):
+            """Extract browser name from user agent."""
+            if not user_agent or user_agent == "Unknown":
+                return "Unknown"
+            ua = user_agent.lower()
+            if "chrome" in ua and "edg" not in ua:
+                return "Chrome"
+            elif "firefox" in ua:
+                return "Firefox"
+            elif "safari" in ua and "chrome" not in ua:
+                return "Safari"
+            elif "edg" in ua or "edge" in ua:
+                return "Edge"
+            elif "opera" in ua or "opr" in ua:
+                return "Opera"
+            elif "msie" in ua or "trident" in ua:
+                return "Internet Explorer"
+            elif "samsung" in ua:
+                return "Samsung Internet"
+            return "Other"
+        
+        def parse_os(user_agent):
+            """Extract operating system from user agent."""
+            if not user_agent or user_agent == "Unknown":
+                return "Unknown"
+            ua = user_agent.lower()
+            if "windows" in ua:
+                if "windows nt 10" in ua:
+                    return "Windows 10/11"
+                elif "windows nt 6.3" in ua:
+                    return "Windows 8.1"
+                elif "windows nt 6.2" in ua:
+                    return "Windows 8"
+                elif "windows nt 6.1" in ua:
+                    return "Windows 7"
+                return "Windows"
+            elif "mac os x" in ua or "macintosh" in ua:
+                return "macOS"
+            elif "iphone" in ua or "ipad" in ua or "ipod" in ua:
+                return "iOS"
+            elif "android" in ua:
+                return "Android"
+            elif "linux" in ua:
+                return "Linux"
+            elif "ubuntu" in ua:
+                return "Ubuntu"
+            return "Other"
+        
         # Convert to list and prepare response data
         visitors = []
         referrer_stats = {}
         content_stats = {}
         campaign_stats = {}
+        device_type_stats = {}
+        browser_stats = {}
+        os_stats = {}
+        page_stats = {}
+        ip_visit_counts = {}
         
         for visitor in cursor:
             # Convert ObjectId to string and datetime to ISO string
@@ -1127,6 +1181,11 @@ def get_site_visitor_info_enhanced(request):
             }
             visitors.append(visitor_data)
             
+            # Track IP visit counts for return visitor analysis
+            ip = visitor.get("ip_address", "Unknown")
+            if ip != "Unknown":
+                ip_visit_counts[ip] = ip_visit_counts.get(ip, 0) + 1
+            
             # Aggregate statistics
             referrer = visitor.get("referrer_source")
             if referrer:
@@ -1140,6 +1199,31 @@ def get_site_visitor_info_enhanced(request):
                 # Truncate long campaign IDs for readability
                 campaign_key = campaign[:50] + "..." if len(campaign) > 50 else campaign
                 campaign_stats[campaign_key] = campaign_stats.get(campaign_key, 0) + 1
+            
+            # Device type statistics
+            device_type = visitor.get("device_type", "Unknown")
+            device_type_stats[device_type] = device_type_stats.get(device_type, 0) + 1
+            
+            # Browser statistics
+            user_agent = visitor.get("user_agent", "Unknown")
+            browser = parse_browser(user_agent)
+            browser_stats[browser] = browser_stats.get(browser, 0) + 1
+            
+            # OS statistics
+            os = parse_os(user_agent)
+            os_stats[os] = os_stats.get(os, 0) + 1
+            
+            # Top pages/paths statistics
+            path = visitor.get("path", "Unknown")
+            if path != "Unknown":
+                # Clean path (remove query parameters)
+                clean_path = path.split('?')[0] if '?' in path else path
+                page_stats[clean_path] = page_stats.get(clean_path, 0) + 1
+        
+        # Calculate return visitors
+        unique_visitors = len([ip for ip, count in ip_visit_counts.items() if count == 1])
+        return_visitors = len([ip for ip, count in ip_visit_counts.items() if count > 1])
+        total_return_visits = sum(count - 1 for count in ip_visit_counts.values() if count > 1)
         
         # Prepare summary statistics
         total_visitors = len(visitors)
@@ -1152,9 +1236,16 @@ def get_site_visitor_info_enhanced(request):
                 "total_visitors": total_visitors,
                 "unique_ips": unique_ips,
                 "unique_countries": unique_countries,
+                "unique_visitors": unique_visitors,
+                "return_visitors": return_visitors,
+                "total_return_visits": total_return_visits,
                 "date_range_days": days,
                 "referrer_breakdown": referrer_stats,
                 "content_type_breakdown": content_stats,
+                "device_type_breakdown": device_type_stats,
+                "browser_breakdown": browser_stats,
+                "os_breakdown": os_stats,
+                "top_pages": dict(sorted(page_stats.items(), key=lambda x: x[1], reverse=True)[:20]),
                 "top_campaigns": dict(sorted(campaign_stats.items(), key=lambda x: x[1], reverse=True)[:10])
             }
         }
