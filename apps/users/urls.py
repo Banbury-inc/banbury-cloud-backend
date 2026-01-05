@@ -23,4 +23,6 @@ urlpatterns = [
     path("reject_friend_request/", views.reject_friend_request, name="reject_friend_request"),
     path("get_user_friends/", views.get_user_friends, name="get_user_friends"),
     path("get_realtime_token/", views.get_realtime_token, name="get_realtime_token"),
+    path("usage_summary/", views.usage_summary, name="usage_summary"),
+    path("track_token_usage/", views.track_token_usage, name="track_token_usage"),
 ]
