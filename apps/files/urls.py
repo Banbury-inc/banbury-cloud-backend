@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from . import transfer_handlers
 
 urlpatterns = [
     path("add_file/", views.add_file, name="add_file"),
@@ -62,4 +63,9 @@ urlpatterns = [
     # S3 file sharing endpoints
     path("share_s3_file/", views.share_s3_file, name="share_s3_file"),
     path("get_shared_s3_files/", views.get_shared_s3_files, name="get_shared_s3_files"),
+    # Cloud transfer endpoints (copy between providers)
+    path("transfer/drive_to_s3/", transfer_handlers.transfer_drive_to_s3, name="transfer_drive_to_s3"),
+    path("transfer/onedrive_to_s3/", transfer_handlers.transfer_onedrive_to_s3, name="transfer_onedrive_to_s3"),
+    path("transfer/s3_to_drive/", transfer_handlers.transfer_s3_to_drive, name="transfer_s3_to_drive"),
+    path("transfer/s3_to_onedrive/", transfer_handlers.transfer_s3_to_onedrive, name="transfer_s3_to_onedrive"),
 ]
