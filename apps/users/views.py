@@ -1172,3 +1172,182 @@ def get_realtime_token(request):
         return JsonResponse({"error": str(e)}, status=500)
 
 
+@csrf_exempt
+@require_http_methods(["GET"])
+def usage_summary(request):
+    """
+    Returns the current user's usage summary including:
+    - Token usage this month (with monthly reset)
+    - Storage usage (total bytes)
+    - Subscription tier
+    - Plan limits
+    - Reset date (first of next month for tokens)
+    """
+    from datetime import datetime
+    
+    try:
+        username = request.username_from_token
+        if not username:
+            return JsonResponse({"error": "Unauthorized"}, status=401)
+
+        # DB connection
+        uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+        client = MongoClient(uri)
+        db = client["NeuraNet"]
+        user_collection = db["users"]
+
+        # Find user
+        user = user_collection.find_one({"username": username})
+        if not user:
+            return JsonResponse({"error": "User not found"}, status=404)
+
+        subscription = user.get("subscription", "free")
+        
+        # Token usage - check if we need to reset (new month)
+        now = datetime.utcnow()
+        current_month = now.strftime("%Y-%m")
+        stored_month = user.get("token_usage_month", "")
+        
+        if stored_month != current_month:
+            # New month - reset counters
+            user_collection.update_one(
+                {"username": username},
+                {
+                    "$set": {
+                        "tokens_used_this_month": 0,
+                        "token_usage_month": current_month
+                    }
+                }
+            )
+            tokens_used = 0
+        else:
+            tokens_used = user.get("tokens_used_this_month", 0)
+        
+        # Storage usage - already tracked by upload_to_s3.py
+        storage_used = user.get("total_file_size", 0)
+        
+        # Calculate reset date (first day of next month at midnight UTC)
+        if now.month == 12:
+            next_month = datetime(now.year + 1, 1, 1)
+        else:
+            next_month = datetime(now.year, now.month + 1, 1)
+        
+        # Define limits based on subscription
+        # Free: 100k tokens/month, 10GB storage
+        # Pro: unlimited
+        if subscription == "pro":
+            token_limit = None  # unlimited
+            storage_limit = None  # unlimited
+        else:
+            token_limit = 100000  # 100k tokens
+            storage_limit = 10 * 1024 * 1024 * 1024  # 10GB in bytes
+
+        return JsonResponse({
+            "result": "success",
+            "subscription": subscription,
+            "tokens": {
+                "used": tokens_used,
+                "limit": token_limit,
+                "unlimited": token_limit is None,
+                "reset_at": next_month.isoformat() + "Z"
+            },
+            "storage": {
+                "used": storage_used,
+                "limit": storage_limit,
+                "unlimited": storage_limit is None
+            }
+        })
+
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def track_token_usage(request):
+    """
+    Track token usage for the authenticated user.
+    Accepts: { input_tokens, output_tokens, total_tokens, model }
+    Increments the user's monthly token counters, rolling over on month change.
+    """
+    from datetime import datetime
+    
+    try:
+        username = request.username_from_token
+        if not username:
+            return JsonResponse({"error": "Unauthorized"}, status=401)
+
+        # Parse request body
+        try:
+            data = json.loads(request.body) if request.body else {}
+        except json.JSONDecodeError:
+            return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+        input_tokens = data.get("input_tokens", 0)
+        output_tokens = data.get("output_tokens", 0)
+        total_tokens = data.get("total_tokens", 0)
+        model = data.get("model", "")
+        
+        # Use total_tokens if provided, otherwise sum input+output
+        tokens_to_add = total_tokens if total_tokens > 0 else (input_tokens + output_tokens)
+        
+        if tokens_to_add <= 0:
+            return JsonResponse({"result": "success", "message": "No tokens to track"})
+
+        # DB connection
+        uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+        client = MongoClient(uri)
+        db = client["NeuraNet"]
+        user_collection = db["users"]
+
+        # Find user
+        user = user_collection.find_one({"username": username})
+        if not user:
+            return JsonResponse({"error": "User not found"}, status=404)
+
+        # Check if we need to reset (new month)
+        now = datetime.utcnow()
+        current_month = now.strftime("%Y-%m")
+        stored_month = user.get("token_usage_month", "")
+        
+        if stored_month != current_month:
+            # New month - reset counter and set to new tokens
+            user_collection.update_one(
+                {"username": username},
+                {
+                    "$set": {
+                        "tokens_used_this_month": tokens_to_add,
+                        "token_usage_month": current_month,
+                        "last_token_usage_at": now.isoformat()
+                    }
+                }
+            )
+            new_total = tokens_to_add
+        else:
+            # Same month - increment
+            result = user_collection.update_one(
+                {"username": username},
+                {
+                    "$inc": {"tokens_used_this_month": tokens_to_add},
+                    "$set": {"last_token_usage_at": now.isoformat()}
+                }
+            )
+            # Read back new total
+            updated_user = user_collection.find_one({"username": username})
+            new_total = updated_user.get("tokens_used_this_month", 0) if updated_user else tokens_to_add
+
+        # Check if free user exceeded limit
+        subscription = user.get("subscription", "free")
+        exceeded_limit = False
+        if subscription != "pro" and new_total > 100000:
+            exceeded_limit = True
+
+        return JsonResponse({
+            "result": "success",
+            "tokens_added": tokens_to_add,
+            "tokens_used_this_month": new_total,
+            "exceeded_limit": exceeded_limit
+        })
+
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
