@@ -65,6 +65,10 @@ urlpatterns = [
     path('drive/files/<str:file_id>/download/', views.drive_download_file, name='drive_download_file'),
     path('drive/files/<str:file_id>/export/', views.drive_export_file, name='drive_export_file'),
     path('drive/files/<str:file_id>/update/', views.drive_update_file, name='drive_update_file'),
+    path('drive/files/<str:file_id>/rename/', views.drive_rename_file, name='drive_rename_file'),
+    path('drive/files/<str:file_id>/delete/', views.drive_delete_file, name='drive_delete_file'),
+    path('drive/files/<str:file_id>/star/', views.drive_star_file, name='drive_star_file'),
+    path('drive/files/<str:file_id>/unstar/', views.drive_unstar_file, name='drive_unstar_file'),
     # Google Calendar API proxy endpoints
     path('calendar/calendars/', views.calendar_calendars, name='calendar_calendars'),
     path('calendar/events/', views.calendar_events, name='calendar_events'),

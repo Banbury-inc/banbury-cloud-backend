@@ -2579,6 +2579,196 @@ def drive_update_file(request, file_id):
         return JsonResponse({"message": "File updated successfully", "id": file_id})
 
 
+@csrf_exempt
+@require_http_methods(["PATCH"])
+def drive_rename_file(request, file_id):
+    """
+    Rename a file or folder in Google Drive.
+    Request body (JSON):
+        name: The new name for the file/folder
+    """
+    username = _require_auth_username(request)
+    if not username:
+        return JsonResponse({"message": "Authentication required"}, status=401)
+
+    user_doc = _get_mongo_user_by_username(username)
+    if not user_doc:
+        return JsonResponse({"message": "User not found"}, status=404)
+
+    credentials = user_doc.get("google_drive_credentials") or {}
+    access_token, _ = _refresh_google_access_token_if_needed(credentials, user_doc)
+    if not access_token:
+        return JsonResponse({"message": "No Google credentials on file"}, status=400)
+
+    try:
+        body = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({"message": "Invalid JSON body"}, status=400)
+
+    new_name = body.get("name")
+    if not new_name:
+        return JsonResponse({"message": "name field is required"}, status=400)
+
+    url = f"https://www.googleapis.com/drive/v3/files/{file_id}"
+    resp = requests.patch(
+        url,
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json"
+        },
+        json={"name": new_name},
+        timeout=20
+    )
+
+    if resp.status_code != 200:
+        return JsonResponse({
+            "message": "Failed to rename file",
+            "status": resp.status_code,
+            "error": resp.text
+        }, status=resp.status_code)
+
+    return JsonResponse(resp.json())
+
+
+@csrf_exempt
+@require_http_methods(["DELETE"])
+def drive_delete_file(request, file_id):
+    """
+    Delete a file or folder from Google Drive (moves to trash or permanently deletes).
+    Query Parameters:
+        permanent: If 'true', permanently deletes instead of trashing
+    """
+    username = _require_auth_username(request)
+    if not username:
+        return JsonResponse({"message": "Authentication required"}, status=401)
+
+    user_doc = _get_mongo_user_by_username(username)
+    if not user_doc:
+        return JsonResponse({"message": "User not found"}, status=404)
+
+    credentials = user_doc.get("google_drive_credentials") or {}
+    access_token, _ = _refresh_google_access_token_if_needed(credentials, user_doc)
+    if not access_token:
+        return JsonResponse({"message": "No Google credentials on file"}, status=400)
+
+    permanent = request.GET.get('permanent', 'false').lower() == 'true'
+
+    if permanent:
+        # Permanently delete the file
+        url = f"https://www.googleapis.com/drive/v3/files/{file_id}"
+        resp = requests.delete(
+            url,
+            headers={"Authorization": f"Bearer {access_token}"},
+            timeout=20
+        )
+        if resp.status_code not in [200, 204]:
+            return JsonResponse({
+                "message": "Failed to delete file",
+                "status": resp.status_code,
+                "error": resp.text
+            }, status=resp.status_code)
+        return JsonResponse({"message": "File deleted permanently", "id": file_id})
+    else:
+        # Move to trash
+        url = f"https://www.googleapis.com/drive/v3/files/{file_id}"
+        resp = requests.patch(
+            url,
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json"
+            },
+            json={"trashed": True},
+            timeout=20
+        )
+        if resp.status_code != 200:
+            return JsonResponse({
+                "message": "Failed to trash file",
+                "status": resp.status_code,
+                "error": resp.text
+            }, status=resp.status_code)
+        return JsonResponse({"message": "File moved to trash", "id": file_id})
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def drive_star_file(request, file_id):
+    """
+    Star a file or folder in Google Drive.
+    """
+    username = _require_auth_username(request)
+    if not username:
+        return JsonResponse({"message": "Authentication required"}, status=401)
+
+    user_doc = _get_mongo_user_by_username(username)
+    if not user_doc:
+        return JsonResponse({"message": "User not found"}, status=404)
+
+    credentials = user_doc.get("google_drive_credentials") or {}
+    access_token, _ = _refresh_google_access_token_if_needed(credentials, user_doc)
+    if not access_token:
+        return JsonResponse({"message": "No Google credentials on file"}, status=400)
+
+    url = f"https://www.googleapis.com/drive/v3/files/{file_id}"
+    resp = requests.patch(
+        url,
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json"
+        },
+        json={"starred": True},
+        timeout=20
+    )
+
+    if resp.status_code != 200:
+        return JsonResponse({
+            "message": "Failed to star file",
+            "status": resp.status_code,
+            "error": resp.text
+        }, status=resp.status_code)
+
+    return JsonResponse({"message": "File starred", "id": file_id, "starred": True})
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def drive_unstar_file(request, file_id):
+    """
+    Unstar a file or folder in Google Drive.
+    """
+    username = _require_auth_username(request)
+    if not username:
+        return JsonResponse({"message": "Authentication required"}, status=401)
+
+    user_doc = _get_mongo_user_by_username(username)
+    if not user_doc:
+        return JsonResponse({"message": "User not found"}, status=404)
+
+    credentials = user_doc.get("google_drive_credentials") or {}
+    access_token, _ = _refresh_google_access_token_if_needed(credentials, user_doc)
+    if not access_token:
+        return JsonResponse({"message": "No Google credentials on file"}, status=400)
+
+    url = f"https://www.googleapis.com/drive/v3/files/{file_id}"
+    resp = requests.patch(
+        url,
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json"
+        },
+        json={"starred": False},
+        timeout=20
+    )
+
+    if resp.status_code != 200:
+        return JsonResponse({
+            "message": "Failed to unstar file",
+            "status": resp.status_code,
+            "error": resp.text
+        }, status=resp.status_code)
+
+    return JsonResponse({"message": "File unstarred", "id": file_id, "starred": False})
+
+
 # =============================================================================
 # Scope Management Endpoints
 # =============================================================================
