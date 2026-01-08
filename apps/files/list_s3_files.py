@@ -1,7 +1,14 @@
-import boto3
-import os
-from pymongo.mongo_client import MongoClient
-from django.http import JsonResponse
+from core.mongodb_manager import get_mongodb_database
+
+# Ensure index exists for efficient S3 file queries
+# This runs once at module import time
+try:
+    _db = get_mongodb_database()
+    _file_collection = _db["files"]
+    # Compound index for user_id + s3_url existence check
+    _file_collection.create_index([("user_id", 1), ("s3_url", 1)])
+except Exception:
+    pass  # Index may already exist or DB not available at import time
 
 def list_s3_files(username):
     """
@@ -14,10 +21,8 @@ def list_s3_files(username):
         dict: A dictionary containing the list of files and any error message
     """
     try:
-        # Connect to MongoDB
-        uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority&readPreference=secondaryPreferred"
-        client = MongoClient(uri, serverSelectionTimeoutMS=10000)
-        db = client["NeuraNet"]
+        # Use the connection-pooled MongoDB manager
+        db = get_mongodb_database()
         user_collection = db["users"]
         file_collection = db["files"]
         
@@ -27,9 +32,10 @@ def list_s3_files(username):
             return {"error": "User not found", "status_code": 404}
         
         # Find all files with s3_url field that belong to the user
+        # Query with user_id first (more selective) for better index usage
         s3_files = list(file_collection.find({
-            "s3_url": {"$exists": True},
-            "user_id": user["_id"]
+            "user_id": user["_id"],
+            "s3_url": {"$exists": True}
         }))
         
         # Transform the results
