@@ -1292,29 +1292,31 @@ def google_drive_download_file(request, file_id):
 def google_drive_upload_file(request):
     """
     Upload a file to Google Drive.
-    
+
     Expects a multipart form data request containing:
     - file: The file to upload
     - parent_folder_id (str, optional): ID of parent folder
-    
+    - target_mime_type (str, optional): Target MIME type for conversion (e.g., 'application/vnd.google-apps.presentation' to convert to Google Slides)
+
     Returns:
         JsonResponse: Result of the upload operation
     """
     username = request.username_from_token
-    
+
     if 'file' not in request.FILES:
         return JsonResponse({"error": "No file provided."}, status=400)
-    
+
     uploaded_file = request.FILES['file']
     parent_folder_id = request.POST.get('parent_folder_id')
-    
+    target_mime_type = request.POST.get('target_mime_type')
+
     if not isinstance(uploaded_file, UploadedFile):
         return JsonResponse({"error": "Invalid file format."}, status=400)
-    
+
     # Create a file-like object from the uploaded file
     file_obj = uploaded_file.open()
-    
-    result = upload_drive_file(username, file_obj, uploaded_file.name, parent_folder_id)
+
+    result = upload_drive_file(username, file_obj, uploaded_file.name, parent_folder_id, target_mime_type)
     
     if isinstance(result, JsonResponse):
         return result

@@ -2532,37 +2532,74 @@ def drive_update_file(request, file_id):
     # Get the uploaded file
     if 'file' not in request.FILES:
         return JsonResponse({"message": "No file provided"}, status=400)
-    
+
     uploaded_file = request.FILES['file']
     file_content = uploaded_file.read()
     content_type = uploaded_file.content_type or 'application/octet-stream'
 
+    # Check if target_mime_type is specified (for format conversion)
+    target_mime_type = request.POST.get('target_mime_type')
+
     # First get the current file metadata to check if it's a Google Workspace file
     metadata_url = f"https://www.googleapis.com/drive/v3/files/{file_id}?fields=name,mimeType"
     metadata_resp = requests.get(metadata_url, headers={"Authorization": f"Bearer {access_token}"}, timeout=20)
-    
+
     if metadata_resp.status_code != 200:
         return JsonResponse({
             "message": "Failed to get file metadata",
             "status": metadata_resp.status_code,
             "error": metadata_resp.text
         }, status=metadata_resp.status_code)
-    
+
     metadata = metadata_resp.json()
     current_mime_type = metadata.get('mimeType', '')
-    
-    # Use Google Drive's update endpoint with media upload
-    # For Google Workspace files, we need to specify the correct mimeType to convert
-    update_url = f"https://www.googleapis.com/upload/drive/v3/files/{file_id}?uploadType=media"
-    
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Content-Type": content_type
-    }
-    
-    # If uploading to a Google Doc, we need to convert the content
-    # Google Drive will auto-convert based on the source MIME type
-    update_resp = requests.patch(update_url, headers=headers, data=file_content, timeout=60)
+
+    # If target_mime_type is specified, use multipart upload to set the mimeType
+    if target_mime_type:
+        import io
+        from email.mime.multipart import MIMEMultipart
+        from email.mime.application import MIMEApplication
+        import json
+
+        # Use multipart upload to specify both metadata and media
+        update_url = f"https://www.googleapis.com/upload/drive/v3/files/{file_id}?uploadType=multipart"
+
+        # Create metadata part
+        file_metadata = {
+            'mimeType': target_mime_type
+        }
+
+        # Create multipart body
+        boundary = "===============boundary=="
+        delimiter = f"\r\n--{boundary}\r\n"
+        close_delim = f"\r\n--{boundary}--"
+
+        metadata_part = delimiter + "Content-Type: application/json; charset=UTF-8\r\n\r\n" + json.dumps(file_metadata)
+        media_part = delimiter + f"Content-Type: {content_type}\r\n\r\n"
+
+        # Combine parts
+        multipart_body = metadata_part.encode('utf-8') + media_part.encode('utf-8') + file_content + close_delim.encode('utf-8')
+
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": f"multipart/related; boundary={boundary}",
+            "Content-Length": str(len(multipart_body))
+        }
+
+        update_resp = requests.patch(update_url, headers=headers, data=multipart_body, timeout=60)
+    else:
+        # Use Google Drive's update endpoint with media upload
+        # For Google Workspace files, we need to specify the correct mimeType to convert
+        update_url = f"https://www.googleapis.com/upload/drive/v3/files/{file_id}?uploadType=media"
+
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": content_type
+        }
+
+        # If uploading to a Google Doc, we need to convert the content
+        # Google Drive will auto-convert based on the source MIME type
+        update_resp = requests.patch(update_url, headers=headers, data=file_content, timeout=60)
     
     if update_resp.status_code not in [200, 204]:
         return JsonResponse({

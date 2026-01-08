@@ -216,28 +216,42 @@ def download_drive_file(username, file_id):
         return JsonResponse({"error": f"Drive API error: {error}"}, status=500)
 
 
-def upload_drive_file(username, file_obj, filename, parent_folder_id=None):
-    """Upload a file to Google Drive."""
+def upload_drive_file(username, file_obj, filename, parent_folder_id=None, target_mime_type=None):
+    """
+    Upload a file to Google Drive.
+
+    Args:
+        username: User's username
+        file_obj: File object to upload
+        filename: Name of the file
+        parent_folder_id: Optional parent folder ID
+        target_mime_type: Optional target MIME type (e.g., 'application/vnd.google-apps.presentation' to convert PPTX to Google Slides)
+    """
     service = get_drive_service(username)
     if not service:
         return JsonResponse({"error": "Drive service not available"}, status=401)
-    
+
     try:
         # File metadata
         file_metadata = {'name': filename}
         if parent_folder_id:
             file_metadata['parents'] = [parent_folder_id]
-        
+
+        # If target_mime_type is specified, set it to convert the file
+        # For example, setting 'application/vnd.google-apps.presentation' will convert PPTX to Google Slides
+        if target_mime_type:
+            file_metadata['mimeType'] = target_mime_type
+
         # Create media upload
         media = MediaIoBaseUpload(file_obj, mimetype='application/octet-stream', resumable=True)
-        
+
         # Upload file
         file = service.files().create(
             body=file_metadata,
             media_body=media,
             fields='id, name, size, mimeType, createdTime'
         ).execute()
-        
+
         return {
             "result": "success",
             "file_info": {
@@ -248,7 +262,7 @@ def upload_drive_file(username, file_obj, filename, parent_folder_id=None):
                 "created_time": file.get('createdTime')
             }
         }
-        
+
     except HttpError as error:
         print(f'An error occurred: {error}')
         return JsonResponse({"error": f"Drive API error: {error}"}, status=500)
