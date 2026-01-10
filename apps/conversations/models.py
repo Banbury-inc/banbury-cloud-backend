@@ -158,6 +158,33 @@ class Conversation:
                 "success": False,
                 "error": str(e)
             }
+
+    @staticmethod
+    def delete_all_conversations(username):
+        """
+        Delete all conversations for a user
+        
+        Args:
+            username (str): The username to delete conversations for
+            
+        Returns:
+            dict: Result of the delete operation
+        """
+        try:
+            result = conversations_collection.delete_many({
+                "username": username
+            })
+            
+            return {
+                "success": True,
+                "deleted_count": result.deleted_count,
+                "message": f"Deleted {result.deleted_count} conversations"
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e)
+            }
     
     @staticmethod
     def update_conversation_title(conversation_id, username, new_title):

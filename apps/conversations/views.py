@@ -340,6 +340,28 @@ def delete_conversation(request, conversation_id):
         }, status=500)
 
 @csrf_exempt
+@require_http_methods(["DELETE"])
+def delete_all_conversations(request):
+    """
+    Delete all conversations for the authenticated user
+    """
+    try:
+        username = request.username_from_token
+        
+        result = Conversation.delete_all_conversations(username)
+        
+        if result["success"]:
+            return JsonResponse(result)
+        else:
+            return JsonResponse(result, status=500)
+            
+    except Exception as e:
+        return JsonResponse({
+            "success": False,
+            "error": str(e)
+        }, status=500)
+
+@csrf_exempt
 @require_http_methods(["POST"])
 def store_memory(request):
     """
