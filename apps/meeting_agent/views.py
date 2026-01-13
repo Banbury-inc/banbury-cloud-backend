@@ -1989,10 +1989,10 @@ def check_and_upload_sessions(request):
 @require_http_methods(["POST"])
 def create_desktop_upload_token(request):
     """
-    Create an upload token for desktop recording
+    Create a bot for desktop/meeting recording
     
-    This endpoint is called by the Electron desktop app before starting
-    a desktop recording to get a token for uploading the recording.
+    This endpoint is called by the frontend before starting a recording.
+    It creates a Recall AI bot that will join the meeting and record it.
     """
     try:
         username = getattr(request, 'username_from_token', None)
@@ -2002,19 +2002,31 @@ def create_desktop_upload_token(request):
                 'error': 'Authentication required'
             }, status=401)
         
-        # Parse request body for optional metadata
+        # Parse request body
         try:
             body = json.loads(request.body) if request.body else {}
         except json.JSONDecodeError:
             body = {}
         
-        # Build metadata for the upload
+        # Get meeting URL from request
+        meeting_url = body.get('meeting_url', '')
+        if not meeting_url:
+            return JsonResponse({
+                'success': False,
+                'error': 'meeting_url is required',
+                'message': 'Please provide a meeting URL (Zoom, Google Meet, Teams, etc.)'
+            }, status=400)
+        
+        # Build metadata for the bot
         metadata = {
             'user_id': username,
             'username': username,
             'platform': body.get('platform', 'desktop'),
             'meeting_title': body.get('meeting_title', 'Desktop Recording'),
+            'bot_name': body.get('bot_name', body.get('meeting_title', 'Meeting Recorder')),
             'transcription_enabled': body.get('transcription_enabled', True),
+            'recording_mode': body.get('recording_mode', 'speaker_view'),
+            'profile_picture_url': body.get('profile_picture_url', ''),
             'created_at': datetime.utcnow().isoformat()
         }
         
@@ -2022,23 +2034,41 @@ def create_desktop_upload_token(request):
         if body.get('metadata'):
             metadata.update(body.get('metadata'))
         
-        logger.info(f"Creating desktop upload token for user: {username}")
+        logger.info(f"Creating bot for meeting: {meeting_url} (user: {username})")
         
-        # Create the upload token
-        result = create_upload_token_sync(metadata)
+        # Create the bot
+        from .desktop_recording_service import create_bot_for_meeting_sync
+        result = create_bot_for_meeting_sync(meeting_url, metadata)
         
         if result['success']:
+            bot_id = result['bot_id']
+            
+            # Create a meeting session for tracking
+            from .models import MeetingSession
+            session_data = {
+                'user_id': username,
+                'username': username,
+                'platform': metadata['platform'],
+                'meeting_url': meeting_url,
+                'bot_id': bot_id,
+                'status': 'joining',
+                'recording_type': 'bot',
+                'metadata': metadata
+            }
+            
+            session = MeetingSession.create_session(session_data)
+            
             return JsonResponse({
                 'success': True,
-                'upload_token': result['upload_token'],
-                'token_id': result['token_id'],
-                'expires_at': result.get('expires_at'),
-                'message': 'Upload token created successfully'
+                'bot_id': bot_id,
+                'session_id': session.get('session_id') if session.get('success') else None,
+                'bot_data': result.get('bot_data', {}),
+                'message': 'Bot created successfully and joining meeting'
             })
         else:
-            error_msg = result.get('error', 'Failed to create upload token')
+            error_msg = result.get('error', 'Failed to create bot')
             message = result.get('message', 'Unknown error')
-            logger.error(f"Failed to create upload token: {error_msg} - {message}")
+            logger.error(f"Failed to create bot: {error_msg} - {message}")
             
             # Return 500 for server errors, but include detailed error info
             return JsonResponse({
@@ -2049,18 +2079,18 @@ def create_desktop_upload_token(request):
             }, status=500)
             
     except ImportError as e:
-        logger.error(f"Import error creating desktop upload token: {str(e)}")
+        logger.error(f"Import error creating bot: {str(e)}")
         return JsonResponse({
             'success': False,
             'error': 'Missing dependency',
-            'message': f'Required package not installed: {str(e)}. Please install httpx.'
+            'message': f'Required package not installed: {str(e)}'
         }, status=500)
     except Exception as e:
-        logger.error(f"Error creating desktop upload token: {str(e)}", exc_info=True)
+        logger.error(f"Error creating bot: {str(e)}", exc_info=True)
         return JsonResponse({
             'success': False,
             'error': str(e),
-            'message': 'Failed to create upload token'
+            'message': 'Failed to create bot'
         }, status=500)
 
 
