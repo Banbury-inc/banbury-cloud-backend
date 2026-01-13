@@ -1987,6 +1987,123 @@ def check_and_upload_sessions(request):
 
 @csrf_exempt
 @require_http_methods(["POST"])
+def create_desktop_sdk_upload_token(request):
+    """
+    Create an upload token for Desktop SDK recording
+    
+    This endpoint is called by the Electron app before starting a desktop SDK recording.
+    It creates an upload token from Recall AI that the Desktop SDK will use to upload the recording.
+    """
+    try:
+        # Parse request body
+        try:
+            body = json.loads(request.body) if request.body else {}
+        except json.JSONDecodeError:
+            body = {}
+        
+        # Get required parameters
+        window_id = body.get('window_id', '')
+        platform = body.get('platform', 'desktop')
+        meeting_title = body.get('meeting_title', 'Desktop Recording')
+        transcription_enabled = body.get('transcription_enabled', True)
+        
+        if not window_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'window_id is required',
+                'message': 'Please provide a window ID from the detected meeting'
+            }, status=400)
+        
+        # Get user from auth token if available (optional for desktop SDK)
+        username = getattr(request, 'username_from_token', 'desktop_user')
+        
+        # Create an upload token from Recall AI
+        import requests
+        
+        api_key = os.environ.get('RECALL_API_KEY')
+        if not api_key:
+            logger.error("RECALL_API_KEY not configured")
+            return JsonResponse({
+                'success': False,
+                'error': 'Server configuration error',
+                'message': 'Recording service not configured'
+            }, status=500)
+        
+        # Call Recall AI to create an upload token
+        api_url = os.environ.get('RECALL_API_URL', 'https://us-west-2.recall.ai')
+        response = requests.post(
+            f'{api_url}/api/v1/upload-token/',
+            headers={
+                'Authorization': f'Token {api_key}',
+                'Content-Type': 'application/json'
+            },
+            json={
+                'transcription': {
+                    'provider': 'assembly_ai' if transcription_enabled else 'none'
+                }
+            },
+            timeout=30
+        )
+        
+        if response.status_code != 201:
+            logger.error(f"Failed to create upload token: {response.status_code} - {response.text}")
+            return JsonResponse({
+                'success': False,
+                'error': 'Failed to create upload token',
+                'message': f'Could not generate upload token from recording service (status: {response.status_code})'
+            }, status=500)
+        
+        token_data = response.json()
+        upload_token = token_data.get('token')
+        
+        if not upload_token:
+            logger.error(f"No token in response: {token_data}")
+            return JsonResponse({
+                'success': False,
+                'error': 'Invalid token response',
+                'message': 'Recording service returned invalid response'
+            }, status=500)
+        
+        # Create a meeting session for tracking
+        from .models import MeetingSession
+        session_data = {
+            'user_id': username,
+            'username': username,
+            'platform': platform,
+            'meeting_url': f'desktop://{window_id}',  # Use a pseudo-URL for desktop recordings
+            'status': 'active',
+            'recording_type': 'desktop_sdk',
+            'metadata': {
+                'window_id': window_id,
+                'meeting_title': meeting_title,
+                'transcription_enabled': transcription_enabled,
+                'upload_token_prefix': upload_token[:10] + '...',  # Store partial token for reference
+                'created_at': datetime.utcnow().isoformat()
+            }
+        }
+        
+        session = MeetingSession.create_session(session_data)
+        
+        logger.info(f"Created desktop SDK upload token for user {username}, window {window_id}")
+        
+        return JsonResponse({
+            'success': True,
+            'upload_token': upload_token,
+            'session_id': session.get('session_id') if session.get('success') else None,
+            'message': 'Upload token created successfully'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error creating desktop SDK upload token: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'success': False,
+            'error': str(e),
+            'message': 'Failed to create upload token'
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
 def create_desktop_upload_token(request):
     """
     Create a bot for desktop/meeting recording
