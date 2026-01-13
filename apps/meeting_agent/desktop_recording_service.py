@@ -5,7 +5,6 @@ This service handles:
 - Creating upload tokens for desktop recordings
 - Processing webhooks from the Desktop SDK
 - Managing desktop recording sessions
-- Fallback to S3 pre-signed URLs when Recall SDK is unavailable
 """
 
 import os
@@ -13,129 +12,9 @@ import logging
 import httpx
 import asyncio
 import json
-import uuid
-import boto3
-from botocore.exceptions import ClientError
 from typing import Dict, Any, Optional
-from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
-
-# S3 Configuration for fallback uploads
-S3_BUCKET_NAME = os.environ.get('AWS_S3_BUCKET_NAME')
-AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID')
-AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY')
-AWS_REGION = os.environ.get('AWS_REGION', 'us-east-1')
-
-
-class S3UploadTokenService:
-    """Fallback service for generating S3 pre-signed URLs for desktop recording uploads"""
-    
-    def __init__(self):
-        self.s3_client = None
-        if AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY and S3_BUCKET_NAME:
-            self.s3_client = boto3.client(
-                's3',
-                aws_access_key_id=AWS_ACCESS_KEY_ID,
-                aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
-                region_name=AWS_REGION
-            )
-    
-    def create_upload_token(self, metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """
-        Create a pre-signed S3 URL for uploading desktop recordings
-        
-        This is used as a fallback when the Recall AI Desktop SDK is not available.
-        
-        Args:
-            metadata: Optional metadata to associate with the recording
-            
-        Returns:
-            dict: Contains upload_token (pre-signed URL), token_id, and expires_at
-        """
-        try:
-            if not self.s3_client:
-                return {
-                    'success': False,
-                    'error': 'S3 not configured',
-                    'message': 'AWS S3 credentials are not configured for fallback upload'
-                }
-            
-            # Generate unique token ID and S3 key
-            token_id = str(uuid.uuid4())
-            user_id = metadata.get('user_id', 'unknown') if metadata else 'unknown'
-            timestamp = datetime.utcnow().strftime('%Y%m%d%H%M%S')
-            
-            # Create S3 key for the recording
-            s3_key = f"desktop-recordings/{user_id}/{token_id}/recording_{timestamp}.webm"
-            
-            # Generate pre-signed URL for upload (valid for 2 hours)
-            expires_in = 7200  # 2 hours
-            expires_at = (datetime.utcnow() + timedelta(seconds=expires_in)).isoformat() + 'Z'
-            
-            presigned_url = self.s3_client.generate_presigned_url(
-                'put_object',
-                Params={
-                    'Bucket': S3_BUCKET_NAME,
-                    'Key': s3_key,
-                    'ContentType': 'video/webm'
-                },
-                ExpiresIn=expires_in
-            )
-            
-            logger.info(f"Created S3 fallback upload token: {token_id} for user: {user_id}")
-            
-            # Store token metadata for later use (when upload completes)
-            self._store_token_metadata(token_id, s3_key, metadata)
-            
-            return {
-                'success': True,
-                'upload_token': presigned_url,
-                'token_id': token_id,
-                'expires_at': expires_at,
-                's3_key': s3_key,
-                'upload_type': 's3_fallback',
-                'message': 'S3 upload token created (Recall AI Desktop SDK not available)'
-            }
-            
-        except ClientError as e:
-            logger.error(f"S3 error creating upload token: {str(e)}")
-            return {
-                'success': False,
-                'error': f'S3 error: {str(e)}',
-                'message': 'Failed to create S3 upload token'
-            }
-        except Exception as e:
-            logger.error(f"Error creating S3 upload token: {str(e)}")
-            return {
-                'success': False,
-                'error': str(e),
-                'message': 'Failed to create upload token'
-            }
-    
-    def _store_token_metadata(self, token_id: str, s3_key: str, metadata: Optional[Dict[str, Any]]) -> None:
-        """Store token metadata in MongoDB for later retrieval"""
-        try:
-            from pymongo.mongo_client import MongoClient
-            uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
-            client = MongoClient(uri)
-            db = client["NeuraNet"]
-            tokens_collection = db["desktop_upload_tokens"]
-            
-            token_doc = {
-                'token_id': token_id,
-                's3_key': s3_key,
-                'metadata': metadata or {},
-                'created_at': datetime.utcnow(),
-                'status': 'pending',
-                'upload_type': 's3_fallback'
-            }
-            
-            tokens_collection.insert_one(token_doc)
-            logger.info(f"Stored upload token metadata: {token_id}")
-            
-        except Exception as e:
-            logger.error(f"Error storing token metadata: {str(e)}")
 
 
 class DesktopRecordingService:
@@ -471,13 +350,8 @@ class DesktopRecordingService:
 
 def create_upload_token_sync(metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """
-    Synchronous wrapper for creating upload token
-    
-    First tries Recall AI Desktop SDK, then falls back to S3 pre-signed URL
+    Synchronous wrapper for creating upload token using Recall AI Desktop SDK
     """
-    recall_error = None
-    
-    # Try Recall AI Desktop SDK first
     try:
         service = DesktopRecordingService()
         
@@ -485,41 +359,15 @@ def create_upload_token_sync(metadata: Optional[Dict[str, Any]] = None) -> Dict[
         asyncio.set_event_loop(loop)
         try:
             result = loop.run_until_complete(service.create_upload_token(metadata))
-            if result.get('success'):
-                return result
-            else:
-                recall_error = result.get('error', 'Unknown error')
-                logger.warning(f"Recall AI Desktop SDK failed: {recall_error}, trying S3 fallback")
+            return result
         finally:
             loop.close()
             
     except Exception as e:
-        recall_error = str(e)
-        logger.warning(f"Recall AI Desktop SDK exception: {recall_error}, trying S3 fallback")
-    
-    # Fallback to S3 pre-signed URL
-    try:
-        logger.info("Using S3 fallback for desktop upload token")
-        s3_service = S3UploadTokenService()
-        result = s3_service.create_upload_token(metadata)
-        
-        if result.get('success'):
-            logger.info("S3 fallback upload token created successfully")
-            return result
-        else:
-            # Both Recall AI and S3 failed
-            logger.error(f"S3 fallback also failed: {result.get('error')}")
-            return {
-                'success': False,
-                'error': f"Recall AI: {recall_error}; S3: {result.get('error')}",
-                'message': 'Failed to create upload token (both Recall AI and S3 fallback failed)'
-            }
-            
-    except Exception as e:
-        logger.error(f"S3 fallback exception: {str(e)}")
+        logger.error(f"Recall AI Desktop SDK exception: {str(e)}")
         return {
             'success': False,
-            'error': f"Recall AI: {recall_error}; S3: {str(e)}",
+            'error': str(e),
             'message': 'Failed to create upload token'
         }
 
