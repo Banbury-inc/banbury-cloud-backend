@@ -3,6 +3,9 @@ from bson import ObjectId
 from datetime import datetime, date
 import uuid
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 # MongoDB connection - following the existing pattern
 uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
@@ -435,6 +438,50 @@ class MeetingSession:
             return {
                 "success": result.modified_count > 0,
                 "message": "S3 upload status updated successfully"
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
+    @staticmethod
+    def find_by_sdk_upload_id(sdk_upload_id):
+        """Find a session by SDK upload ID (for desktop recordings)"""
+        try:
+            session = meeting_sessions_collection.find_one({"sdk_upload_id": sdk_upload_id})
+            
+            if not session:
+                return None
+            
+            session["_id"] = str(session["_id"])
+            if "created_at" in session and hasattr(session["created_at"], "isoformat"):
+                session["created_at"] = session["created_at"].isoformat()
+            if "updated_at" in session and hasattr(session["updated_at"], "isoformat"):
+                session["updated_at"] = session["updated_at"].isoformat()
+            
+            return session
+        except Exception as e:
+            logger.error(f"Error finding session by SDK upload ID: {str(e)}")
+            return None
+    
+    @staticmethod
+    def set_transcript_id(session_id, transcript_id):
+        """Set the transcript ID for a session"""
+        try:
+            result = meeting_sessions_collection.update_one(
+                {"session_id": session_id},
+                {
+                    "$set": {
+                        "transcript_id": transcript_id,
+                        "updated_at": datetime.utcnow()
+                    }
+                }
+            )
+            
+            return {
+                "success": result.modified_count > 0,
+                "message": "Transcript ID set successfully"
             }
         except Exception as e:
             return {

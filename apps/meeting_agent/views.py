@@ -15,6 +15,7 @@ from .models import (
 from .services import MeetingAgentService, TranscriptionService, SummaryService
 from .recall_service import create_recall_bot_sync, get_recall_bot_sync, stop_recall_bot_sync, create_async_transcript_sync, get_transcript_sync
 from .s3_upload_service import trigger_s3_upload_for_completed_meeting, MeetingS3UploadService
+from .desktop_recording_service import create_upload_token_sync, get_sdk_upload_sync, handle_sdk_webhook_sync
 import requests
 
 logger = logging.getLogger(__name__)
@@ -1977,6 +1978,169 @@ def check_and_upload_sessions(request):
         return JsonResponse({
             "success": False,
             "error": str(e)
+        }, status=500)
+
+
+# ============================================================================
+# Desktop Recording SDK Endpoints
+# ============================================================================
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def create_desktop_upload_token(request):
+    """
+    Create an upload token for desktop recording
+    
+    This endpoint is called by the Electron desktop app before starting
+    a desktop recording to get a token for uploading the recording.
+    """
+    try:
+        username = getattr(request, 'username_from_token', None)
+        if not username:
+            return JsonResponse({
+                'success': False,
+                'error': 'Authentication required'
+            }, status=401)
+        
+        # Parse request body for optional metadata
+        try:
+            body = json.loads(request.body) if request.body else {}
+        except json.JSONDecodeError:
+            body = {}
+        
+        # Build metadata for the upload
+        metadata = {
+            'user_id': username,
+            'username': username,
+            'platform': body.get('platform', 'desktop'),
+            'meeting_title': body.get('meeting_title', 'Desktop Recording'),
+            'transcription_enabled': body.get('transcription_enabled', True),
+            'created_at': datetime.utcnow().isoformat()
+        }
+        
+        # Add any additional metadata from request
+        if body.get('metadata'):
+            metadata.update(body.get('metadata'))
+        
+        logger.info(f"Creating desktop upload token for user: {username}")
+        
+        # Create the upload token
+        result = create_upload_token_sync(metadata)
+        
+        if result['success']:
+            return JsonResponse({
+                'success': True,
+                'upload_token': result['upload_token'],
+                'token_id': result['token_id'],
+                'expires_at': result.get('expires_at'),
+                'message': 'Upload token created successfully'
+            })
+        else:
+            logger.error(f"Failed to create upload token: {result.get('error')}")
+            return JsonResponse({
+                'success': False,
+                'error': result.get('error', 'Failed to create upload token'),
+                'message': result.get('message', 'Unknown error')
+            }, status=500)
+            
+    except Exception as e:
+        logger.error(f"Error creating desktop upload token: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e),
+            'message': 'Failed to create upload token'
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def desktop_recording_webhook(request):
+    """
+    Handle webhook events from the Desktop Recording SDK
+    
+    This endpoint receives events like:
+    - sdk_upload.complete: Recording upload completed
+    - sdk_upload.failed: Recording upload failed
+    - transcript.complete: Transcription completed
+    """
+    try:
+        # Parse webhook payload
+        try:
+            payload = json.loads(request.body)
+        except json.JSONDecodeError:
+            logger.error("Invalid JSON in desktop webhook payload")
+            return JsonResponse({
+                'success': False,
+                'error': 'Invalid JSON payload'
+            }, status=400)
+        
+        # Get event type from payload
+        event_type = payload.get('event')
+        if not event_type:
+            logger.error("Missing event type in desktop webhook payload")
+            return JsonResponse({
+                'success': False,
+                'error': 'Missing event type'
+            }, status=400)
+        
+        logger.info(f"Received desktop recording webhook: {event_type}")
+        
+        # Process the webhook
+        result = handle_sdk_webhook_sync(event_type, payload)
+        
+        if result['success']:
+            return JsonResponse({
+                'success': True,
+                'message': result.get('message', 'Webhook processed')
+            })
+        else:
+            logger.error(f"Webhook processing failed: {result.get('error')}")
+            return JsonResponse({
+                'success': False,
+                'error': result.get('error', 'Webhook processing failed')
+            }, status=500)
+            
+    except Exception as e:
+        logger.error(f"Error processing desktop webhook: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@require_http_methods(["GET"])
+def get_desktop_upload(request, upload_id):
+    """
+    Get information about a desktop SDK upload
+    """
+    try:
+        username = getattr(request, 'username_from_token', None)
+        if not username:
+            return JsonResponse({
+                'success': False,
+                'error': 'Authentication required'
+            }, status=401)
+        
+        logger.info(f"Getting desktop upload {upload_id} for user: {username}")
+        
+        result = get_sdk_upload_sync(upload_id)
+        
+        if result['success']:
+            return JsonResponse({
+                'success': True,
+                'upload': result['upload_data']
+            })
+        else:
+            return JsonResponse({
+                'success': False,
+                'error': result.get('error', 'Failed to get upload')
+            }, status=404)
+            
+    except Exception as e:
+        logger.error(f"Error getting desktop upload: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
         }, status=500)
 
 
