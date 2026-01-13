@@ -15,7 +15,7 @@ from .models import (
 from .services import MeetingAgentService, TranscriptionService, SummaryService
 from .recall_service import create_recall_bot_sync, get_recall_bot_sync, stop_recall_bot_sync, create_async_transcript_sync, get_transcript_sync
 from .s3_upload_service import trigger_s3_upload_for_completed_meeting, MeetingS3UploadService
-from .desktop_recording_service import create_upload_token_sync, get_sdk_upload_sync, handle_sdk_webhook_sync
+from .desktop_recording_service import create_bot_for_meeting_sync, get_bot_sync, stop_bot_sync, handle_bot_webhook_sync
 import requests
 
 logger = logging.getLogger(__name__)
@@ -2037,7 +2037,6 @@ def create_desktop_upload_token(request):
         logger.info(f"Creating bot for meeting: {meeting_url} (user: {username})")
         
         # Create the bot
-        from .desktop_recording_service import create_bot_for_meeting_sync
         result = create_bot_for_meeting_sync(meeting_url, metadata)
         
         if result['success']:
@@ -2098,11 +2097,11 @@ def create_desktop_upload_token(request):
 @require_http_methods(["POST"])
 def desktop_recording_webhook(request):
     """
-    Handle webhook events from the Desktop Recording SDK
+    Handle webhook events from Recall AI bots
     
     This endpoint receives events like:
-    - sdk_upload.complete: Recording upload completed
-    - sdk_upload.failed: Recording upload failed
+    - bot.status_change: Bot status changed
+    - recording.ready: Recording is ready
     - transcript.complete: Transcription completed
     """
     try:
@@ -2110,7 +2109,7 @@ def desktop_recording_webhook(request):
         try:
             payload = json.loads(request.body)
         except json.JSONDecodeError:
-            logger.error("Invalid JSON in desktop webhook payload")
+            logger.error("Invalid JSON in bot webhook payload")
             return JsonResponse({
                 'success': False,
                 'error': 'Invalid JSON payload'
@@ -2119,16 +2118,16 @@ def desktop_recording_webhook(request):
         # Get event type from payload
         event_type = payload.get('event')
         if not event_type:
-            logger.error("Missing event type in desktop webhook payload")
+            logger.error("Missing event type in bot webhook payload")
             return JsonResponse({
                 'success': False,
                 'error': 'Missing event type'
             }, status=400)
         
-        logger.info(f"Received desktop recording webhook: {event_type}")
+        logger.info(f"Received bot webhook: {event_type}")
         
         # Process the webhook
-        result = handle_sdk_webhook_sync(event_type, payload)
+        result = handle_bot_webhook_sync(event_type, payload)
         
         if result['success']:
             return JsonResponse({
@@ -2153,7 +2152,7 @@ def desktop_recording_webhook(request):
 @require_http_methods(["GET"])
 def get_desktop_upload(request, upload_id):
     """
-    Get information about a desktop SDK upload
+    Get information about a bot (renamed from upload_id to maintain URL compatibility)
     """
     try:
         username = getattr(request, 'username_from_token', None)
@@ -2163,23 +2162,27 @@ def get_desktop_upload(request, upload_id):
                 'error': 'Authentication required'
             }, status=401)
         
-        logger.info(f"Getting desktop upload {upload_id} for user: {username}")
+        # upload_id parameter is actually bot_id now (for backward compatibility)
+        bot_id = upload_id
+        logger.info(f"Getting bot {bot_id} for user: {username}")
         
-        result = get_sdk_upload_sync(upload_id)
+        result = get_bot_sync(bot_id)
         
         if result['success']:
             return JsonResponse({
                 'success': True,
-                'upload': result['upload_data']
+                'bot_data': result.get('bot_data', {}),
+                'message': result.get('message', 'Bot info retrieved')
             })
         else:
             return JsonResponse({
                 'success': False,
-                'error': result.get('error', 'Failed to get upload')
+                'error': result.get('error', 'Failed to get bot info'),
+                'message': result.get('message', 'Bot not found')
             }, status=404)
             
     except Exception as e:
-        logger.error(f"Error getting desktop upload: {str(e)}")
+        logger.error(f"Error getting bot info: {str(e)}")
         return JsonResponse({
             'success': False,
             'error': str(e)
