@@ -1679,6 +1679,100 @@ def recall_webhook(request):
         }, status=500)
 
 
+@csrf_exempt
+@require_http_methods(["POST"])
+def realtime_transcription_webhook(request):
+    """
+    Handle real-time transcription webhook events from Recall AI
+    
+    This endpoint receives live transcription segments during recording
+    and broadcasts them to connected WebSocket clients.
+    """
+    try:
+        # Parse webhook payload
+        webhook_data = json.loads(request.body)
+        
+        # Extract transcription data
+        # Recall AI sends different event types for real-time transcription
+        event_type = webhook_data.get('event', 'transcript.partial')
+        data = webhook_data.get('data', {})
+        
+        logger.info(f"Received real-time transcription webhook: {event_type}")
+        
+        # Extract session/bot information
+        bot_id = data.get('bot_id') or webhook_data.get('bot_id')
+        transcript_data = data.get('transcript', data)
+        
+        # Get the transcript segment details
+        segment = {
+            'id': str(data.get('id', '')),
+            'speaker_id': data.get('speaker_id', data.get('speaker', 0)),
+            'speaker_name': data.get('speaker_name', data.get('speaker_label', f'Speaker {data.get("speaker", 0)}')),
+            'text': data.get('text', data.get('words', '')),
+            'start_time': data.get('start_time', data.get('start', 0)),
+            'end_time': data.get('end_time', data.get('end', 0)),
+            'confidence': data.get('confidence', 1.0),
+            'is_final': data.get('is_final', event_type == 'transcript.final'),
+            'timestamp': datetime.utcnow().isoformat()
+        }
+        
+        # Find the session associated with this bot
+        session_id = None
+        if bot_id:
+            from .models import MeetingSession
+            try:
+                session = MeetingSession.find_by_bot_id(bot_id)
+                if session:
+                    session_id = session.get('session_id')
+            except Exception as e:
+                logger.warning(f"Could not find session for bot {bot_id}: {e}")
+        
+        # Use session_id from webhook data if not found via bot_id
+        if not session_id:
+            session_id = data.get('session_id') or webhook_data.get('session_id')
+        
+        if session_id:
+            # Broadcast to WebSocket channel
+            from channels.layers import get_channel_layer
+            from asgiref.sync import async_to_sync
+            
+            channel_layer = get_channel_layer()
+            group_name = f'transcription_{session_id}'
+            
+            async_to_sync(channel_layer.group_send)(
+                group_name,
+                {
+                    'type': 'transcription_segment',
+                    'segment': segment,
+                    'session_id': session_id,
+                    'bot_id': bot_id
+                }
+            )
+            
+            logger.info(f"Broadcasted transcription segment to {group_name}")
+            
+            # Also store in database for persistence
+            from .models import MeetingSession
+            try:
+                MeetingSession.add_live_transcript_segment(session_id, segment)
+            except Exception as e:
+                logger.warning(f"Could not store transcript segment: {e}")
+        else:
+            logger.warning(f"No session_id found for transcription webhook, bot_id: {bot_id}")
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Transcription segment received'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error processing real-time transcription webhook: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'message': f'Webhook processing failed: {str(e)}'
+        }, status=500)
+
+
 @require_http_methods(["POST"])
 def debug_create_transcript(request, recording_id):
     """Debug endpoint to manually create transcript for a recording"""

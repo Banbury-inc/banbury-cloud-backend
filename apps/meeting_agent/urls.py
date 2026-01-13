@@ -34,6 +34,7 @@ urlpatterns = [
     
     # Recall AI webhooks
     path('recall-webhook/', views.recall_webhook, name='recall_webhook'),
+    path('transcription-webhook/', views.realtime_transcription_webhook, name='realtime_transcription_webhook'),
     
     # Desktop Recording SDK endpoints
     path('desktop/sdk-token/', views.create_desktop_sdk_upload_token, name='create_desktop_sdk_upload_token'),

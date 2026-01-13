@@ -519,6 +519,124 @@ class MeetingSession:
                 "success": False,
                 "error": str(e)
             }
+    
+    @staticmethod
+    def find_by_bot_id(bot_id):
+        """Find a session by Recall AI bot ID"""
+        try:
+            # Try different field locations for bot_id
+            session = meeting_sessions_collection.find_one({
+                "$or": [
+                    {"recall_bot_id": bot_id},
+                    {"bot_id": bot_id},
+                    {"metadata.bot_id": bot_id},
+                    {"recall_bot.id": bot_id}
+                ]
+            })
+            
+            if not session:
+                return None
+            
+            session["_id"] = str(session["_id"])
+            if "created_at" in session and hasattr(session["created_at"], "isoformat"):
+                session["created_at"] = session["created_at"].isoformat()
+            if "updated_at" in session and hasattr(session["updated_at"], "isoformat"):
+                session["updated_at"] = session["updated_at"].isoformat()
+            
+            return session
+        except Exception as e:
+            logger.error(f"Error finding session by bot ID {bot_id}: {str(e)}")
+            return None
+    
+    @staticmethod
+    def update_status(session_id, status):
+        """Update session status"""
+        try:
+            result = meeting_sessions_collection.update_one(
+                {"session_id": session_id},
+                {
+                    "$set": {
+                        "status": status,
+                        "updated_at": datetime.utcnow()
+                    }
+                }
+            )
+            
+            return {
+                "success": result.modified_count > 0,
+                "message": f"Status updated to {status}"
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
+    @staticmethod
+    def set_recording_id(session_id, recording_id):
+        """Set the recording ID for a session"""
+        try:
+            result = meeting_sessions_collection.update_one(
+                {"session_id": session_id},
+                {
+                    "$set": {
+                        "recording_id": recording_id,
+                        "updated_at": datetime.utcnow()
+                    }
+                }
+            )
+            
+            return {
+                "success": result.modified_count > 0,
+                "message": "Recording ID set successfully"
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
+    @staticmethod
+    def add_live_transcript_segment(session_id, segment):
+        """Add a live transcript segment during real-time transcription"""
+        try:
+            segment["added_at"] = datetime.utcnow().isoformat()
+            
+            result = meeting_sessions_collection.update_one(
+                {"session_id": session_id},
+                {
+                    "$push": {"live_transcript_segments": segment},
+                    "$set": {"updated_at": datetime.utcnow()}
+                }
+            )
+            
+            return {
+                "success": result.modified_count > 0,
+                "message": "Live transcript segment added"
+            }
+        except Exception as e:
+            logger.error(f"Error adding live transcript segment: {str(e)}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
+    @staticmethod
+    def get_live_transcript_segments(session_id):
+        """Get all live transcript segments for a session"""
+        try:
+            session = meeting_sessions_collection.find_one(
+                {"session_id": session_id},
+                {"live_transcript_segments": 1}
+            )
+            
+            if session and "live_transcript_segments" in session:
+                return session["live_transcript_segments"]
+            
+            return []
+        except Exception as e:
+            logger.error(f"Error getting live transcript segments: {str(e)}")
+            return []
 
 
 class MeetingAgentConfig:

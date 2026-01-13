@@ -296,6 +296,16 @@ class RecallAIService:
                     }
                 }
                 logger.info(f"Transcription enabled in recording_config with provider: recallai_streaming (accurate mode)")
+                
+                # Configure real-time transcription webhook for live updates
+                backend_url = os.environ.get('BACKEND_URL', 'https://api.banbury.io')
+                realtime_webhook_url = f'{backend_url}/meeting-agent/transcription-webhook/'
+                
+                payload['real_time_transcription'] = {
+                    'destination_url': realtime_webhook_url,
+                    'partial_results': True  # Enable partial results for live updates
+                }
+                logger.info(f"Real-time transcription webhook configured: {realtime_webhook_url}")
             else:
                 logger.info("Transcription disabled in recording_config")
             
