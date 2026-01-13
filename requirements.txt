@@ -37,6 +37,7 @@ google-auth-oauthlib==1.2.1
 google-api-python-client==2.37.0
 grpcio==1.67.1
 h5py==3.12.1
+httpx==0.27.0
 hyperlink==21.0.0
 idna==3.10
 incremental==24.7.2

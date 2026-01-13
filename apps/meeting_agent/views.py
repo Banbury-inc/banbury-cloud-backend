@@ -2036,15 +2036,27 @@ def create_desktop_upload_token(request):
                 'message': 'Upload token created successfully'
             })
         else:
-            logger.error(f"Failed to create upload token: {result.get('error')}")
+            error_msg = result.get('error', 'Failed to create upload token')
+            message = result.get('message', 'Unknown error')
+            logger.error(f"Failed to create upload token: {error_msg} - {message}")
+            
+            # Return 500 for server errors, but include detailed error info
             return JsonResponse({
                 'success': False,
-                'error': result.get('error', 'Failed to create upload token'),
-                'message': result.get('message', 'Unknown error')
+                'error': error_msg,
+                'message': message,
+                'details': result.get('details')
             }, status=500)
             
+    except ImportError as e:
+        logger.error(f"Import error creating desktop upload token: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'error': 'Missing dependency',
+            'message': f'Required package not installed: {str(e)}. Please install httpx.'
+        }, status=500)
     except Exception as e:
-        logger.error(f"Error creating desktop upload token: {str(e)}")
+        logger.error(f"Error creating desktop upload token: {str(e)}", exc_info=True)
         return JsonResponse({
             'success': False,
             'error': str(e),

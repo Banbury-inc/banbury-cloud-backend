@@ -353,6 +353,15 @@ def create_upload_token_sync(metadata: Optional[Dict[str, Any]] = None) -> Dict[
     Synchronous wrapper for creating upload token using Recall AI Desktop SDK
     """
     try:
+        # Check if RECALL_API_KEY is set before creating service
+        if not os.environ.get('RECALL_API_KEY'):
+            logger.error("RECALL_API_KEY environment variable is not set!")
+            return {
+                'success': False,
+                'error': 'RECALL_API_KEY not configured',
+                'message': 'RECALL_API_KEY environment variable is required for desktop recording. Please configure it in your environment.'
+            }
+        
         service = DesktopRecordingService()
         
         loop = asyncio.new_event_loop()
@@ -363,8 +372,16 @@ def create_upload_token_sync(metadata: Optional[Dict[str, Any]] = None) -> Dict[
         finally:
             loop.close()
             
+    except ValueError as e:
+        # Handle missing API key error specifically
+        logger.error(f"Configuration error: {str(e)}")
+        return {
+            'success': False,
+            'error': 'Configuration error',
+            'message': str(e)
+        }
     except Exception as e:
-        logger.error(f"Recall AI Desktop SDK exception: {str(e)}")
+        logger.error(f"Recall AI Desktop SDK exception: {str(e)}", exc_info=True)
         return {
             'success': False,
             'error': str(e),
