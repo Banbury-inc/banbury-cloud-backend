@@ -4,6 +4,7 @@ from django.views.decorators.http import require_http_methods
 import logging
 import re
 import json
+import os
 from urllib.parse import urlparse
 from datetime import datetime, date
 
@@ -2029,13 +2030,13 @@ def create_desktop_sdk_upload_token(request):
                 'message': 'Recording service not configured'
             }, status=500)
         
-        # Call Recall AI to create an upload token
-        api_url = os.environ.get('RECALL_API_URL', 'https://us-west-2.recall.ai')
+        # Call Recall AI to create an SDK upload token
         response = requests.post(
-            f'{api_url}/api/v1/upload-token/',
+            f'https://us-west-2.recall.ai/api/v1/sdk_upload/',
             headers={
                 'Authorization': f'Token {api_key}',
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
             },
             json={
                 'transcription': {
@@ -2054,13 +2055,14 @@ def create_desktop_sdk_upload_token(request):
             }, status=500)
         
         token_data = response.json()
-        upload_token = token_data.get('token')
+        upload_token = token_data.get('upload_token')
+
+        print(response.json())
         
         if not upload_token:
-            logger.error(f"No token in response: {token_data}")
             return JsonResponse({
                 'success': False,
-                'error': 'Invalid token response',
+                'error': 'Failed to create upload token',
                 'message': 'Recording service returned invalid response'
             }, status=500)
         
