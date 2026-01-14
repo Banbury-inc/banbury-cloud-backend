@@ -259,6 +259,9 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 
+# Disable Django's automatic trailing slash redirect for webhook compatibility
+APPEND_SLASH = False
+
 CORS_ALLOW_ALL_ORIGINS = True
 
 CORS_ALLOWED_ORIGINS = [
