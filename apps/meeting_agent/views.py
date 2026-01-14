@@ -336,6 +336,22 @@ def get_meeting_sessions(request):
             
             logger.info(f"Session {session['session_id']} participants: {len(session_participants)} from bot, {len(session.get('participants', []))} from session")
             
+            # Convert metadata keys to camelCase for frontend
+            raw_metadata = session.get('metadata', {})
+            frontend_metadata = {
+                'transcriptionEnabled': raw_metadata.get('transcription_enabled', raw_metadata.get('transcriptionEnabled', True)),
+                'windowId': raw_metadata.get('window_id', raw_metadata.get('windowId', '')),
+                'meetingTitle': raw_metadata.get('meeting_title', raw_metadata.get('meetingTitle', '')),
+                'botName': raw_metadata.get('bot_name', raw_metadata.get('botName', '')),
+                'recordingMode': raw_metadata.get('recording_mode', raw_metadata.get('recordingMode', 'speaker_view')),
+                'profilePictureUrl': raw_metadata.get('profile_picture_url', raw_metadata.get('profilePictureUrl', '')),
+            }
+            # Merge any other metadata fields
+            for key, value in raw_metadata.items():
+                camel_key = ''.join(word.capitalize() if i > 0 else word for i, word in enumerate(key.split('_')))
+                if camel_key not in frontend_metadata:
+                    frontend_metadata[camel_key] = value
+            
             session_data.append({
                 'id': session['session_id'],
                 'title': session.get('title', ''),
@@ -349,7 +365,7 @@ def get_meeting_sessions(request):
                 'recordingUrl': session.get('recording_url', ''),
                 'transcriptionUrl': session.get('transcription_url', ''),
                 'transcriptionText': session.get('transcription_text', ''),
-                'metadata': session.get('metadata', {}),
+                'metadata': frontend_metadata,
                 'participants': session_participants,
                 'summary': session.get('summary'),
                 'createdAt': session.get('created_at'),
@@ -433,6 +449,22 @@ def get_meeting_session(request, session_id):
                     'chatMessagesUrl': bot_data.get('chat_messages_url')
                 }
 
+        # Convert metadata keys to camelCase for frontend
+        raw_metadata = session.get('metadata', {})
+        frontend_metadata = {
+            'transcriptionEnabled': raw_metadata.get('transcription_enabled', raw_metadata.get('transcriptionEnabled', True)),
+            'windowId': raw_metadata.get('window_id', raw_metadata.get('windowId', '')),
+            'meetingTitle': raw_metadata.get('meeting_title', raw_metadata.get('meetingTitle', '')),
+            'botName': raw_metadata.get('bot_name', raw_metadata.get('botName', '')),
+            'recordingMode': raw_metadata.get('recording_mode', raw_metadata.get('recordingMode', 'speaker_view')),
+            'profilePictureUrl': raw_metadata.get('profile_picture_url', raw_metadata.get('profilePictureUrl', '')),
+        }
+        # Merge any other metadata fields
+        for key, value in raw_metadata.items():
+            camel_key = ''.join(word.capitalize() if i > 0 else word for i, word in enumerate(key.split('_')))
+            if camel_key not in frontend_metadata:
+                frontend_metadata[camel_key] = value
+        
         session_data = {
             'id': session['session_id'],
             'title': session.get('title', ''),
@@ -446,7 +478,7 @@ def get_meeting_session(request, session_id):
             'recordingUrl': session.get('recording_url', ''),
             'transcriptionUrl': session.get('transcription_url', ''),
             'transcriptionText': session.get('transcription_text', ''),
-            'metadata': session.get('metadata', {}),
+            'metadata': frontend_metadata,
             'participants': session.get('participants', []),
             'summary': session.get('summary'),
             'createdAt': session.get('created_at'),
@@ -702,8 +734,66 @@ def get_transcription(request, session_id):
         full_text = ""
         
         # First, try to get transcription from async transcript data
-        recall_transcript_url = session.get('recall_transcript_url')
+        # Check multiple field names as webhook stores it differently
+        recall_transcript_url = (
+            session.get('recall_transcript_url') or 
+            session.get('transcription_url') or
+            session.get('recall_bot', {}).get('transcript_url')
+        )
         recall_transcript_data = session.get('recall_transcript_data')
+        
+        # For Desktop SDK: check if we have a recording_id to fetch from Recall API
+        # Per docs: https://docs.recall.ai/docs/desktop-sdk
+        # After sdk_upload.complete, use Retrieve Recording endpoint
+        recording_id = session.get('recording_id')
+        if not recall_transcript_url and recording_id:
+            try:
+                logger.info(f"Fetching transcript from recording_id: {recording_id}")
+                api_key = os.environ.get('RECALL_API_KEY')
+                if api_key:
+                    recording_response = requests.get(
+                        f'https://us-west-2.recall.ai/api/v1/recording/{recording_id}/',
+                        headers={
+                            'Authorization': f'Token {api_key}',
+                            'Content-Type': 'application/json'
+                        },
+                        timeout=30
+                    )
+                    
+                    if recording_response.status_code == 200:
+                        recording_data = recording_response.json()
+                        media_shortcuts = recording_data.get('media_shortcuts', {})
+                        
+                        # Get transcript URL from media_shortcuts
+                        transcript_info = media_shortcuts.get('transcript', {})
+                        transcript_status = transcript_info.get('status', {}).get('code')
+                        
+                        if transcript_status == 'done':
+                            recall_transcript_url = transcript_info.get('data', {}).get('download_url')
+                            logger.info(f"Got transcript URL from recording: {recall_transcript_url}")
+                            
+                            # Store it in session for future use
+                            if recall_transcript_url:
+                                MeetingSession.update_session(session_id, {'transcription_url': recall_transcript_url})
+                        else:
+                            logger.info(f"Transcript not ready yet, status: {transcript_status}")
+                    else:
+                        logger.warning(f"Failed to fetch recording {recording_id}: {recording_response.status_code}")
+            except Exception as e:
+                logger.warning(f"Failed to fetch transcript from recording {recording_id}: {str(e)}")
+        
+        # Fallback: check if we have a transcript_id to fetch from Recall API
+        transcript_id = session.get('transcript_id')
+        if not recall_transcript_url and transcript_id:
+            try:
+                logger.info(f"Fetching transcript using transcript_id: {transcript_id}")
+                transcript_result = get_transcript_sync(transcript_id)
+                if transcript_result.get('success'):
+                    transcript_full_data = transcript_result.get('transcript_data', {})
+                    recall_transcript_url = transcript_full_data.get('data', {}).get('download_url')
+                    logger.info(f"Got transcript URL from transcript_id: {recall_transcript_url}")
+            except Exception as e:
+                logger.warning(f"Failed to fetch transcript by ID {transcript_id}: {str(e)}")
         
         if recall_transcript_url:
             # Fetch the raw transcript JSON and return it directly to frontend
@@ -899,11 +989,31 @@ def get_transcription(request, session_id):
         
         # Fall back to local transcription segments if no Recall AI transcript found
         if not segments and not full_text:
-            segments = session.get('transcription_segments', [])
-            if segments:
-                full_text = '\n'.join([f"{seg.get('speaker_name', 'Unknown')}: {seg.get('text', '')}" for seg in segments])
-            else:
-                # Check for basic transcription text
+            # Check for live transcript segments (real-time during active meeting)
+            live_segments = session.get('live_transcript_segments', [])
+            if live_segments:
+                # Format live segments to match expected format
+                segments = []
+                for seg in live_segments:
+                    segments.append({
+                        'id': seg.get('id', ''),
+                        'speakerId': str(seg.get('speaker_id', seg.get('speakerId', 0))),
+                        'speakerName': seg.get('speaker_name', seg.get('speakerName', 'Unknown')),
+                        'text': seg.get('text', ''),
+                        'startTime': seg.get('start_time', seg.get('startTime', 0)),
+                        'endTime': seg.get('end_time', seg.get('endTime', 0)),
+                        'confidence': seg.get('confidence', 1.0)
+                    })
+                full_text = '\n'.join([f"{seg.get('speakerName', 'Unknown')}: {seg.get('text', '')}" for seg in segments])
+            
+            # Also check stored transcription_segments
+            if not segments:
+                segments = session.get('transcription_segments', [])
+                if segments:
+                    full_text = '\n'.join([f"{seg.get('speaker_name', 'Unknown')}: {seg.get('text', '')}" for seg in segments])
+            
+            # Check for basic transcription text as last resort
+            if not segments and not full_text:
                 transcription_text = session.get('transcription_text', '')
                 if transcription_text:
                     full_text = transcription_text
@@ -1379,11 +1489,12 @@ def create_recall_bot(request):
                 'message': 'Meeting URL is required'
             }, status=400)
         
-        # Extract metadata
+        # Extract metadata - enable transcription by default for real-time transcription
         metadata = {
             'bot_name': data.get('bot_name', 'Meeting Recorder'),
             'recording_mode': data.get('recording_mode', 'speaker_view'),
-            'user_id': username
+            'user_id': username,
+            'transcription_enabled': data.get('transcription_enabled', True)  # Enable by default
         }
         
         result = create_recall_bot_sync(meeting_url, metadata)
@@ -1717,18 +1828,33 @@ def realtime_transcription_webhook(request):
             'timestamp': datetime.utcnow().isoformat()
         }
         
-        # Find the session associated with this bot
+        # Find the session associated with this bot or SDK upload
         session_id = None
+        from .models import MeetingSession
+        
+        # Try to find by bot_id first
         if bot_id:
-            from .models import MeetingSession
             try:
                 session = MeetingSession.find_by_bot_id(bot_id)
                 if session:
                     session_id = session.get('session_id')
+                    logger.info(f"Found session {session_id} by bot_id {bot_id}")
             except Exception as e:
                 logger.warning(f"Could not find session for bot {bot_id}: {e}")
         
-        # Use session_id from webhook data if not found via bot_id
+        # Try to find by SDK upload ID (for desktop SDK recordings)
+        if not session_id:
+            sdk_upload_id = data.get('sdk_upload_id') or webhook_data.get('sdk_upload_id')
+            if sdk_upload_id:
+                try:
+                    session = MeetingSession.find_by_sdk_upload_id(sdk_upload_id)
+                    if session:
+                        session_id = session.get('session_id')
+                        logger.info(f"Found session {session_id} by sdk_upload_id {sdk_upload_id}")
+                except Exception as e:
+                    logger.warning(f"Could not find session for sdk_upload_id {sdk_upload_id}: {e}")
+        
+        # Use session_id from webhook data if not found via bot_id or sdk_upload_id
         if not session_id:
             session_id = data.get('session_id') or webhook_data.get('session_id')
         
@@ -2125,6 +2251,24 @@ def create_desktop_sdk_upload_token(request):
             }, status=500)
         
         # Call Recall AI to create an SDK upload token
+        # Per docs: https://docs.recall.ai/docs/desktop-sdk
+        # Configure recording_config with transcript provider for async transcription
+        sdk_payload = {}
+        
+        if transcription_enabled:
+            # Configure recording_config for transcription
+            # Using assembly_ai for async transcription after recording completes
+            sdk_payload['recording_config'] = {
+                'transcript': {
+                    'provider': {
+                        'assembly_ai_v3_streaming': {}  # Use AssemblyAI for async transcription
+                    }
+                }
+            }
+            logger.info("SDK upload configured with AssemblyAI async transcription")
+        
+        logger.info(f"Creating SDK upload with payload: {json.dumps(sdk_payload, indent=2)}")
+        
         response = requests.post(
             f'https://us-west-2.recall.ai/api/v1/sdk_upload/',
             headers={
@@ -2132,11 +2276,7 @@ def create_desktop_sdk_upload_token(request):
                 'Content-Type': 'application/json',
                 'Accept': 'application/json'
             },
-            json={
-                'transcription': {
-                    'provider': 'assembly_ai' if transcription_enabled else 'none'
-                }
-            },
+            json=sdk_payload,
             timeout=30
         )
         
@@ -2150,8 +2290,9 @@ def create_desktop_sdk_upload_token(request):
         
         token_data = response.json()
         upload_token = token_data.get('upload_token')
-
-        print(response.json())
+        sdk_upload_id = token_data.get('id')  # SDK upload ID for linking webhooks
+        
+        logger.info(f"SDK upload response: {token_data}")
         
         if not upload_token:
             return JsonResponse({
@@ -2169,18 +2310,21 @@ def create_desktop_sdk_upload_token(request):
             'meeting_url': f'desktop://{window_id}',  # Use a pseudo-URL for desktop recordings
             'status': 'active',
             'recording_type': 'desktop_sdk',
+            'sdk_upload_id': sdk_upload_id,  # Store SDK upload ID for webhook linking
             'metadata': {
                 'window_id': window_id,
                 'meeting_title': meeting_title,
                 'transcription_enabled': transcription_enabled,
                 'upload_token_prefix': upload_token[:10] + '...',  # Store partial token for reference
+                'sdk_upload_id': sdk_upload_id,
                 'created_at': datetime.utcnow().isoformat()
             }
         }
         
         session = MeetingSession.create_session(session_data)
+        session_id = session.get('session_id') if session.get('success') else None
         
-        logger.info(f"Created desktop SDK upload token for user {username}, window {window_id}")
+        logger.info(f"Created desktop SDK upload token for user {username}, window {window_id}, session {session_id}, sdk_upload_id {sdk_upload_id}")
         
         return JsonResponse({
             'success': True,
@@ -2310,19 +2454,20 @@ def create_desktop_upload_token(request):
 @require_http_methods(["POST"])
 def desktop_recording_webhook(request):
     """
-    Handle webhook events from Recall AI bots
+    Handle webhook events from Recall AI Desktop SDK
     
-    This endpoint receives events like:
-    - bot.status_change: Bot status changed
-    - recording.ready: Recording is ready
-    - transcript.complete: Transcription completed
+    Per docs: https://docs.recall.ai/docs/desktop-sdk
+    Events:
+    - sdk_upload.complete: SDK Upload has finished successfully
+    - sdk_upload.failed: SDK Upload has finished unsuccessfully  
+    - sdk_upload.uploading: SDK upload has started uploading
     """
     try:
         # Parse webhook payload
         try:
             payload = json.loads(request.body)
         except json.JSONDecodeError:
-            logger.error("Invalid JSON in bot webhook payload")
+            logger.error("Invalid JSON in desktop webhook payload")
             return JsonResponse({
                 'success': False,
                 'error': 'Invalid JSON payload'
@@ -2330,32 +2475,199 @@ def desktop_recording_webhook(request):
         
         # Get event type from payload
         event_type = payload.get('event')
-        if not event_type:
-            logger.error("Missing event type in bot webhook payload")
-            return JsonResponse({
-                'success': False,
-                'error': 'Missing event type'
-            }, status=400)
+        data = payload.get('data', {})
         
-        logger.info(f"Received bot webhook: {event_type}")
+        logger.info(f"Received desktop SDK webhook: {event_type}")
+        logger.info(f"Webhook payload: {json.dumps(payload, indent=2, default=str)}")
         
-        # Process the webhook
-        result = handle_bot_webhook_sync(event_type, payload)
-        
-        if result['success']:
+        if event_type == 'sdk_upload.complete':
+            # SDK Upload completed - fetch the recording and transcript
+            recording_id = data.get('recording_id')
+            sdk_upload_id = data.get('id') or data.get('sdk_upload_id')
+            
+            logger.info(f"SDK upload complete: recording_id={recording_id}, sdk_upload_id={sdk_upload_id}")
+            
+            if recording_id:
+                # Fetch the recording to get transcript URL
+                api_key = os.environ.get('RECALL_API_KEY')
+                if api_key:
+                    try:
+                        recording_response = requests.get(
+                            f'https://us-west-2.recall.ai/api/v1/recording/{recording_id}/',
+                            headers={
+                                'Authorization': f'Token {api_key}',
+                                'Content-Type': 'application/json'
+                            },
+                            timeout=30
+                        )
+                        
+                        if recording_response.status_code == 200:
+                            recording_data = recording_response.json()
+                            media_shortcuts = recording_data.get('media_shortcuts', {})
+                            
+                            # Extract transcript URL
+                            transcript_info = media_shortcuts.get('transcript', {})
+                            transcript_status = transcript_info.get('status', {}).get('code')
+                            transcript_url = transcript_info.get('data', {}).get('download_url')
+                            
+                            # Extract video URL
+                            video_info = media_shortcuts.get('video_mixed', {})
+                            video_url = video_info.get('data', {}).get('download_url')
+                            
+                            logger.info(f"Recording {recording_id}: transcript_status={transcript_status}, has_transcript_url={bool(transcript_url)}, has_video_url={bool(video_url)}")
+                            
+                            # Find and update the session
+                            if sdk_upload_id:
+                                session = MeetingSession.find_by_sdk_upload_id(sdk_upload_id)
+                                if session:
+                                    session_id = session['session_id']
+                                    update_data = {
+                                        'status': 'completed',
+                                        'recording_id': recording_id,
+                                        'recording_url': video_url,
+                                        'transcription_url': transcript_url,
+                                    }
+                                    MeetingSession.update_session(session_id, update_data)
+                                    logger.info(f"Updated session {session_id} with recording data from SDK upload")
+                                else:
+                                    logger.warning(f"No session found for sdk_upload_id: {sdk_upload_id}")
+                        else:
+                            logger.error(f"Failed to fetch recording {recording_id}: {recording_response.status_code}")
+                    except Exception as e:
+                        logger.error(f"Error fetching recording {recording_id}: {str(e)}")
+            
             return JsonResponse({
                 'success': True,
-                'message': result.get('message', 'Webhook processed')
+                'message': 'SDK upload complete webhook processed'
             })
-        else:
-            logger.error(f"Webhook processing failed: {result.get('error')}")
+            
+        elif event_type == 'sdk_upload.uploading':
+            # Recording upload started
+            sdk_upload_id = data.get('id') or data.get('sdk_upload_id')
+            logger.info(f"SDK upload started: {sdk_upload_id}")
+            
+            if sdk_upload_id:
+                session = MeetingSession.find_by_sdk_upload_id(sdk_upload_id)
+                if session:
+                    MeetingSession.update_session(session['session_id'], {'status': 'uploading'})
+            
             return JsonResponse({
-                'success': False,
-                'error': result.get('error', 'Webhook processing failed')
-            }, status=500)
+                'success': True,
+                'message': 'SDK upload uploading webhook processed'
+            })
+            
+        elif event_type == 'sdk_upload.failed':
+            # Recording upload failed
+            sdk_upload_id = data.get('id') or data.get('sdk_upload_id')
+            error = data.get('error', 'Unknown error')
+            logger.error(f"SDK upload failed: {sdk_upload_id}, error: {error}")
+            
+            if sdk_upload_id:
+                session = MeetingSession.find_by_sdk_upload_id(sdk_upload_id)
+                if session:
+                    MeetingSession.update_session(session['session_id'], {
+                        'status': 'failed',
+                        'error': error
+                    })
+            
+            return JsonResponse({
+                'success': True,
+                'message': 'SDK upload failed webhook processed'
+            })
+        
+        else:
+            # Handle other events via the existing handler
+            result = handle_bot_webhook_sync(event_type, payload)
+            
+            if result['success']:
+                return JsonResponse({
+                    'success': True,
+                    'message': result.get('message', 'Webhook processed')
+                })
+            else:
+                logger.error(f"Webhook processing failed: {result.get('error')}")
+                return JsonResponse({
+                    'success': False,
+                    'error': result.get('error', 'Webhook processing failed')
+                }, status=500)
             
     except Exception as e:
         logger.error(f"Error processing desktop webhook: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def end_desktop_session(request, session_id):
+    """
+    End a desktop SDK recording session
+    
+    This endpoint is called when a desktop SDK recording stops.
+    It updates the session status and triggers transcription fetching.
+    """
+    try:
+        username = getattr(request, 'username_from_token', None)
+        if not username:
+            return JsonResponse({
+                'success': False,
+                'error': 'Authentication required'
+            }, status=401)
+        
+        logger.info(f"Ending desktop SDK session {session_id} for user {username}")
+        
+        result = MeetingSession.get_session(session_id, username)
+        
+        if not result["success"]:
+            return JsonResponse({
+                'success': False,
+                'error': 'Session not found'
+            }, status=404)
+        
+        session = result["session"]
+        
+        # Calculate duration
+        end_time = datetime.utcnow()
+        duration = None
+        if session.get('start_time'):
+            start_time = session['start_time']
+            if isinstance(start_time, str):
+                start_time = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+            duration = int((end_time - start_time).total_seconds())
+        
+        # Update session to completed status
+        update_data = {
+            'status': 'completed',
+            'end_time': end_time,
+            'duration': duration
+        }
+        
+        MeetingSession.update_session(session_id, update_data)
+        logger.info(f"Updated session {session_id} status to completed")
+        
+        # For Desktop SDK, we need to wait for the recording to be uploaded to Recall AI
+        # and then fetch the transcription. The SDK upload webhook will handle this.
+        # For now, just mark the session as completed and wait for webhook.
+        
+        # Check if we have an sdk_upload_id to poll for transcription
+        sdk_upload_id = session.get('sdk_upload_id')
+        if sdk_upload_id:
+            logger.info(f"Session {session_id} has sdk_upload_id: {sdk_upload_id}")
+            # The transcription will be fetched when the SDK upload completes
+            # via the desktop webhook or when the user requests transcription
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Session ended successfully',
+            'session_id': session_id,
+            'status': 'completed',
+            'duration': duration
+        })
+        
+    except Exception as e:
+        logger.error(f"Error ending desktop session: {str(e)}")
         return JsonResponse({
             'success': False,
             'error': str(e)

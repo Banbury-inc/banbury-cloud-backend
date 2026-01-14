@@ -41,6 +41,7 @@ urlpatterns = [
     path('desktop/upload-token/', views.create_desktop_upload_token, name='create_desktop_upload_token'),
     path('desktop/webhook/', views.desktop_recording_webhook, name='desktop_recording_webhook'),
     path('desktop/upload/<str:upload_id>/', views.get_desktop_upload, name='get_desktop_upload'),
+    path('desktop/session/<str:session_id>/end/', views.end_desktop_session, name='end_desktop_session'),
     
     # Debug endpoints
     path('debug/create-transcript/<str:recording_id>/', views.debug_create_transcript, name='debug_create_transcript'),
