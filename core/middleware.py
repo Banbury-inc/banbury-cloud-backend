@@ -38,7 +38,12 @@ class AuthenticationTokenMiddleware:
             # OneDrive OAuth callback must be public
             '/authentication/onedrive/oauth_callback/',
             # favicon should not require auth
-            '/favicon.ico'
+            '/favicon.ico',
+            # Recall AI webhooks (called by external service, no auth)
+            '/meeting-agent/recall-webhook/',
+            '/meeting-agent/transcription-webhook/',
+            '/meeting-agent/desktop/webhook/',
+            '/meeting-agent/desktop/webhook',
         ]
         
         # Check if the current path starts with any of the excluded paths
