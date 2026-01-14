@@ -163,6 +163,8 @@ class DesktopRecordingService:
                 return self._handle_sdk_upload_recording_started(payload)
             elif event_type == 'sdk_upload.recording_ended':
                 return self._handle_sdk_upload_recording_ended(payload)
+            elif event_type == 'sdk_upload.complete':
+                return self._handle_sdk_upload_complete(payload)
             else:
                 logger.warning(f"Unknown bot webhook event type: {event_type}")
                 return {

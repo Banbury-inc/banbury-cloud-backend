@@ -2278,11 +2278,6 @@ def create_desktop_sdk_upload_token(request):
             # Configure recording_config for real-time transcription streaming
             # This sends transcript.data and transcript.partial_data events to the desktop SDK
             sdk_payload['recording_config'] = {
-                'transcript': {
-                    'provider': {
-                        'assembly_ai_v3_streaming': {}
-                    }
-                },
                 'realtime_endpoints': [
                     {
                         'type': 'desktop_sdk_callback',
