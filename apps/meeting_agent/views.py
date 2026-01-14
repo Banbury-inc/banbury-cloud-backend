@@ -2278,6 +2278,11 @@ def create_desktop_sdk_upload_token(request):
             # Configure recording_config for real-time transcription streaming
             # This sends transcript.data and transcript.partial_data events to the desktop SDK
             sdk_payload['recording_config'] = {
+                transcript: {
+                    provider: {
+                        assembly_ai_v3_streaming: {}
+                    }
+                },
                 'realtime_endpoints': [
                     {
                         'type': 'desktop_sdk_callback',
@@ -2497,8 +2502,12 @@ def desktop_recording_webhook(request):
         event_type = payload.get('event')
         data = payload.get('data', {})
         
-        logger.info(f"Received desktop SDK webhook: {event_type}")
-        logger.info(f"Webhook payload: {json.dumps(payload, indent=2, default=str)}")
+        # Log full payload details for debugging
+        logger.info(f"=== DESKTOP SDK WEBHOOK RECEIVED ===")
+        logger.info(f"Event type: {event_type}")
+        logger.info(f"Data keys: {list(data.keys()) if data else 'None'}")
+        logger.info(f"Full payload: {json.dumps(payload, indent=2, default=str)}")
+        logger.info(f"=== END WEBHOOK DEBUG ===")
         
         if event_type == 'sdk_upload.complete':
             # SDK Upload completed - create transcript and fetch recording data

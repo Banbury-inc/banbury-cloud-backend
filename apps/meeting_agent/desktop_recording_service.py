@@ -253,7 +253,7 @@ class DesktopRecordingService:
         sdk_upload_id = data.get('sdk_upload_id') or data.get('sdk_upload', {}).get('id')
         recording_id = data.get('recording_id')
         
-        logger.info(f"Transcript complete - transcript_id: {transcript_id}, bot_id: {bot_id}, sdk_upload_id: {sdk_upload_id}")
+        logger.info(f"Transcript complete - transcript_id: {transcript_id}, bot_id: {bot_id}, sdk_upload_id: {sdk_upload_id}, recording_id: {recording_id}")
         
         # Update the session with transcript data
         from .models import MeetingSession
@@ -269,6 +269,12 @@ class DesktopRecordingService:
             if not session and sdk_upload_id:
                 session = MeetingSession.find_by_sdk_upload_id(sdk_upload_id)
             
+            # Try to find by recording_id (for SDK uploads where transcript webhook only has recording_id)
+            if not session and recording_id:
+                session = MeetingSession.find_by_recording_id(recording_id)
+                if session:
+                    logger.info(f"Found session by recording_id: {recording_id}")
+            
             if session:
                 session_id = session['session_id']
                 MeetingSession.set_transcript_id(session_id, transcript_id)
@@ -278,7 +284,7 @@ class DesktopRecordingService:
                 
                 logger.info(f"Updated session {session_id} with transcript {transcript_id}")
             else:
-                logger.warning(f"No session found for transcript.complete: bot_id={bot_id}, sdk_upload_id={sdk_upload_id}")
+                logger.warning(f"No session found for transcript.complete: bot_id={bot_id}, sdk_upload_id={sdk_upload_id}, recording_id={recording_id}")
         except Exception as e:
             logger.error(f"Error updating session with transcript: {str(e)}")
         

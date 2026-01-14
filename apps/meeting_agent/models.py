@@ -549,6 +549,26 @@ class MeetingSession:
             return None
     
     @staticmethod
+    def find_by_recording_id(recording_id):
+        """Find a session by Recall AI recording ID (for transcript lookups)"""
+        try:
+            session = meeting_sessions_collection.find_one({"recording_id": recording_id})
+            
+            if not session:
+                return None
+            
+            session["_id"] = str(session["_id"])
+            if "created_at" in session and hasattr(session["created_at"], "isoformat"):
+                session["created_at"] = session["created_at"].isoformat()
+            if "updated_at" in session and hasattr(session["updated_at"], "isoformat"):
+                session["updated_at"] = session["updated_at"].isoformat()
+            
+            return session
+        except Exception as e:
+            logger.error(f"Error finding session by recording ID {recording_id}: {str(e)}")
+            return None
+    
+    @staticmethod
     def update_status(session_id, status):
         """Update session status"""
         try:
