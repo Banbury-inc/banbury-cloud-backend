@@ -1040,6 +1040,7 @@ def get_transcription(request, session_id):
         if not segments and not full_text:
             return JsonResponse({
                 'segments': [],
+                'session_info': session,
                 'full_text': '',
                 'is_complete': False,
                 'processing_status': 'No transcription available',

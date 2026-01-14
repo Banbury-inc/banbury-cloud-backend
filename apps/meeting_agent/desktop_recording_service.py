@@ -245,20 +245,38 @@ class DesktopRecordingService:
     
     def _handle_transcript_complete(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Handle transcript.complete webhook event"""
-        transcript_id = payload.get('data', {}).get('id')
-        bot_id = payload.get('data', {}).get('bot_id')
+        data = payload.get('data', {})
+        transcript_id = data.get('id')
+        bot_id = data.get('bot_id')
+        sdk_upload_id = data.get('sdk_upload_id') or data.get('sdk_upload', {}).get('id')
+        recording_id = data.get('recording_id')
         
-        logger.info(f"Transcript complete - transcript_id: {transcript_id}, bot_id: {bot_id}")
+        logger.info(f"Transcript complete - transcript_id: {transcript_id}, bot_id: {bot_id}, sdk_upload_id: {sdk_upload_id}")
         
         # Update the session with transcript data
         from .models import MeetingSession
         
         try:
-            # Find session by bot ID
-            session = MeetingSession.find_by_bot_id(bot_id)
+            session = None
+            
+            # Try to find session by bot_id first (for bot-based recordings)
+            if bot_id:
+                session = MeetingSession.find_by_bot_id(bot_id)
+            
+            # Try to find by sdk_upload_id (for SDK uploads / desktop recordings)
+            if not session and sdk_upload_id:
+                session = MeetingSession.find_by_sdk_upload_id(sdk_upload_id)
+            
             if session:
-                MeetingSession.set_transcript_id(session['session_id'], transcript_id)
-                logger.info(f"Updated session {session['session_id']} with transcript {transcript_id}")
+                session_id = session['session_id']
+                MeetingSession.set_transcript_id(session_id, transcript_id)
+                
+                # Also update status to completed since transcript is now ready
+                MeetingSession.update_status(session_id, 'completed')
+                
+                logger.info(f"Updated session {session_id} with transcript {transcript_id}")
+            else:
+                logger.warning(f"No session found for transcript.complete: bot_id={bot_id}, sdk_upload_id={sdk_upload_id}")
         except Exception as e:
             logger.error(f"Error updating session with transcript: {str(e)}")
         
