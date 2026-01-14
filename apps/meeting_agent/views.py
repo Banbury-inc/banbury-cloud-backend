@@ -14,7 +14,7 @@ from .models import (
     initialize_meeting_platforms, get_duration_minutes
 )
 from .services import MeetingAgentService, TranscriptionService, SummaryService
-from .recall_service import create_recall_bot_sync, get_recall_bot_sync, stop_recall_bot_sync, create_async_transcript_sync, get_transcript_sync
+from .recall_service import create_recall_bot_sync, get_recall_bot_sync, stop_recall_bot_sync, create_async_transcript_sync, get_transcript_sync, list_recordings_sync
 from .s3_upload_service import trigger_s3_upload_for_completed_meeting, MeetingS3UploadService
 from .desktop_recording_service import create_bot_for_meeting_sync, get_bot_sync, stop_bot_sync, handle_bot_webhook_sync
 import requests
@@ -135,6 +135,7 @@ def get_meeting_sessions(request):
             recall_bot = None
             participants_from_bot = []
             recall_bot_id = session.get('recall_bot_id')
+            
             if recall_bot_id:
                 recall_bot_result = get_recall_bot_sync(recall_bot_id)
                 if recall_bot_result['success']:
@@ -150,6 +151,7 @@ def get_meeting_sessions(request):
                     audio_url = None
                     transcript_url = None
                     
+                    # Extract video URL and transcript URL from nested recordings structure
                     recordings = bot_data.get('recordings', [])
                     if recordings:
                         # Get the most recent recording
@@ -421,17 +423,41 @@ def get_meeting_session(request, session_id):
         # Get Recall bot data if available
         recall_bot = None
         recall_bot_id = session.get('recall_bot_id')
+        
         if recall_bot_id:
             recall_bot_result = get_recall_bot_sync(recall_bot_id)
             logger.info(f"Recall bot result: {recall_bot_result}")
             if recall_bot_result['success']:
                 bot_data = recall_bot_result['bot_data']
+                
+                # Extract video URL and transcript URL from bot_data
+                video_url = None
+                audio_url = None
+                transcript_url = None
+                
+                recordings = bot_data.get('recordings', [])
+                if recordings:
+                    latest_recording = recordings[-1]
+                    media_shortcuts = latest_recording.get('media_shortcuts', {})
+                    
+                    if 'video_mixed' in media_shortcuts and media_shortcuts['video_mixed']:
+                        video_data = media_shortcuts['video_mixed'].get('data', {})
+                        video_url = video_data.get('download_url')
+                    
+                    if 'audio_mixed' in media_shortcuts and media_shortcuts['audio_mixed']:
+                        audio_data = media_shortcuts['audio_mixed'].get('data', {})
+                        audio_url = audio_data.get('download_url')
+                    
+                    if 'transcript' in media_shortcuts and media_shortcuts['transcript']:
+                        transcript_data = media_shortcuts['transcript'].get('data', {})
+                        transcript_url = transcript_data.get('download_url')
+                
                 recall_bot = {
                     'id': bot_data.get('id'),
                     'status': bot_data.get('status_changes', [])[-1].get('code', 'unknown') if bot_data.get('status_changes') else 'unknown',
                     'meetingUrl': bot_data.get('meeting_url'),
-                    'recordingStatus': 'completed' if bot_data.get('video_url') else 'processing',
-                    'transcriptionStatus': 'completed' if bot_data.get('transcript_segments') else 'processing',
+                    'recordingStatus': 'completed' if video_url else 'processing',
+                    'transcriptionStatus': 'completed' if transcript_url or bot_data.get('transcript_segments') else 'processing',
                     'createdAt': bot_data.get('created_at'),
                     'joinedAt': bot_data.get('joined_at'),
                     'leftAt': bot_data.get('left_at'),
@@ -443,9 +469,9 @@ def get_meeting_session(request, session_id):
                             'language': 'en'
                         }
                     },
-                    'videoUrl': bot_data.get('video_url'),
-                    'audioUrl': bot_data.get('audio_url'),
-                    'transcriptUrl': bot_data.get('transcript_url'),
+                    'videoUrl': video_url or bot_data.get('video_url'),
+                    'audioUrl': audio_url or bot_data.get('audio_url'),
+                    'transcriptUrl': transcript_url or bot_data.get('transcript_url'),
                     'chatMessagesUrl': bot_data.get('chat_messages_url')
                 }
 
@@ -732,6 +758,20 @@ def get_transcription(request, session_id):
         session = result["session"]
         segments = []
         full_text = ""
+        recording_data = None  # Single recording data for this specific session
+        video_url = None  # Video URL for playback
+        
+        # Fetch recording data for desktop SDK uploads
+        sdk_upload_id = session.get('sdk_upload_id')
+        if sdk_upload_id:
+            try:
+                recordings_result = list_recordings_sync(limit=1, offset=0, sdk_upload_id=sdk_upload_id)
+                if recordings_result.get('success') and recordings_result.get('recordings'):
+                    # Get just the first (most relevant) recording for this SDK upload
+                    recording_data = recordings_result.get('recordings', [])[0] if recordings_result.get('recordings') else None
+                    logger.info(f"Fetched recording for sdk_upload_id {sdk_upload_id}: {recording_data.get('id') if recording_data else 'None'}")
+            except Exception as e:
+                logger.warning(f"Failed to fetch recording for sdk_upload_id {sdk_upload_id}: {str(e)}")
         
         # First, try to get transcription from async transcript data
         # Check multiple field names as webhook stores it differently
@@ -742,11 +782,35 @@ def get_transcription(request, session_id):
         )
         recall_transcript_data = session.get('recall_transcript_data')
         
+        # Try to get video_url from session first
+        video_url = session.get('recording_url')
+        
         # For Desktop SDK: check if we have a recording_id to fetch from Recall API
         # Per docs: https://docs.recall.ai/docs/desktop-sdk
         # After sdk_upload.complete, use Retrieve Recording endpoint
         # This mirrors the check done in desktop_recording_webhook for sdk_upload.complete
         recording_id = session.get('recording_id')
+        
+        # Also try to get recording_id from recording_data if available
+        if not recording_id and recording_data:
+            recording_id = recording_data.get('id')
+            
+        # Extract video_url and transcript_url from recording_data if available
+        if recording_data:
+            media_shortcuts = recording_data.get('media_shortcuts', {})
+            
+            # Extract video URL
+            video_mixed = media_shortcuts.get('video_mixed')
+            if video_mixed and video_mixed.get('status', {}).get('code') == 'done':
+                video_url = video_mixed.get('data', {}).get('download_url') or video_url
+            
+            # Extract transcript URL if not already set
+            transcript_info = media_shortcuts.get('transcript')
+            if transcript_info and transcript_info.get('status', {}).get('code') == 'done':
+                recall_transcript_url = recall_transcript_url or transcript_info.get('data', {}).get('download_url')
+            
+            logger.info(f"Recording {recording_id}: video_url={bool(video_url)}, transcript_url={bool(recall_transcript_url)}")
+        
         if not recall_transcript_url and recording_id:
             try:
                 logger.info(f"Fetching transcript from recording_id: {recording_id}")
@@ -771,9 +835,9 @@ def get_transcription(request, session_id):
                         
                         # Also extract video URL like the webhook does
                         video_info = media_shortcuts.get('video_mixed', {})
-                        video_url = video_info.get('data', {}).get('download_url')
+                        fetched_video_url = video_info.get('data', {}).get('download_url')
                         
-                        logger.info(f"Recording {recording_id}: transcript_status={transcript_status}, has_video_url={bool(video_url)}")
+                        logger.info(f"Recording {recording_id}: transcript_status={transcript_status}, has_video_url={bool(fetched_video_url)}")
                         
                         update_data = {}
                         
@@ -786,8 +850,10 @@ def get_transcription(request, session_id):
                             logger.info(f"Transcript not ready yet, status: {transcript_status}")
                         
                         # Store video URL if available (like webhook does)
-                        if video_url and not session.get('recording_url'):
-                            update_data['recording_url'] = video_url
+                        if fetched_video_url:
+                            video_url = fetched_video_url  # Use the fetched video URL
+                            if not session.get('recording_url'):
+                                update_data['recording_url'] = fetched_video_url
                         
                         # Update session with any new data found
                         if update_data:
@@ -869,7 +935,7 @@ def get_transcription(request, session_id):
                     # Sort segments by start time
                     segments.sort(key=lambda x: x['startTime'])
                     
-                    # Return parsed segments and raw transcript
+                    # Return parsed segments and raw transcript with video URL and recording data
                     return JsonResponse({
                         'segments': segments,
                         'full_json': transcript_json,
@@ -877,6 +943,9 @@ def get_transcription(request, session_id):
                         'raw_transcript': transcript_json,
                         'is_complete': True,
                         'processing_status': 'completed',
+                        'video_url': video_url,  # Direct video URL for playback
+                        'transcript_url': recall_transcript_url,  # Transcript download URL
+                        'recording': recording_data,  # Single recording data for this session
                         'session_info': {
                             'title': session.get('title', 'Untitled Meeting'),
                             'start_time': session.get('start_time'),
@@ -971,7 +1040,7 @@ def get_transcription(request, session_id):
                                         # Sort segments by start time
                                         segments.sort(key=lambda x: x['startTime'])
                                         
-                                        # Return parsed segments and raw transcript
+                                        # Return parsed segments and raw transcript with video URL and recording data
                                         return JsonResponse({
                                             'segments': segments,
                                             'full_text': full_text,
@@ -979,6 +1048,9 @@ def get_transcription(request, session_id):
                                             'raw_transcript': transcript_json,
                                             'is_complete': True,
                                             'processing_status': 'completed',
+                                            'video_url': video_url,  # Direct video URL for playback
+                                            'transcript_url': recall_transcript_url,  # Transcript download URL
+                                            'recording': recording_data,  # Single recording data for this session
                                             'session_info': {
                                                 'title': session.get('title', 'Untitled Meeting'),
                                                 'start_time': session.get('start_time'),
@@ -1044,7 +1116,10 @@ def get_transcription(request, session_id):
                 'full_text': '',
                 'is_complete': False,
                 'processing_status': 'No transcription available',
-                'message': 'No transcription data found for this meeting session'
+                'message': 'No transcription data found for this meeting session',
+                'video_url': video_url,  # Still provide video URL even if no transcription
+                'transcript_url': recall_transcript_url,
+                'recording': recording_data
             })
         
         is_complete = session.get('status') == 'completed'
@@ -1055,6 +1130,9 @@ def get_transcription(request, session_id):
             'full_text': full_text,
             'is_complete': is_complete,
             'processing_status': processing_status,
+            'video_url': video_url,  # Direct video URL for playback
+            'transcript_url': recall_transcript_url,  # Transcript download URL
+            'recording': recording_data,  # Single recording data for this session
             'session_info': {
                 'title': session.get('title', 'Untitled Meeting'),
                 'start_time': session.get('start_time'),

@@ -651,6 +651,55 @@ class RecallAIService:
                 'message': 'Failed to list bots'
             }
 
+    async def list_recordings(self, limit: int = 50, offset: int = 0, sdk_upload_id: Optional[str] = None) -> Dict[str, Any]:
+        """
+        List recordings from Recall AI
+        
+        Args:
+            limit (int): Maximum number of recordings to return
+            offset (int): Number of recordings to skip
+            sdk_upload_id (str, optional): Filter by SDK upload ID
+            
+        Returns:
+            dict: List of recordings from Recall AI with full data structure
+        """
+        try:
+            params = {'limit': limit, 'offset': offset}
+            if sdk_upload_id:
+                params['sdk_upload_id'] = sdk_upload_id
+            
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                response = await client.get(
+                    f'{self.base_url}/recording/',
+                    headers=self.headers,
+                    params=params
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    return {
+                        'success': True,
+                        'recordings': data.get('results', []),
+                        'next': data.get('next'),
+                        'previous': data.get('previous'),
+                        'total': len(data.get('results', []))
+                    }
+                else:
+                    logger.error(f"Error listing recordings: {response.status_code} - {response.text}")
+                    return {
+                        'success': False,
+                        'error': f'API error: {response.status_code}',
+                        'message': 'Failed to list recordings'
+                    }
+                    
+        except Exception as e:
+            logger.error(f"Error listing recordings: {str(e)}")
+            return {
+                'success': False,
+                'error': str(e),
+                'message': 'Failed to list recordings'
+            }
+
 
 def create_recall_bot_sync(meeting_url: str, metadata: Dict[str, Any] = None) -> Dict[str, Any]:
     """
@@ -823,4 +872,28 @@ def get_transcript_sync(transcript_id: str) -> Dict[str, Any]:
             'success': False,
             'error': str(e),
             'message': 'Failed to get transcript'
+        }
+
+
+def list_recordings_sync(limit: int = 50, offset: int = 0, sdk_upload_id: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Synchronous wrapper for listing recordings
+    """
+    try:
+        service = RecallAIService()
+        
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            result = loop.run_until_complete(service.list_recordings(limit, offset, sdk_upload_id))
+            return result
+        finally:
+            loop.close()
+            
+    except Exception as e:
+        logger.error(f"Error in sync wrapper for list_recordings: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e),
+            'message': 'Failed to list recordings'
         }
