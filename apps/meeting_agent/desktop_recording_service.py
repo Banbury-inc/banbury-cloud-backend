@@ -290,7 +290,8 @@ class DesktopRecordingService:
     def _handle_sdk_upload_recording_started(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Handle sdk_upload.recording_started webhook event"""
         data = payload.get('data', {})
-        upload_id = data.get('id')
+        # Try multiple key variations to find the upload ID
+        upload_id = data.get('id') or data.get('sdk_upload_id') or data.get('sdk_upload', {}).get('id')
         
         logger.info(f"SDK upload recording started - upload_id: {upload_id}")
         logger.info(f"SDK upload data: {json.dumps(data, indent=2)}")
@@ -315,7 +316,8 @@ class DesktopRecordingService:
     def _handle_sdk_upload_recording_ended(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Handle sdk_upload.recording_ended webhook event"""
         data = payload.get('data', {})
-        upload_id = data.get('id')
+        # Try multiple key variations to find the upload ID
+        upload_id = data.get('id') or data.get('sdk_upload_id') or data.get('sdk_upload', {}).get('id')
         
         logger.info(f"SDK upload recording ended - upload_id: {upload_id}")
         logger.info(f"SDK upload data: {json.dumps(data, indent=2)}")
