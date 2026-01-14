@@ -39,6 +39,8 @@ urlpatterns = [
     # Desktop Recording SDK endpoints
     path('desktop/sdk-token/', views.create_desktop_sdk_upload_token, name='create_desktop_sdk_upload_token'),
     path('desktop/upload-token/', views.create_desktop_upload_token, name='create_desktop_upload_token'),
+    # Webhook needs both with and without trailing slash since external services don't follow redirects
+    path('desktop/webhook', views.desktop_recording_webhook, name='desktop_recording_webhook_no_slash'),
     path('desktop/webhook/', views.desktop_recording_webhook, name='desktop_recording_webhook'),
     path('desktop/upload/<str:upload_id>/', views.get_desktop_upload, name='get_desktop_upload'),
     path('desktop/session/<str:session_id>/end/', views.end_desktop_session, name='end_desktop_session'),
