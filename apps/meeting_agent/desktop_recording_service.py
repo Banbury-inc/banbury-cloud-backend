@@ -159,6 +159,10 @@ class DesktopRecordingService:
                 return self._handle_recording_ready(payload)
             elif event_type == 'transcript.complete':
                 return self._handle_transcript_complete(payload)
+            elif event_type == 'sdk_upload.recording_started':
+                return self._handle_sdk_upload_recording_started(payload)
+            elif event_type == 'sdk_upload.recording_ended':
+                return self._handle_sdk_upload_recording_ended(payload)
             else:
                 logger.warning(f"Unknown bot webhook event type: {event_type}")
                 return {
@@ -261,6 +265,56 @@ class DesktopRecordingService:
         return {
             'success': True,
             'message': 'Transcript complete processed'
+        }
+    
+    def _handle_sdk_upload_recording_started(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle sdk_upload.recording_started webhook event"""
+        data = payload.get('data', {})
+        upload_id = data.get('id')
+        
+        logger.info(f"SDK upload recording started - upload_id: {upload_id}")
+        logger.info(f"SDK upload data: {json.dumps(data, indent=2)}")
+        
+        # Update session status if we can find it by sdk_upload_id
+        from .models import MeetingSession
+        
+        try:
+            session = MeetingSession.find_by_sdk_upload_id(upload_id)
+            if session:
+                session_id = session['session_id']
+                MeetingSession.update_status(session_id, 'recording')
+                logger.info(f"Updated session {session_id} to recording status (SDK upload)")
+        except Exception as e:
+            logger.error(f"Error updating session for SDK upload recording started: {str(e)}")
+        
+        return {
+            'success': True,
+            'message': f'SDK upload recording started processed for {upload_id}'
+        }
+    
+    def _handle_sdk_upload_recording_ended(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle sdk_upload.recording_ended webhook event"""
+        data = payload.get('data', {})
+        upload_id = data.get('id')
+        
+        logger.info(f"SDK upload recording ended - upload_id: {upload_id}")
+        logger.info(f"SDK upload data: {json.dumps(data, indent=2)}")
+        
+        # Update session status if we can find it by sdk_upload_id
+        from .models import MeetingSession
+        
+        try:
+            session = MeetingSession.find_by_sdk_upload_id(upload_id)
+            if session:
+                session_id = session['session_id']
+                MeetingSession.update_status(session_id, 'processing')
+                logger.info(f"Updated session {session_id} to processing status (SDK upload ended)")
+        except Exception as e:
+            logger.error(f"Error updating session for SDK upload recording ended: {str(e)}")
+        
+        return {
+            'success': True,
+            'message': f'SDK upload recording ended processed for {upload_id}'
         }
 
 

@@ -745,6 +745,7 @@ def get_transcription(request, session_id):
         # For Desktop SDK: check if we have a recording_id to fetch from Recall API
         # Per docs: https://docs.recall.ai/docs/desktop-sdk
         # After sdk_upload.complete, use Retrieve Recording endpoint
+        # This mirrors the check done in desktop_recording_webhook for sdk_upload.complete
         recording_id = session.get('recording_id')
         if not recall_transcript_url and recording_id:
             try:
@@ -764,19 +765,33 @@ def get_transcription(request, session_id):
                         recording_data = recording_response.json()
                         media_shortcuts = recording_data.get('media_shortcuts', {})
                         
-                        # Get transcript URL from media_shortcuts
+                        # Get transcript URL from media_shortcuts (same check as webhook)
                         transcript_info = media_shortcuts.get('transcript', {})
                         transcript_status = transcript_info.get('status', {}).get('code')
+                        
+                        # Also extract video URL like the webhook does
+                        video_info = media_shortcuts.get('video_mixed', {})
+                        video_url = video_info.get('data', {}).get('download_url')
+                        
+                        logger.info(f"Recording {recording_id}: transcript_status={transcript_status}, has_video_url={bool(video_url)}")
+                        
+                        update_data = {}
                         
                         if transcript_status == 'done':
                             recall_transcript_url = transcript_info.get('data', {}).get('download_url')
                             logger.info(f"Got transcript URL from recording: {recall_transcript_url}")
-                            
-                            # Store it in session for future use
                             if recall_transcript_url:
-                                MeetingSession.update_session(session_id, {'transcription_url': recall_transcript_url})
+                                update_data['transcription_url'] = recall_transcript_url
                         else:
                             logger.info(f"Transcript not ready yet, status: {transcript_status}")
+                        
+                        # Store video URL if available (like webhook does)
+                        if video_url and not session.get('recording_url'):
+                            update_data['recording_url'] = video_url
+                        
+                        # Update session with any new data found
+                        if update_data:
+                            MeetingSession.update_session(session_id, update_data)
                     else:
                         logger.warning(f"Failed to fetch recording {recording_id}: {recording_response.status_code}")
             except Exception as e:
@@ -802,6 +817,7 @@ def get_transcription(request, session_id):
                 logger.info(f"Fetching async transcript from URL: {transcript_download_url}")
                 response = requests.get(transcript_download_url, timeout=10)
                 if response.status_code == 200:
+                    logger.info(f"Transcript response: {response.json()}")
                     transcript_json = response.json()
                     
                     # Parse transcript and create segments with speaker attribution
@@ -856,6 +872,7 @@ def get_transcription(request, session_id):
                     # Return parsed segments and raw transcript
                     return JsonResponse({
                         'segments': segments,
+                        'full_json': transcript_json,
                         'full_text': full_text,
                         'raw_transcript': transcript_json,
                         'is_complete': True,
@@ -958,6 +975,7 @@ def get_transcription(request, session_id):
                                         return JsonResponse({
                                             'segments': segments,
                                             'full_text': full_text,
+                                            'full_json': transcript_json,
                                             'raw_transcript': transcript_json,
                                             'is_complete': True,
                                             'processing_status': 'completed',
@@ -2252,20 +2270,26 @@ def create_desktop_sdk_upload_token(request):
         
         # Call Recall AI to create an SDK upload token
         # Per docs: https://docs.recall.ai/docs/desktop-sdk
-        # Configure recording_config with transcript provider for async transcription
+        # Configure real-time transcript streaming with AssemblyAI
         sdk_payload = {}
         
         if transcription_enabled:
-            # Configure recording_config for transcription
-            # Using assembly_ai for async transcription after recording completes
+            # Configure recording_config for real-time transcription streaming
+            # This sends transcript.data and transcript.partial_data events to the desktop SDK
             sdk_payload['recording_config'] = {
                 'transcript': {
                     'provider': {
-                        'assembly_ai_v3_streaming': {}  # Use AssemblyAI for async transcription
+                        'assembly_ai_v3_streaming': {}
                     }
-                }
+                },
+                'realtime_endpoints': [
+                    {
+                        'type': 'desktop_sdk_callback',
+                        'events': ['transcript.data', 'transcript.partial_data']
+                    }
+                ]
             }
-            logger.info("SDK upload configured with AssemblyAI async transcription")
+            logger.info("SDK upload configured with AssemblyAI real-time transcript streaming")
         
         logger.info(f"Creating SDK upload with payload: {json.dumps(sdk_payload, indent=2)}")
         
@@ -2481,16 +2505,34 @@ def desktop_recording_webhook(request):
         logger.info(f"Webhook payload: {json.dumps(payload, indent=2, default=str)}")
         
         if event_type == 'sdk_upload.complete':
-            # SDK Upload completed - fetch the recording and transcript
+            # SDK Upload completed - create transcript and fetch recording data
             recording_id = data.get('recording_id')
             sdk_upload_id = data.get('id') or data.get('sdk_upload_id')
             
             logger.info(f"SDK upload complete: recording_id={recording_id}, sdk_upload_id={sdk_upload_id}")
             
             if recording_id:
-                # Fetch the recording to get transcript URL
                 api_key = os.environ.get('RECALL_API_KEY')
                 if api_key:
+                    transcript_id = None
+                    transcript_url = None
+                    video_url = None
+                    
+                    # Step 1: Create async transcript for the recording
+                    # SDK uploads don't have automatic transcription - we need to create it explicitly
+                    try:
+                        logger.info(f"Creating async transcript for recording {recording_id}")
+                        transcript_result = create_async_transcript_sync(recording_id, 'en')
+                        
+                        if transcript_result.get('success'):
+                            transcript_id = transcript_result.get('transcript_id')
+                            logger.info(f"Successfully created transcript {transcript_id} for recording {recording_id}")
+                        else:
+                            logger.warning(f"Failed to create transcript for recording {recording_id}: {transcript_result.get('message')}")
+                    except Exception as e:
+                        logger.error(f"Error creating transcript for recording {recording_id}: {str(e)}")
+                    
+                    # Step 2: Fetch the recording to get video URL and any existing transcript
                     try:
                         recording_response = requests.get(
                             f'https://us-west-2.recall.ai/api/v1/recording/{recording_id}/',
@@ -2505,36 +2547,43 @@ def desktop_recording_webhook(request):
                             recording_data = recording_response.json()
                             media_shortcuts = recording_data.get('media_shortcuts', {})
                             
-                            # Extract transcript URL
+                            # Extract transcript URL (may not be ready yet since we just created it)
                             transcript_info = media_shortcuts.get('transcript', {})
                             transcript_status = transcript_info.get('status', {}).get('code')
-                            transcript_url = transcript_info.get('data', {}).get('download_url')
+                            if transcript_status == 'done':
+                                transcript_url = transcript_info.get('data', {}).get('download_url')
                             
                             # Extract video URL
                             video_info = media_shortcuts.get('video_mixed', {})
                             video_url = video_info.get('data', {}).get('download_url')
                             
                             logger.info(f"Recording {recording_id}: transcript_status={transcript_status}, has_transcript_url={bool(transcript_url)}, has_video_url={bool(video_url)}")
-                            
-                            # Find and update the session
-                            if sdk_upload_id:
-                                session = MeetingSession.find_by_sdk_upload_id(sdk_upload_id)
-                                if session:
-                                    session_id = session['session_id']
-                                    update_data = {
-                                        'status': 'completed',
-                                        'recording_id': recording_id,
-                                        'recording_url': video_url,
-                                        'transcription_url': transcript_url,
-                                    }
-                                    MeetingSession.update_session(session_id, update_data)
-                                    logger.info(f"Updated session {session_id} with recording data from SDK upload")
-                                else:
-                                    logger.warning(f"No session found for sdk_upload_id: {sdk_upload_id}")
                         else:
                             logger.error(f"Failed to fetch recording {recording_id}: {recording_response.status_code}")
                     except Exception as e:
                         logger.error(f"Error fetching recording {recording_id}: {str(e)}")
+                    
+                    # Step 3: Find and update the session
+                    if sdk_upload_id:
+                        session = MeetingSession.find_by_sdk_upload_id(sdk_upload_id)
+                        if session:
+                            session_id = session['session_id']
+                            update_data = {
+                                'status': 'processing' if not transcript_url else 'completed',
+                                'recording_id': recording_id,
+                                'recording_url': video_url,
+                            }
+                            # Only set transcript_url if we have it
+                            if transcript_url:
+                                update_data['transcription_url'] = transcript_url
+                            # Store transcript_id for later polling
+                            if transcript_id:
+                                update_data['transcript_id'] = transcript_id
+                            
+                            MeetingSession.update_session(session_id, update_data)
+                            logger.info(f"Updated session {session_id} with recording data from SDK upload (transcript_id={transcript_id})")
+                        else:
+                            logger.warning(f"No session found for sdk_upload_id: {sdk_upload_id}")
             
             return JsonResponse({
                 'success': True,
