@@ -7,7 +7,7 @@ import json
 import os
 from urllib.parse import urlparse
 from datetime import datetime, date
-
+from .get_meeting_details import get_meeting_details as get_meeting_details_view
 from .models import (
     MeetingPlatform, MeetingSession, MeetingAgentConfig, MeetingAgentStatus,
     get_user_id_from_django_user, get_username_from_django_user,
@@ -17,6 +17,7 @@ from .services import MeetingAgentService, TranscriptionService, SummaryService
 from .recall_service import create_recall_bot_sync, get_recall_bot_sync, stop_recall_bot_sync, create_async_transcript_sync, get_transcript_sync, list_recordings_sync
 from .s3_upload_service import trigger_s3_upload_for_completed_meeting, MeetingS3UploadService
 from .desktop_recording_service import create_bot_for_meeting_sync, get_bot_sync, stop_bot_sync, handle_bot_webhook_sync
+
 import requests
 
 logger = logging.getLogger(__name__)
@@ -737,6 +738,16 @@ def leave_meeting(request, session_id):
             'message': f'Failed to leave meeting: {str(e)}'
         }, status=500)
 
+@require_http_methods(["GET"])
+def get_meeting_details(request, session_id):
+    """Get meeting details for a meeting session"""
+    try:
+        return get_meeting_details_view(request, session_id)
+    except Exception as e:
+        logger.error(f"Failed to get meeting details: {str(e)}")
+        return JsonResponse({
+            'error': 'Failed to get meeting details'
+        }, status=500)
 
 @require_http_methods(["GET"])
 def get_transcription(request, session_id):
@@ -2654,17 +2665,21 @@ def desktop_recording_webhook(request):
                             update_data = {
                                 'status': 'processing' if not transcript_url else 'completed',
                                 'recording_id': recording_id,
-                                'recording_url': video_url,
                             }
-                            # Only set transcript_url if we have it
+                            # Update recording_url if we have it
+                            if video_url:
+                                update_data['recording_url'] = video_url
+                                logger.info(f"Setting recording_url for session {session_id}")
+                            # Update transcription_url if we have it
                             if transcript_url:
                                 update_data['transcription_url'] = transcript_url
+                                logger.info(f"Setting transcription_url for session {session_id}")
                             # Store transcript_id for later polling
                             if transcript_id:
                                 update_data['transcript_id'] = transcript_id
                             
                             MeetingSession.update_session(session_id, update_data)
-                            logger.info(f"Updated session {session_id} with recording data from SDK upload (transcript_id={transcript_id})")
+                            logger.info(f"Updated session {session_id} with recording data from SDK upload: recording_url={bool(video_url)}, transcription_url={bool(transcript_url)}, transcript_id={transcript_id}")
                         else:
                             logger.warning(f"No session found for sdk_upload_id: {sdk_upload_id}")
             

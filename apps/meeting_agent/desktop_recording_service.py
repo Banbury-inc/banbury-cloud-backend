@@ -344,6 +344,117 @@ class DesktopRecordingService:
             'success': True,
             'message': f'SDK upload recording ended processed for {upload_id}'
         }
+    
+    def _handle_sdk_upload_complete(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle sdk_upload.complete webhook event"""
+        import requests
+        import os
+        from .recall_service import create_async_transcript_sync
+        
+        data = payload.get('data', {})
+        recording_id = data.get('recording_id')
+        sdk_upload_id = data.get('id') or data.get('sdk_upload_id')
+        
+        logger.info(f"SDK upload complete - recording_id={recording_id}, sdk_upload_id={sdk_upload_id}")
+        
+        if not recording_id:
+            logger.warning(f"No recording_id in sdk_upload.complete payload")
+            return {
+                'success': True,
+                'message': 'SDK upload complete processed (no recording_id)'
+            }
+        
+        api_key = os.environ.get('RECALL_API_KEY')
+        if not api_key:
+            logger.error("RECALL_API_KEY not set, cannot fetch recording data")
+            return {
+                'success': False,
+                'error': 'RECALL_API_KEY not configured'
+            }
+        
+        transcript_id = None
+        transcript_url = None
+        video_url = None
+        
+        # Step 1: Create async transcript for the recording
+        try:
+            logger.info(f"Creating async transcript for recording {recording_id}")
+            transcript_result = create_async_transcript_sync(recording_id, 'en')
+            
+            if transcript_result.get('success'):
+                transcript_id = transcript_result.get('transcript_id')
+                logger.info(f"Successfully created transcript {transcript_id} for recording {recording_id}")
+            else:
+                logger.warning(f"Failed to create transcript for recording {recording_id}: {transcript_result.get('message')}")
+        except Exception as e:
+            logger.error(f"Error creating transcript for recording {recording_id}: {str(e)}")
+        
+        # Step 2: Fetch the recording to get video URL and any existing transcript
+        try:
+            recording_response = requests.get(
+                f'https://us-west-2.recall.ai/api/v1/recording/{recording_id}/',
+                headers={
+                    'Authorization': f'Token {api_key}',
+                    'Content-Type': 'application/json'
+                },
+                timeout=30
+            )
+            
+            if recording_response.status_code == 200:
+                recording_data = recording_response.json()
+                media_shortcuts = recording_data.get('media_shortcuts', {})
+                
+                # Extract transcript URL (may not be ready yet since we just created it)
+                transcript_info = media_shortcuts.get('transcript', {})
+                transcript_status = transcript_info.get('status', {}).get('code')
+                if transcript_status == 'done':
+                    transcript_url = transcript_info.get('data', {}).get('download_url')
+                
+                # Extract video URL
+                video_info = media_shortcuts.get('video_mixed', {})
+                video_url = video_info.get('data', {}).get('download_url')
+                
+                logger.info(f"Recording {recording_id}: transcript_status={transcript_status}, has_transcript_url={bool(transcript_url)}, has_video_url={bool(video_url)}")
+            else:
+                logger.error(f"Failed to fetch recording {recording_id}: {recording_response.status_code}")
+        except Exception as e:
+            logger.error(f"Error fetching recording {recording_id}: {str(e)}")
+        
+        # Step 3: Find and update the session
+        from .models import MeetingSession
+        
+        if sdk_upload_id:
+            try:
+                session = MeetingSession.find_by_sdk_upload_id(sdk_upload_id)
+                if session:
+                    session_id = session['session_id']
+                    update_data = {
+                        'status': 'processing' if not transcript_url else 'completed',
+                        'recording_id': recording_id,
+                    }
+                    # Update recording_url if we have it
+                    if video_url:
+                        update_data['recording_url'] = video_url
+                        logger.info(f"Setting recording_url for session {session_id}")
+                    # Update transcription_url if we have it
+                    if transcript_url:
+                        update_data['transcription_url'] = transcript_url
+                        logger.info(f"Setting transcription_url for session {session_id}")
+                    # Store transcript_id for later polling
+                    if transcript_id:
+                        update_data['transcript_id'] = transcript_id
+                    
+                    MeetingSession.update_session(session_id, update_data)
+                    logger.info(f"Updated session {session_id} with recording data from SDK upload: recording_url={bool(video_url)}, transcription_url={bool(transcript_url)}, transcript_id={transcript_id}")
+                else:
+                    logger.warning(f"No session found for sdk_upload_id: {sdk_upload_id}")
+            except Exception as e:
+                logger.error(f"Error updating session for SDK upload complete: {str(e)}")
+        
+        return {
+            'success': True,
+            'message': f'SDK upload complete processed for {sdk_upload_id}'
+        }
 
 
 # Synchronous wrappers for Django views

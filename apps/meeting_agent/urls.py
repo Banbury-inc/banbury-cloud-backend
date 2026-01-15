@@ -8,13 +8,15 @@ urlpatterns = [
     
     # Session management
     path('sessions/', views.get_meeting_sessions, name='get_meeting_sessions'),
-    path('sessions/<str:session_id>/', views.get_meeting_session, name='get_meeting_session'),
     path('sessions/join/', views.join_meeting, name='join_meeting'),
-    path('sessions/<str:session_id>/leave/', views.leave_meeting, name='leave_meeting'),
+    # More specific routes must come before less specific ones
+    path('sessions/<str:session_id>/meeting-details/', views.get_meeting_details, name='get_meeting_details'),
     path('sessions/<str:session_id>/transcription/', views.get_transcription, name='get_transcription'),
     path('sessions/<str:session_id>/summary/', views.meeting_summary, name='meeting_summary'),
     path('sessions/<str:session_id>/recording/download/', views.download_recording, name='download_recording'),
+    path('sessions/<str:session_id>/leave/', views.leave_meeting, name='leave_meeting'),
     path('sessions/<str:session_id>/delete/', views.delete_meeting_session, name='delete_meeting_session'),
+    path('sessions/<str:session_id>/', views.get_meeting_session, name='get_meeting_session'),
     
     # Alternative shorter paths for easier frontend access
     path('join/', views.join_meeting, name='join_meeting_short'),
