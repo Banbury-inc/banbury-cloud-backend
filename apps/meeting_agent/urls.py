@@ -12,6 +12,7 @@ urlpatterns = [
     # More specific routes must come before less specific ones
     path('sessions/<str:session_id>/meeting-details/', views.get_meeting_details, name='get_meeting_details'),
     path('sessions/<str:session_id>/transcription/', views.get_transcription, name='get_transcription'),
+    path('proxy-transcript/', views.proxy_transcript, name='proxy_transcript'),
     path('sessions/<str:session_id>/summary/', views.meeting_summary, name='meeting_summary'),
     path('sessions/<str:session_id>/recording/download/', views.download_recording, name='download_recording'),
     path('sessions/<str:session_id>/leave/', views.leave_meeting, name='leave_meeting'),

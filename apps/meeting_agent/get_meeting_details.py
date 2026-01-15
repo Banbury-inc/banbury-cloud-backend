@@ -25,12 +25,31 @@ def get_meeting_details(request, session_id):
             }, status=404)
         
         session = result["session"]
-        recording_id = session.get('recording_id')
-        if not recording_id:
+        sdk_upload_id = session.get('sdk_upload_id')
+        if not sdk_upload_id:
             return JsonResponse({
-                'error': 'Recording ID not found for this session'
+                'error': 'SDK Upload ID not found for this session'
             }, status=404)
         api_key = os.environ.get('RECALL_API_KEY')
+        if api_key:
+            sdk_upload_response = requests.get(
+                f'https://us-west-2.recall.ai/api/v1/sdk-upload/{sdk_upload_id}/',
+                headers={
+                    'Authorization': f'Token {api_key}',
+                    'Content-Type': 'application/json'
+                },
+                timeout=30
+            )
+            if sdk_upload_response.status_code == 200:
+                recording_id = sdk_upload_response.json().get('recording_id')
+                if not recording_id:
+                    return JsonResponse({
+                        'error': 'Recording ID not found for this SDK Upload'
+                    }, status=404)
+            else:
+                return JsonResponse({
+                    'error': 'Failed to get meeting details from Recall API'
+                }, status=500)
         if api_key:
             recording_response = requests.get(
                 f'https://us-west-2.recall.ai/api/v1/recording/{recording_id}/',

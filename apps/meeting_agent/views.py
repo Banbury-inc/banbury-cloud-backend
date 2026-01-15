@@ -2861,6 +2861,132 @@ def get_desktop_upload(request, upload_id):
         }, status=500)
 
 
+@require_http_methods(["GET"])
+def proxy_transcript(request):
+    """Proxy transcript URL to avoid CORS issues and format transcript data"""
+    try:
+        username = getattr(request, 'username_from_token', None)
+        if not username:
+            return JsonResponse({
+                'error': 'Authentication required'
+            }, status=401)
+        
+        # Get transcript URL from query parameter
+        transcript_url = request.GET.get('url')
+        if not transcript_url:
+            return JsonResponse({
+                'error': 'Transcript URL is required'
+            }, status=400)
+        
+        # Validate that the URL is from Recall.ai
+        if 'recall.ai' not in transcript_url:
+            return JsonResponse({
+                'error': 'Invalid transcript URL'
+            }, status=400)
+        
+        # Fetch the transcript from Recall.ai
+        logger.info(f"Proxying transcript request to: {transcript_url}")
+        response = requests.get(transcript_url, timeout=30)
+        
+        if response.status_code == 200:
+            # Return the transcript data as JSON
+            try:
+                transcript_data = response.json()
+                
+                # Transform word-level transcript into utterance format
+                if isinstance(transcript_data, list) and len(transcript_data) > 0:
+                    # Check if this is the word-level format (has 'participant' and 'words' keys)
+                    first_item = transcript_data[0]
+                    if isinstance(first_item, dict) and 'participant' in first_item and 'words' in first_item:
+                        utterances = []
+                        current_utterance = None
+                        utterance_gap_threshold = 2.0  # seconds - group words within 2 seconds
+                        
+                        for item in transcript_data:
+                            participant = item.get('participant', {})
+                            words = item.get('words', [])
+                            
+                            if not words:
+                                continue
+                            
+                            participant_id = participant.get('id', 'unknown')
+                            participant_name = participant.get('name', f'Speaker {participant_id}')
+                            
+                            # Get timestamps from first and last word
+                            first_word = words[0]
+                            last_word = words[-1]
+                            
+                            start_time = first_word.get('start_timestamp', {}).get('relative', 0)
+                            end_time = last_word.get('end_timestamp', {}).get('relative', 0)
+                            
+                            # Extract text from words, filtering out empty strings
+                            text_parts = [word.get('text', '').strip() for word in words if word.get('text') and word.get('text').strip()]
+                            text = ' '.join(text_parts)
+                            
+                            if not text:
+                                continue
+                            
+                            # Check if we should continue current utterance or start new one
+                            # Group if same speaker and gap is less than threshold
+                            if (current_utterance and 
+                                str(current_utterance['speaker']) == str(participant_id) and
+                                start_time - current_utterance['end'] < utterance_gap_threshold):
+                                # Continue current utterance - append text
+                                if current_utterance['text']:
+                                    current_utterance['text'] += ' ' + text
+                                else:
+                                    current_utterance['text'] = text
+                                current_utterance['end'] = end_time
+                            else:
+                                # Start new utterance
+                                if current_utterance:
+                                    utterances.append(current_utterance)
+                                
+                                current_utterance = {
+                                    'id': f"utterance-{len(utterances)}",
+                                    'speaker': str(participant_id),
+                                    'speaker_name': participant_name,
+                                    'text': text,
+                                    'start': start_time,
+                                    'end': end_time
+                                }
+                        
+                        # Add the last utterance
+                        if current_utterance:
+                            utterances.append(current_utterance)
+                        
+                        logger.info(f"Transformed {len(transcript_data)} word items into {len(utterances)} utterances")
+                        
+                        # Return in the expected format
+                        return JsonResponse({
+                            'utterances': utterances
+                        })
+                
+                # If already in utterance format or other format, return as-is
+                return JsonResponse(transcript_data, safe=False)
+            except ValueError:
+                # If it's not JSON, return as text
+                return JsonResponse({
+                    'text': response.text
+                })
+        else:
+            logger.error(f"Failed to fetch transcript: {response.status_code}")
+            return JsonResponse({
+                'error': f'Failed to fetch transcript: {response.status_code}'
+            }, status=response.status_code)
+            
+    except requests.exceptions.Timeout:
+        logger.error("Timeout fetching transcript")
+        return JsonResponse({
+            'error': 'Timeout fetching transcript'
+        }, status=504)
+    except Exception as e:
+        logger.error(f"Error proxying transcript: {str(e)}")
+        return JsonResponse({
+            'error': str(e)
+        }, status=500)
+
+
 # Initialize platforms on module load
 try:
     initialize_meeting_platforms()
