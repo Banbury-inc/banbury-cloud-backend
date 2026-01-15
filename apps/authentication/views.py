@@ -39,6 +39,29 @@ GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET')
 REDIRECT_URI = os.getenv('REDIRECT_URI')
 
 
+def normalize_redirect_uri(uri):
+    """
+    Normalize a redirect URI by removing query parameters and fragments.
+    This allows validation of URIs with query params (like electron=true) 
+    by comparing only the base URL.
+    """
+    if not uri:
+        return uri
+    parsed = urllib.parse.urlparse(uri)
+    # Reconstruct URI with only scheme, netloc, and path (no query, no fragment)
+    normalized = urllib.parse.urlunparse((parsed.scheme, parsed.netloc, parsed.path, '', '', ''))
+    return normalized
+
+
+def is_allowed_redirect_uri(uri, allowed_list):
+    """
+    Check if a redirect URI (potentially with query parameters) is allowed.
+    Compares the normalized (base) URI against the allowed list.
+    """
+    if not uri:
+        return False
+    normalized_uri = normalize_redirect_uri(uri)
+    return normalized_uri in allowed_list
 
 
 def login(request):
@@ -152,10 +175,16 @@ def google(request):
         REDIRECT_URI
     ]
     
-    if frontend_redirect_uri not in allowed_redirect_uris:
+    # Normalize allowed URIs for comparison (remove any query params from them)
+    allowed_redirect_uris = [normalize_redirect_uri(uri) for uri in allowed_redirect_uris if uri]
+    
+    if not is_allowed_redirect_uri(frontend_redirect_uri, allowed_redirect_uris):
         return JsonResponse({
             "error": "Invalid redirect URI"
         }, status=400)
+    
+    # Use normalized URI for OAuth flow (without query params)
+    frontend_redirect_uri = normalize_redirect_uri(frontend_redirect_uri)
     
     # Create a new flow instance with the correct redirect URI and minimal scopes
     flow_instance = Flow.from_client_config(
@@ -219,8 +248,8 @@ def google_callback(request):
     
     try:
         # Determine which redirect URI was used based on the request parameter or known list
-        # Allowed/known redirect URIs
-        allowed_redirect_uris = [
+        # Allowed/known redirect URIs (base URIs without query params)
+        allowed_redirect_uris_base = [
             # Localhost callbacks
             'http://localhost:3000/authentication/auth/callback',
             'http://localhost:3001/authentication/auth/callback',
@@ -234,11 +263,15 @@ def google_callback(request):
             # Fallback to configured REDIRECT_URI
             REDIRECT_URI
         ]
+        
+        # Normalize allowed URIs for comparison (remove any query params from them)
+        allowed_redirect_uris = [normalize_redirect_uri(uri) for uri in allowed_redirect_uris_base if uri]
 
         # Build a prioritized list: try the incoming redirect_uri first if valid
         possible_redirect_uris = []
-        if incoming_redirect_uri and incoming_redirect_uri in allowed_redirect_uris:
-            possible_redirect_uris.append(incoming_redirect_uri)
+        if incoming_redirect_uri and is_allowed_redirect_uri(incoming_redirect_uri, allowed_redirect_uris):
+            # Use normalized URI (without query params) for the OAuth flow
+            possible_redirect_uris.append(normalize_redirect_uri(incoming_redirect_uri))
         # Then extend with the rest, preserving order and avoiding duplicates
         for uri in allowed_redirect_uris:
             if uri and uri not in possible_redirect_uris:
@@ -278,8 +311,9 @@ def google_callback(request):
                 print(f"Failed parsing granted scopes: {e}")
 
         # Only use the incoming redirect URI to avoid consuming the code on multiple attempts
-        if incoming_redirect_uri and incoming_redirect_uri in allowed_redirect_uris:
-            redirect_uri = incoming_redirect_uri
+        # Normalize the URI (remove query params) since Google OAuth requires exact match
+        if incoming_redirect_uri and is_allowed_redirect_uri(incoming_redirect_uri, allowed_redirect_uris):
+            redirect_uri = normalize_redirect_uri(incoming_redirect_uri)
         else:
             return JsonResponse({
                 "success": False,
@@ -2915,10 +2949,16 @@ def request_additional_scopes(request):
             REDIRECT_URI
         ]
         
-        if frontend_redirect_uri not in allowed_redirect_uris:
+        # Normalize allowed URIs for comparison (remove any query params from them)
+        allowed_redirect_uris = [normalize_redirect_uri(uri) for uri in allowed_redirect_uris if uri]
+        
+        if not is_allowed_redirect_uri(frontend_redirect_uri, allowed_redirect_uris):
             return JsonResponse({
                 "error": "Invalid redirect URI"
             }, status=400)
+        
+        # Use normalized URI for OAuth flow (without query params)
+        frontend_redirect_uri = normalize_redirect_uri(frontend_redirect_uri)
         
         # Create OAuth flow with additional scopes
         all_scopes = list(current_scopes) + list(new_scopes)
