@@ -36,7 +36,32 @@ load_dotenv()
 
 GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID')
 GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET')
+# Desktop OAuth client credentials (for Electron app)
+GOOGLE_DESKTOP_CLIENT_ID = os.getenv('GOOGLE_DESKTOP_CLIENT_ID')
+GOOGLE_DESKTOP_CLIENT_SECRET = os.getenv('GOOGLE_DESKTOP_CLIENT_SECRET')
 REDIRECT_URI = os.getenv('REDIRECT_URI')
+
+
+def get_google_client_credentials(is_desktop=False):
+    """
+    Get the appropriate Google OAuth client credentials based on client type.
+    
+    Args:
+        is_desktop: True if this is a desktop/Electron app request, False for web
+    
+    Returns:
+        tuple: (client_id, client_secret)
+    """
+    if is_desktop:
+        # Use desktop client credentials if available, otherwise fall back to web credentials
+        client_id = GOOGLE_DESKTOP_CLIENT_ID or GOOGLE_CLIENT_ID
+        client_secret = GOOGLE_DESKTOP_CLIENT_SECRET or GOOGLE_CLIENT_SECRET
+    else:
+        # Use web client credentials
+        client_id = GOOGLE_CLIENT_ID
+        client_secret = GOOGLE_CLIENT_SECRET
+    
+    return client_id, client_secret
 
 
 def normalize_redirect_uri(uri):
@@ -155,6 +180,13 @@ def google(request):
     # Allow the frontend to specify the redirect URI
     frontend_redirect_uri = request.GET.get('redirect_uri', REDIRECT_URI)
     
+    # Check if this is a desktop app request (Electron)
+    # Desktop apps pass electron=true in the redirect_uri query param, or we can check a separate parameter
+    is_desktop = request.GET.get('is_desktop', 'false').lower() == 'true' or 'electron=true' in frontend_redirect_uri
+    
+    # Get the appropriate client credentials
+    client_id, client_secret = get_google_client_credentials(is_desktop=is_desktop)
+    
     # Validate the redirect URI for security
     allowed_redirect_uris = [
         # Localhost callbacks
@@ -187,16 +219,30 @@ def google(request):
     frontend_redirect_uri = normalize_redirect_uri(frontend_redirect_uri)
     
     # Create a new flow instance with the correct redirect URI and minimal scopes
-    flow_instance = Flow.from_client_config(
-        {
-            "web": {
-                "client_id": GOOGLE_CLIENT_ID,
-                "client_secret": GOOGLE_CLIENT_SECRET,
+    # For desktop apps, use "installed" type; for web, use "web" type
+    if is_desktop:
+        client_config = {
+            "installed": {
+                "client_id": client_id,
+                "client_secret": client_secret,
                 "auth_uri": "https://accounts.google.com/o/oauth2/auth",
                 "token_uri": "https://oauth2.googleapis.com/token",
                 "redirect_uris": [frontend_redirect_uri],
             }
-        },
+        }
+    else:
+        client_config = {
+            "web": {
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
+                "redirect_uris": [frontend_redirect_uri],
+            }
+        }
+    
+    flow_instance = Flow.from_client_config(
+        client_config,
         scopes=MINIMAL_SCOPES
     )
     flow_instance.redirect_uri = frontend_redirect_uri
@@ -235,8 +281,21 @@ def google_callback(request):
     code = request.GET.get("code")
     incoming_redirect_uri = request.GET.get("redirect_uri")
     
+    # Check if this is a desktop app request
+    # Desktop apps can be detected by:
+    # 1. is_desktop parameter in the request
+    # 2. redirect_uri containing "electron=true" (before normalization)
+    is_desktop = (
+        request.GET.get('is_desktop', 'false').lower() == 'true' or
+        (incoming_redirect_uri and 'electron=true' in incoming_redirect_uri)
+    )
+    
+    # Get the appropriate client credentials
+    client_id, client_secret = get_google_client_credentials(is_desktop=is_desktop)
+    
     # Add debugging information
     print(f"Google callback received - Code: {code[:10] if code else 'None'}..., Redirect URI: {incoming_redirect_uri}")
+    print(f"Is Desktop: {is_desktop}, Client ID: {client_id[:20] if client_id else 'None'}...")
     print(f"REDIRECT_URI env var: {REDIRECT_URI}")
     print(f"All query params: {dict(request.GET)}")
     
@@ -329,16 +388,30 @@ def google_callback(request):
 
         try:
             print(f"Exchanging code with redirect_uri={redirect_uri} and scopes={scopes_to_use}")
-            flow_instance = Flow.from_client_config(
-                {
-                    "web": {
-                        "client_id": GOOGLE_CLIENT_ID,
-                        "client_secret": GOOGLE_CLIENT_SECRET,
+            # Use the same client type (desktop vs web) as was used during authorization
+            if is_desktop:
+                client_config = {
+                    "installed": {
+                        "client_id": client_id,
+                        "client_secret": client_secret,
                         "auth_uri": "https://accounts.google.com/o/oauth2/auth",
                         "token_uri": "https://oauth2.googleapis.com/token",
                         "redirect_uris": [redirect_uri],
                     }
-                },
+                }
+            else:
+                client_config = {
+                    "web": {
+                        "client_id": client_id,
+                        "client_secret": client_secret,
+                        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                        "token_uri": "https://oauth2.googleapis.com/token",
+                        "redirect_uris": [redirect_uri],
+                    }
+                }
+            
+            flow_instance = Flow.from_client_config(
+                client_config,
                 scopes=scopes_to_use
             )
             flow_instance.redirect_uri = redirect_uri
@@ -366,16 +439,30 @@ def google_callback(request):
                     new_scopes_str = msg.split(marker, 1)[1].rstrip('".')
                     derived_scopes = new_scopes_str.split(' ')
                     print(f"Retrying with scopes derived from error: {derived_scopes}")
-                    flow_instance2 = Flow.from_client_config(
-                        {
-                            "web": {
-                                "client_id": GOOGLE_CLIENT_ID,
-                                "client_secret": GOOGLE_CLIENT_SECRET,
+                    # Build complete config with all required fields using the same client type
+                    if is_desktop:
+                        complete_retry_config = {
+                            "installed": {
+                                "client_id": client_id,
+                                "client_secret": client_secret,
                                 "auth_uri": "https://accounts.google.com/o/oauth2/auth",
                                 "token_uri": "https://oauth2.googleapis.com/token",
                                 "redirect_uris": [redirect_uri],
                             }
-                        },
+                        }
+                    else:
+                        complete_retry_config = {
+                            "web": {
+                                "client_id": client_id,
+                                "client_secret": client_secret,
+                                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                                "token_uri": "https://oauth2.googleapis.com/token",
+                                "redirect_uris": [redirect_uri],
+                            }
+                        }
+                    
+                    flow_instance2 = Flow.from_client_config(
+                        complete_retry_config,
                         scopes=derived_scopes
                     )
                     flow_instance2.redirect_uri = redirect_uri
@@ -394,21 +481,27 @@ def google_callback(request):
         
         if not credentials:
             print("Failed to exchange authorization code for credentials after trying all combinations")
+            # Extract the most recent error message for better debugging
+            last_error = attempt_errors[-1]["error"] if attempt_errors else "Unknown error"
             return JsonResponse({
                 "success": False,
-                "error": "Failed to exchange authorization code for credentials.",
+                "error": f"Failed to exchange authorization code for credentials: {last_error}",
                 "details": {
                     "incoming_redirect_uri": incoming_redirect_uri,
+                    "normalized_redirect_uri": redirect_uri,
                     "tried_redirect_uris": possible_redirect_uris,
-                    "attempts": attempt_errors
+                    "attempts": attempt_errors,
+                    "scopes_used": scopes_to_use
                 }
             }, status=400)
         
-        # Verify the ID token
+        # Verify the ID token using the same client ID that was used to obtain it
+        # This ensures the token audience matches the client ID
+        verify_client_id = client_id  # Use the client_id that was used for token exchange
         id_info = id_token.verify_oauth2_token(
             credentials.id_token, 
             google_requests.Request(), 
-            GOOGLE_CLIENT_ID
+            verify_client_id
         )
         
         # Extract user information
