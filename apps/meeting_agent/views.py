@@ -1191,19 +1191,22 @@ def meeting_summary(request, session_id):
                 }, status=404)
         
         elif request.method == 'POST':
-            # Generate new summary
-            if session.get('status') != 'completed':
+            # Accept pre-generated summary from frontend
+            try:
+                summary_data = json.loads(request.body.decode('utf-8'))
+            except (json.JSONDecodeError, UnicodeDecodeError) as e:
+                logger.error(f"Failed to parse summary data: {str(e)}")
                 return JsonResponse({
                     'success': False,
-                    'message': 'Meeting must be completed before generating summary'
+                    'message': 'Invalid JSON payload'
                 }, status=400)
-            
-            summary_service = SummaryService()
-            summary_service.generate_summary(session)
-            
+
+            # Save the provided summary data directly
+            MeetingSession.set_summary(session_id, summary_data)
+
             return JsonResponse({
                 'success': True,
-                'message': 'Summary generated successfully'
+                'message': 'Summary saved successfully'
             })
             
     except Exception as e:

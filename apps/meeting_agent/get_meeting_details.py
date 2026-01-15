@@ -26,6 +26,9 @@ def get_meeting_details(request, session_id):
         
         session = result["session"]
         sdk_upload_id = session.get('sdk_upload_id')
+
+        summary = session.get('summary')
+
         if not sdk_upload_id:
             return JsonResponse({
                 'error': 'SDK Upload ID not found for this session'
@@ -61,6 +64,9 @@ def get_meeting_details(request, session_id):
             )
             if recording_response.status_code == 200:
                 recording_data = recording_response.json()
+                # Include summary from database if available
+                if summary:
+                    recording_data['summary'] = summary
                 return JsonResponse(recording_data)
             else:
                 # Extract error details from response
@@ -76,9 +82,16 @@ def get_meeting_details(request, session_id):
                 return JsonResponse(error_detail, status=500)
         else:
             logger.error("RECALL_API_KEY not configured")
-            return JsonResponse({
-                'error': 'RECALL_API_KEY not configured'
-            }, status=500)
+            # Return summary from database if available, even without Recall API
+            if summary:
+                return JsonResponse({
+                    'summary': summary,
+                    'error': 'RECALL_API_KEY not configured - only summary available'
+                })
+            else:
+                return JsonResponse({
+                    'error': 'RECALL_API_KEY not configured'
+                }, status=500)
     except requests.exceptions.RequestException as e:
         logger.error(f"Request exception while getting meeting details for session {session_id}: {str(e)}")
         return JsonResponse({
