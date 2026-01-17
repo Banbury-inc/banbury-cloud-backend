@@ -18,6 +18,8 @@ user_engagement_collection = db["user_engagement_sessions"]
 feature_usage_collection = db["feature_usage_events"]
 error_logs_collection = db["error_logs"]
 user_activity_collection = db["user_activity_daily"]
+page_time_collection = db["page_time_tracking"]
+user_journey_collection = db["user_journey_events"]
 
 
 @csrf_exempt
@@ -1067,6 +1069,409 @@ def get_error_analytics(request):
         
     except Exception as e:
         print(f"Error getting error analytics: {e}")
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({
+            'result': 'error',
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def track_page_time(request):
+    """Track time spent on a page."""
+    try:
+        # Handle both JSON body and sendBeacon blob data
+        data = {}
+        if request.body:
+            try:
+                # Try to decode as UTF-8 string first (for sendBeacon)
+                body_str = request.body.decode('utf-8')
+                data = json.loads(body_str)
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                # If that fails, try as regular JSON
+                try:
+                    data = json.loads(request.body)
+                except:
+                    data = {}
+        
+        page_time_data = {
+            'path': data.get('path', ''),
+            'page_title': data.get('page_title'),
+            'content_type': data.get('content_type'),
+            'duration': int(data.get('duration', 0)),  # Duration in milliseconds
+            'start_time': datetime.fromisoformat(data.get('start_time', datetime.utcnow().isoformat()).replace('Z', '+00:00')),
+            'end_time': datetime.fromisoformat(data.get('end_time', datetime.utcnow().isoformat()).replace('Z', '+00:00')),
+            'username': data.get('username'),
+            'timestamp': datetime.utcnow()
+        }
+        
+        # Only insert if duration is valid (at least 1 second)
+        if page_time_data['duration'] >= 1000:
+            page_time_collection.insert_one(page_time_data)
+        
+        return JsonResponse({
+            'result': 'success',
+            'message': 'Page time tracked successfully'
+        }, status=200)
+        
+    except Exception as e:
+        print(f"Error tracking page time: {e}")
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({
+            'result': 'error',
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def get_page_time_analytics(request):
+    """Get page time analytics."""
+    try:
+        days = int(request.GET.get('days', 30))
+        excluded_users = request.GET.get('excluded_users', '').strip()
+        cutoff_date = datetime.utcnow() - timedelta(days=days)
+        
+        # Build query filter
+        query_filter = {"timestamp": {"$gte": cutoff_date}}
+        
+        # Add user exclusions if provided
+        if excluded_users:
+            excluded_user_list = [u.strip() for u in excluded_users.split(',') if u.strip()]
+            if excluded_user_list:
+                query_filter["username"] = {"$nin": excluded_user_list}
+        
+        page_times = list(page_time_collection.find(query_filter))
+        
+        if not page_times:
+            return JsonResponse({
+                'result': 'success',
+                'summary': {
+                    'total_page_views': 0,
+                    'total_time_spent': 0,
+                    'avg_time_per_page': 0,
+                    'unique_pages': 0,
+                    'unique_users': 0,
+                    'period_days': days
+                },
+                'page_stats': [],
+                'daily_stats': [],
+                'hourly_stats': [],
+                'user_stats': []
+            }, status=200)
+        
+        # Calculate summary statistics
+        total_time = sum(page.get('duration', 0) for page in page_times)
+        total_page_views = len(page_times)
+        avg_time_per_page = total_time / total_page_views if total_page_views > 0 else 0
+        
+        # Get unique pages and users
+        unique_pages = set()
+        unique_users = set()
+        for page in page_times:
+            if page.get('path'):
+                unique_pages.add(page.get('path'))
+            if page.get('username'):
+                unique_users.add(page.get('username'))
+        
+        # Group by page path
+        page_stats_map = {}
+        for page in page_times:
+            path = page.get('path', 'unknown')
+            duration = page.get('duration', 0)
+            
+            if path not in page_stats_map:
+                page_stats_map[path] = {
+                    'path': path,
+                    'page_title': page.get('page_title', ''),
+                    'content_type': page.get('content_type', ''),
+                    'total_time': 0,
+                    'count': 0,
+                    'avg_time': 0,
+                    'min_time': float('inf'),
+                    'max_time': 0
+                }
+            
+            page_stats_map[path]['total_time'] += duration
+            page_stats_map[path]['count'] += 1
+            page_stats_map[path]['min_time'] = min(page_stats_map[path]['min_time'], duration)
+            page_stats_map[path]['max_time'] = max(page_stats_map[path]['max_time'], duration)
+        
+        # Calculate averages
+        page_stats = []
+        for path, stats in page_stats_map.items():
+            stats['avg_time'] = stats['total_time'] / stats['count'] if stats['count'] > 0 else 0
+            stats['min_time'] = stats['min_time'] if stats['min_time'] != float('inf') else 0
+            page_stats.append(stats)
+        
+        # Sort by total time descending
+        page_stats.sort(key=lambda x: x['total_time'], reverse=True)
+        
+        # Daily stats
+        daily_map = {}
+        for page in page_times:
+            timestamp = page.get('timestamp') or page.get('start_time')
+            if isinstance(timestamp, datetime):
+                date_str = timestamp.strftime('%Y-%m-%d')
+            else:
+                date_str = datetime.fromisoformat(str(timestamp).replace('Z', '+00:00')).strftime('%Y-%m-%d')
+            
+            if date_str not in daily_map:
+                daily_map[date_str] = {'total_time': 0, 'count': 0}
+            
+            daily_map[date_str]['total_time'] += page.get('duration', 0)
+            daily_map[date_str]['count'] += 1
+        
+        daily_stats = [{
+            'date': date,
+            'total_time': stats['total_time'],
+            'count': stats['count'],
+            'avg_time': stats['total_time'] / stats['count'] if stats['count'] > 0 else 0
+        } for date, stats in sorted(daily_map.items())]
+        
+        # Hourly stats
+        hourly_map = {}
+        for page in page_times:
+            timestamp = page.get('timestamp') or page.get('start_time')
+            if isinstance(timestamp, datetime):
+                hour = timestamp.hour
+            else:
+                hour = datetime.fromisoformat(str(timestamp).replace('Z', '+00:00')).hour
+            
+            if hour not in hourly_map:
+                hourly_map[hour] = {'total_time': 0, 'count': 0}
+            
+            hourly_map[hour]['total_time'] += page.get('duration', 0)
+            hourly_map[hour]['count'] += 1
+        
+        hourly_stats = [{
+            'hour': hour,
+            'total_time': stats['total_time'],
+            'count': stats['count'],
+            'avg_time': stats['total_time'] / stats['count'] if stats['count'] > 0 else 0
+        } for hour, stats in sorted(hourly_map.items())]
+        
+        # User stats
+        user_map = {}
+        for page in page_times:
+            username = page.get('username', 'anonymous')
+            duration = page.get('duration', 0)
+            
+            if username not in user_map:
+                user_map[username] = {'total_time': 0, 'count': 0}
+            
+            user_map[username]['total_time'] += duration
+            user_map[username]['count'] += 1
+        
+        user_stats = [{
+            'username': username,
+            'total_time': stats['total_time'],
+            'count': stats['count'],
+            'avg_time': stats['total_time'] / stats['count'] if stats['count'] > 0 else 0
+        } for username, stats in sorted(user_map.items(), key=lambda x: x[1]['total_time'], reverse=True)]
+        
+        return JsonResponse({
+            'result': 'success',
+            'summary': {
+                'total_page_views': total_page_views,
+                'total_time_spent': total_time,  # in milliseconds
+                'avg_time_per_page': round(avg_time_per_page, 2),
+                'unique_pages': len(unique_pages),
+                'unique_users': len(unique_users),
+                'period_days': days
+            },
+            'page_stats': page_stats,
+            'daily_stats': daily_stats,
+            'hourly_stats': hourly_stats,
+            'user_stats': user_stats
+        }, status=200)
+        
+    except Exception as e:
+        print(f"Error getting page time analytics: {e}")
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({
+            'result': 'error',
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def track_user_journey_event(request):
+    """Track user journey events (page views, navigation, button clicks, etc.)."""
+    try:
+        data = json.loads(request.body) if request.body else {}
+        
+        journey_event = {
+            'user_id': data.get('user_id'),
+            'username': data.get('username'),
+            'session_id': data.get('session_id'),
+            'event_type': data.get('event_type'),  # 'page_view', 'navigation', 'button_click', 'file_open', 'tab_open'
+            'event_name': data.get('event_name'),
+            'from_page': data.get('from_page'),
+            'to_page': data.get('to_page'),
+            'metadata': data.get('metadata', {}),
+            'timestamp': datetime.utcnow()
+        }
+        
+        # Use provided timestamp if available, otherwise use current time
+        if data.get('timestamp'):
+            try:
+                if isinstance(data['timestamp'], str):
+                    journey_event['timestamp'] = datetime.fromisoformat(data['timestamp'].replace('Z', '+00:00'))
+                else:
+                    journey_event['timestamp'] = data['timestamp']
+            except:
+                journey_event['timestamp'] = datetime.utcnow()
+        
+        user_journey_collection.insert_one(journey_event)
+        
+        return JsonResponse({
+            'result': 'success',
+            'message': 'User journey event tracked successfully'
+        }, status=200)
+        
+    except Exception as e:
+        print(f"Error tracking user journey event: {e}")
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({
+            'result': 'error',
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def get_user_journey_analytics(request):
+    """Get user journey analytics aggregated into flow paths."""
+    try:
+        days = int(request.GET.get('days', 30))
+        starting_event = request.GET.get('starting_event', '')
+        user_filter = request.GET.get('user', '')
+        limit = int(request.GET.get('limit', 10))
+        
+        # Calculate date range
+        end_date = datetime.utcnow()
+        start_date = end_date - timedelta(days=days)
+        
+        # Build query
+        query = {
+            'timestamp': {'$gte': start_date, '$lte': end_date}
+        }
+        
+        if starting_event:
+            query['event_name'] = starting_event
+        
+        if user_filter:
+            query['username'] = user_filter
+        
+        # Get all events in the date range
+        all_events = list(user_journey_collection.find(query).sort('timestamp', 1))
+        
+        if not all_events:
+            return JsonResponse({
+                'result': 'success',
+                'starting_event': starting_event or 'All Events',
+                'total_users': 0,
+                'paths': [],
+                'period_days': days
+            }, status=200)
+        
+        # Group events by session_id and user_id
+        sessions = {}
+        for event in all_events:
+            session_key = f"{event.get('user_id', '')}_{event.get('session_id', '')}"
+            if session_key not in sessions:
+                sessions[session_key] = {
+                    'user_id': event.get('user_id'),
+                    'username': event.get('username'),
+                    'session_id': event.get('session_id'),
+                    'events': []
+                }
+            sessions[session_key]['events'].append(event)
+        
+        # Build paths for each session
+        session_paths = []
+        for session_key, session_data in sessions.items():
+            events = sorted(session_data['events'], key=lambda x: x.get('timestamp', datetime.utcnow()))
+            
+            # If starting_event is specified, filter to sessions that start with that event
+            if starting_event:
+                if not events or events[0].get('event_name') != starting_event:
+                    continue
+            
+            # Build path sequence
+            path = []
+            path_timestamps = []
+            for i, event in enumerate(events):
+                event_name = event.get('event_name', 'Unknown')
+                path.append(event_name)
+                path_timestamps.append(event.get('timestamp', datetime.utcnow()))
+            
+            if path:
+                session_paths.append({
+                    'path': path,
+                    'username': session_data['username'],
+                    'user_id': session_data['user_id'],
+                    'session_id': session_data['session_id'],
+                    'timestamps': path_timestamps
+                })
+        
+        # Aggregate common paths
+        path_counts = {}
+        for session_path in session_paths:
+            path_key = ' -> '.join(session_path['path'])
+            
+            if path_key not in path_counts:
+                path_counts[path_key] = {
+                    'path': session_path['path'],
+                    'users': set(),
+                    'sessions': [],
+                    'durations': []
+                }
+            
+            path_counts[path_key]['users'].add(session_path['username'] or session_path['user_id'])
+            path_counts[path_key]['sessions'].append(session_path)
+            
+            # Calculate duration for this path
+            if len(session_path['timestamps']) > 1:
+                duration = (session_path['timestamps'][-1] - session_path['timestamps'][0]).total_seconds()
+                path_counts[path_key]['durations'].append(duration)
+        
+        # Convert to list and calculate stats
+        aggregated_paths = []
+        total_unique_users = len(set([sp['username'] or sp['user_id'] for sp in session_paths]))
+        
+        for path_key, path_data in path_counts.items():
+            user_count = len(path_data['users'])
+            avg_duration = statistics.mean(path_data['durations']) if path_data['durations'] else 0
+            
+            aggregated_paths.append({
+                'path': path_data['path'],
+                'userCount': user_count,
+                'percentage': (user_count / total_unique_users * 100) if total_unique_users > 0 else 0,
+                'averageDuration': avg_duration
+            })
+        
+        # Sort by user count and limit
+        aggregated_paths.sort(key=lambda x: x['userCount'], reverse=True)
+        aggregated_paths = aggregated_paths[:limit]
+        
+        return JsonResponse({
+            'result': 'success',
+            'starting_event': starting_event or 'All Events',
+            'total_users': total_unique_users,
+            'paths': aggregated_paths,
+            'period_days': days
+        }, status=200)
+        
+    except Exception as e:
+        print(f"Error getting user journey analytics: {e}")
         import traceback
         traceback.print_exc()
         return JsonResponse({

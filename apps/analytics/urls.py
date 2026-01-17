@@ -16,5 +16,9 @@ urlpatterns = [
     path("get_feature_usage_analytics/", views.get_feature_usage_analytics, name="get_feature_usage_analytics"),
     path("track_error/", views.track_error, name="track_error"),
     path("get_error_analytics/", views.get_error_analytics, name="get_error_analytics"),
+    path("track_page_time/", views.track_page_time, name="track_page_time"),
+    path("get_page_time_analytics/", views.get_page_time_analytics, name="get_page_time_analytics"),
+    path("track_user_journey_event/", views.track_user_journey_event, name="track_user_journey_event"),
+    path("get_user_journey_analytics/", views.get_user_journey_analytics, name="get_user_journey_analytics"),
 ]
 
