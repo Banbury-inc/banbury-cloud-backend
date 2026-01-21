@@ -6,7 +6,7 @@ from django.views.decorators.http import require_http_methods
 from rest_framework.permissions import AllowAny
 import bcrypt
 from django.shortcuts import render, redirect
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from ..forms import LoginForm
 import requests as http_requests
 from pymongo.mongo_client import MongoClient
@@ -187,6 +187,11 @@ def google(request):
         'http://localhost:3001/authentication/auth/callback',
         'http://localhost:3002/authentication/auth/callback',
         'http://localhost:8080/authentication/auth/callback',
+        # Localhost Electron callbacks
+        'http://localhost:3000/authentication/auth/electron/callback',
+        'http://localhost:3001/authentication/auth/electron/callback',
+        'http://localhost:3002/authentication/auth/electron/callback',
+        'http://localhost:8080/authentication/auth/electron/callback',
         'http://localhost:3000/files/google_drive/oauth_callback',
         'http://localhost:3001/files/google_drive/oauth_callback',
         'http://localhost:3002/files/google_drive/oauth_callback',
@@ -196,6 +201,11 @@ def google(request):
         'https://www.banbury.io/authentication/auth/callback',
         'https://dev.banbury.io/authentication/auth/callback',
         'https://www.dev.banbury.io/authentication/auth/callback',
+        # Production/Dev HTTPS Electron callbacks
+        'https://banbury.io/authentication/auth/electron/callback',
+        'https://www.banbury.io/authentication/auth/electron/callback',
+        'https://dev.banbury.io/authentication/auth/electron/callback',
+        'https://www.dev.banbury.io/authentication/auth/electron/callback',
         # Fallback to configured REDIRECT_URI
         REDIRECT_URI
     ]
@@ -594,6 +604,396 @@ def google_callback(request):
         
     except Exception as e:
         print(f"Error in google_callback: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({
+            "success": False,
+            "error": f"Authentication failed: {str(e)}"
+        }, status=400)
+
+
+@csrf_exempt
+def google_callback_electron(request):
+    """Handles the callback from Google after OAuth2 authentication for Electron desktop apps."""
+    code = request.GET.get("code")
+    incoming_redirect_uri = request.GET.get("redirect_uri")
+    
+    # Get the web client credentials (same for both web and desktop)
+    client_id, client_secret = get_google_client_credentials()
+    
+    # Add debugging information
+    print(f"Google Electron callback received - Code: {code[:10] if code else 'None'}..., Redirect URI: {incoming_redirect_uri}")
+    print(f"Client ID: {client_id[:20] if client_id else 'None'}...")
+    print(f"All query params: {dict(request.GET)}")
+    
+    if not code:
+        return JsonResponse({
+            "success": False,
+            "error": "No authorization code provided"
+        }, status=400)
+    
+    try:
+        # Allowed redirect URIs for Electron (base URIs without query params)
+        allowed_redirect_uris_base = [
+            # Localhost Electron callbacks
+            'http://localhost:3000/authentication/auth/electron/callback',
+            'http://localhost:3001/authentication/auth/electron/callback',
+            'http://localhost:3002/authentication/auth/electron/callback',
+            'http://localhost:8080/authentication/auth/electron/callback',
+            # Production/Dev HTTPS Electron callbacks
+            'https://banbury.io/authentication/auth/electron/callback',
+            'https://www.banbury.io/authentication/auth/electron/callback',
+            'https://dev.banbury.io/authentication/auth/electron/callback',
+            'https://www.dev.banbury.io/authentication/auth/electron/callback',
+        ]
+        
+        # Normalize allowed URIs for comparison (remove any query params from them)
+        allowed_redirect_uris = [normalize_redirect_uri(uri) for uri in allowed_redirect_uris_base if uri]
+
+        # Build a prioritized list: try the incoming redirect_uri first if valid
+        possible_redirect_uris = []
+        if incoming_redirect_uri and is_allowed_redirect_uri(incoming_redirect_uri, allowed_redirect_uris):
+            # Use normalized URI (without query params) for the OAuth flow
+            possible_redirect_uris.append(normalize_redirect_uri(incoming_redirect_uri))
+        # Then extend with the rest, preserving order and avoiding duplicates
+        for uri in allowed_redirect_uris:
+            if uri and uri not in possible_redirect_uris:
+                possible_redirect_uris.append(uri)
+        
+        # If no redirect URIs were found, use the default
+        if not possible_redirect_uris:
+            print(f"No valid redirect URIs found for Electron callback")
+            return JsonResponse({
+                "success": False,
+                "error": "No valid redirect URIs configured for Electron",
+            }, status=400)
+        
+        print(f"Will try these redirect URIs: {possible_redirect_uris}")
+        
+        credentials = None
+        used_redirect_uri = None
+        attempt_errors = []  # collect debug info for failures
+        
+        # Reconstruct scopes: prefer 'scope' param from Google callback; normalize short names
+        def normalize_scopes(scopes: list) -> list:
+            mapping = {
+                'email': 'https://www.googleapis.com/auth/userinfo.email',
+                'profile': 'https://www.googleapis.com/auth/userinfo.profile',
+            }
+            result = []
+            for s in scopes:
+                s2 = mapping.get(s, s)
+                if s2 not in result:
+                    result.append(s2)
+            return result
+
+        granted_scopes_list = None
+        granted_scope_param = request.GET.get('scope')
+        if granted_scope_param:
+            try:
+                granted_scopes_list = normalize_scopes(granted_scope_param.split(' '))
+                print(f"Granted scopes from callback param (normalized): {granted_scopes_list}")
+            except Exception as e:
+                print(f"Failed parsing granted scopes: {e}")
+
+        # Only use the incoming redirect URI to avoid consuming the code on multiple attempts
+        # Normalize the URI (remove query params) since Google OAuth requires exact match
+        if incoming_redirect_uri and is_allowed_redirect_uri(incoming_redirect_uri, allowed_redirect_uris):
+            redirect_uri = normalize_redirect_uri(incoming_redirect_uri)
+        else:
+            return JsonResponse({
+                "success": False,
+                "error": "Invalid or missing redirect URI for Electron",
+                "details": {
+                    "incoming_redirect_uri": incoming_redirect_uri,
+                    "allowed_redirect_uris": allowed_redirect_uris
+                }
+            }, status=400)
+
+        # Decide scopes to use for token exchange: prefer granted scopes from callback
+        scopes_to_use = granted_scopes_list if granted_scopes_list else MINIMAL_SCOPES
+
+        try:
+            print(f"Exchanging code with redirect_uri={redirect_uri} and scopes={scopes_to_use}")
+            # Always use "web" type for both web and desktop (desktop uses web redirect URIs)
+            client_config = {
+                "web": {
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                    "redirect_uris": [redirect_uri],
+                }
+            }
+            
+            flow_instance = Flow.from_client_config(
+                client_config,
+                scopes=scopes_to_use
+            )
+            flow_instance.redirect_uri = redirect_uri
+            # Avoid oauthlib scope mismatch parsing by unsetting client scope before parsing response
+            try:
+                flow_instance.client.scope = None
+            except Exception:
+                pass
+            flow_instance.fetch_token(code=code)
+            credentials = flow_instance.credentials
+            used_redirect_uri = redirect_uri
+            print("Successfully exchanged code for credentials.")
+        except Exception as e:
+            print(f"Token exchange failed: {e}")
+            attempt_errors.append({
+                "redirect_uri": redirect_uri,
+                "scopes": scopes_to_use,
+                "error": str(e)
+            })
+            # If the error tells us scopes have changed, extract them and retry once
+            try:
+                msg = str(e)
+                marker = ' to "'
+                if 'Scope has changed' in msg and marker in msg:
+                    new_scopes_str = msg.split(marker, 1)[1].rstrip('".')
+                    derived_scopes = new_scopes_str.split(' ')
+                    print(f"Retrying with scopes derived from error: {derived_scopes}")
+                    # Build complete config with all required fields - always use web type
+                    complete_retry_config = {
+                        "web": {
+                            "client_id": client_id,
+                            "client_secret": client_secret,
+                            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                            "token_uri": "https://oauth2.googleapis.com/token",
+                            "redirect_uris": [redirect_uri],
+                        }
+                    }
+                    
+                    flow_instance2 = Flow.from_client_config(
+                        complete_retry_config,
+                        scopes=derived_scopes
+                    )
+                    flow_instance2.redirect_uri = redirect_uri
+                    try:
+                        flow_instance2.client.scope = None
+                    except Exception:
+                        pass
+                    flow_instance2.fetch_token(code=code)
+                    credentials = flow_instance2.credentials
+                    used_redirect_uri = redirect_uri
+                    print("Successfully exchanged code after deriving scopes from error.")
+                else:
+                    print("No derivable scopes from error message.")
+            except Exception as e2:
+                print(f"Retry with derived scopes failed: {e2}")
+        
+        if not credentials:
+            print("Failed to exchange authorization code for credentials after trying all combinations")
+            # Extract the most recent error message for better debugging
+            last_error = attempt_errors[-1]["error"] if attempt_errors else "Unknown error"
+            return JsonResponse({
+                "success": False,
+                "error": f"Failed to exchange authorization code for credentials: {last_error}",
+                "details": {
+                    "incoming_redirect_uri": incoming_redirect_uri,
+                    "normalized_redirect_uri": redirect_uri,
+                    "tried_redirect_uris": possible_redirect_uris,
+                    "attempts": attempt_errors,
+                    "scopes_used": scopes_to_use
+                }
+            }, status=400)
+        
+        # Verify the ID token using the same client ID that was used to obtain it
+        # This ensures the token audience matches the client ID
+        verify_client_id = client_id  # Use the client_id that was used for token exchange
+        id_info = id_token.verify_oauth2_token(
+            credentials.id_token, 
+            google_requests.Request(), 
+            verify_client_id
+        )
+        
+        # Extract user information
+        user_info = {
+            "email": id_info.get("email"),
+            "name": id_info.get("name"),
+            "first_name": id_info.get("given_name"),
+            "last_name": id_info.get("family_name"),
+            "picture": id_info.get("picture")
+        }
+        
+        # Now handle user authentication/creation and token generation
+        email = user_info.get("email")
+        if not email:
+            return JsonResponse({
+                "success": False,
+                "error": "No email provided by Google"
+            }, status=400)
+        
+        # Connect to MongoDB
+        uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+        client = MongoClient(uri)
+        db = client["NeuraNet"]
+        user_collection = db["users"]
+        
+        # Check if user exists by email
+        user = user_collection.find_one({"email": email})
+        
+        # Store Google Drive credentials
+        drive_credentials = {
+            "access_token": credentials.token,
+            "refresh_token": credentials.refresh_token,
+            "token_uri": credentials.token_uri,
+            "client_id": credentials.client_id,
+            "client_secret": credentials.client_secret,
+            "scopes": credentials.scopes,
+            "expiry": credentials.expiry.isoformat() if credentials.expiry else None
+        }
+        
+        if not user:
+            # Create new user for Google OAuth
+            # Download and convert the profile picture if available
+            profile_picture = None
+            if user_info.get("picture"):
+                try:
+                    response = http_requests.get(user_info["picture"], verify=True)
+                    if response.status_code == 200:
+                        image_base64 = base64.b64encode(response.content).decode('utf-8')
+                        profile_picture = {
+                            'data': image_base64,
+                            'content_type': response.headers.get('content-type', 'image/jpeg'),
+                            'source': 'google_oauth',
+                            'size': len(response.content)
+                        }
+                except Exception as e:
+                    print(f"Error downloading profile picture: {e}")
+                    profile_picture = user_info.get("picture")  # Store URL as fallback
+            
+            new_user = {
+                "username": email,  # Use email as username for Google OAuth users
+                "email": email,
+                "first_name": user_info.get("first_name"),
+                "last_name": user_info.get("last_name"),
+                "picture": profile_picture,
+                "phone_number": None,
+                "password": None,  # No password for OAuth users
+                "auth_method": "google_oauth",
+                "devices": [],
+                "google_drive_credentials": drive_credentials,
+            }
+            
+            try:
+                user_collection.insert_one(new_user)
+                user = new_user
+            except Exception as e:
+                print(f"Error creating user: {e}")
+                return JsonResponse({
+                    "success": False,
+                    "error": "Failed to create user"
+                }, status=500)
+        else:
+            # Update existing user with new Google Drive credentials
+            try:
+                # For existing users, update by both email and username (in case they differ)
+                # First try to update by email
+                result = user_collection.update_one(
+                    {"email": email},
+                    {"$set": {"google_drive_credentials": drive_credentials}}
+                )
+                
+                # Also update by username if the user has username set to email (common for Google OAuth users)
+                if email:
+                    user_collection.update_one(
+                        {"username": email},
+                        {"$set": {"google_drive_credentials": drive_credentials}}
+                    )
+                
+                user["google_drive_credentials"] = drive_credentials
+                print(f"Successfully updated Google Drive credentials for user: {email}")
+                
+            except Exception as e:
+                print(f"Error updating user with Drive credentials: {e}")
+                # Continue without failing the login
+        
+        # Track successful login
+        try:
+            login_collection = db["user_logins"]
+            login_event = {
+                "username": user.get("username") or email,
+                "user_id": str(user.get("_id")),
+                "timestamp": datetime.utcnow(),
+                "ip_address": request.META.get('HTTP_X_FORWARDED_FOR', request.META.get('REMOTE_ADDR', 'unknown')),
+                "user_agent": request.META.get('HTTP_USER_AGENT', 'unknown'),
+                "auth_method": "google_oauth_electron"
+            }
+            login_collection.insert_one(login_event)
+        except Exception as e:
+            print(f"Error tracking Google OAuth Electron login: {e}")
+        
+        # Generate a JWT token for the user
+        access = AccessToken()
+        access["username"] = user.get("username") or email
+        # Set token expiry to 7 days
+        access.set_exp(lifetime=timedelta(days=7))
+        token = str(access)
+        
+        # Check if this is an API request (Accept header contains application/json)
+        # vs a browser redirect (Accept header contains text/html)
+        accept_header = request.META.get('HTTP_ACCEPT', '')
+        is_api_request = 'application/json' in accept_header and 'text/html' not in accept_header
+        
+        if is_api_request:
+            # Return JSON for API calls (when frontend fetches programmatically)
+            return JsonResponse({
+                "success": True,
+                "token": token,
+                "user": {
+                    "email": email,
+                    "username": user.get("username") or email,
+                    "first_name": user.get("first_name"),
+                    "last_name": user.get("last_name"),
+                    "picture": user.get("picture")
+                },
+                "message": "Successfully authenticated with Google (Electron)"
+            })
+        else:
+            # Return HTML page for browser redirects
+            # For Electron, redirect to banbury:// protocol with the token
+            # This allows the Electron app to receive the token and redirect to workspaces
+            import urllib.parse
+            encoded_token = urllib.parse.quote(token, safe='')
+            redirect_url = f"banbury://auth/callback?token={encoded_token}"
+            
+            # Return HTML page that redirects to banbury:// protocol
+            html_content = f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Authentication Successful</title>
+                <meta http-equiv="refresh" content="0;url={redirect_url}">
+                <script>
+                    // Try to redirect immediately
+                    window.location.href = "{redirect_url}";
+                    // Fallback: show message after delay
+                    setTimeout(function() {{
+                        document.getElementById("message").innerHTML = 
+                            "Authentication successful! If you're not redirected automatically, " +
+                            "<a href='{redirect_url}'>click here</a> to return to the app.";
+                    }}, 1000);
+                </script>
+            </head>
+            <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+                         background: #0a0a0a; color: #fff; display: flex; align-items: center; 
+                         justify-content: center; height: 100vh; margin: 0; text-align: center;">
+                <div>
+                    <div style="font-size: 48px; margin-bottom: 20px;">✓</div>
+                    <h2 style="color: #10b981; margin-bottom: 10px;">Authentication Successful!</h2>
+                    <p id="message" style="color: #888;">Redirecting to the Banbury app...</p>
+                </div>
+            </body>
+            </html>
+            """
+            
+            return HttpResponse(html_content, content_type="text/html")
+        
+    except Exception as e:
+        print(f"Error in google_callback_electron: {str(e)}")
         import traceback
         traceback.print_exc()
         return JsonResponse({
