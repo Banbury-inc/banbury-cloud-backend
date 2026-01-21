@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/3.0/ref/settings/
 from datetime import timedelta
 import os
 from dotenv import load_dotenv
+import sentry_sdk
 
 # Load environment variables from .env file
 load_dotenv()
@@ -426,5 +427,13 @@ SPECTACULAR_SETTINGS = {
 # Add health check specific settings
 HEALTH_CHECK_ALLOWED_HOSTS = ['*']
 HEALTH_CHECK_ALLOWED_METHODS = ['GET', 'HEAD']
+
+
+sentry_sdk.init(
+    dsn="https://d651f23aaf2d70acbce0900e2fb7da9e@o4510364904914944.ingest.us.sentry.io/4510727830634496",
+    # Add data like request headers and IP for users,
+    # see https://docs.sentry.io/platforms/python/data-management/data-collected/ for more info
+    send_default_pii=True,
+)
 
 
