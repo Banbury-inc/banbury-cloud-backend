@@ -23,6 +23,7 @@ class AuthenticationTokenMiddleware:
             '/authentication/login_api/',
             '/authentication/google/',
             '/authentication/auth/callback/',
+            '/authentication/auth/electron/callback/',
             # Public endpoints (no auth required)
             '/authentication/get_client_ip/',
             '/authentication/add_site_visitor_info/',

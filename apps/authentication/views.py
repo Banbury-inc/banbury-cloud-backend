@@ -32,7 +32,8 @@ import requests
 from urllib.parse import urlencode
 import urllib.parse
 
-load_dotenv()
+# Load environment variables from .env file, overriding any existing env vars
+load_dotenv(os.path.join(settings.BASE_DIR, '.env'), override=True)
 
 GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID')
 GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET')
@@ -621,9 +622,9 @@ def google_callback_electron(request):
     # Get the web client credentials (same for both web and desktop)
     client_id, client_secret = get_google_client_credentials()
     
-    # Add debugging information
-    print(f"Google Electron callback received - Code: {code[:10] if code else 'None'}..., Redirect URI: {incoming_redirect_uri}")
-    print(f"Client ID: {client_id[:20] if client_id else 'None'}...")
+    print(f"Client ID: {client_id}")
+    print(f"Client Secret: {client_secret}")
+    print(f"Incoming Redirect URI: {incoming_redirect_uri}")
     print(f"All query params: {dict(request.GET)}")
     
     if not code:
