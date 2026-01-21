@@ -25,4 +25,5 @@ urlpatterns = [
     path("get_realtime_token/", views.get_realtime_token, name="get_realtime_token"),
     path("usage_summary/", views.usage_summary, name="usage_summary"),
     path("track_token_usage/", views.track_token_usage, name="track_token_usage"),
+    path("token_usage_history/", views.token_usage_history, name="token_usage_history"),
 ]
