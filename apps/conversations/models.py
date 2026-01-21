@@ -277,6 +277,56 @@ class Conversation:
             }
 
     @staticmethod
+    def track_daily_token_usage(username, tokens):
+        """
+        Track daily token usage for a user
+        
+        Args:
+            username (str): The username
+            tokens (int): Number of tokens used
+            
+        Returns:
+            dict: Result of the tracking operation
+        """
+        from pymongo.mongo_client import MongoClient
+        
+        try:
+            # Get today's date in YYYY-MM-DD format
+            today = datetime.utcnow().date().strftime("%Y-%m-%d")
+            
+            # DB connection
+            uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+            client = MongoClient(uri)
+            db = client["NeuraNet"]
+            daily_usage_collection = db["daily_token_usage"]
+            
+            # Upsert: increment tokens for today, or create new entry
+            daily_usage_collection.update_one(
+                {
+                    "username": username,
+                    "date": today
+                },
+                {
+                    "$inc": {"tokens": tokens},
+                    "$setOnInsert": {
+                        "username": username,
+                        "date": today
+                    }
+                },
+                upsert=True
+            )
+            
+            return {
+                "success": True,
+                "message": "Token usage tracked successfully"
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e)
+            }
+
+    @staticmethod
     def get_all_conversations_admin(limit=50, offset=0, days=30, username_filter=""):
         """
         Get all conversations across all users for admin analytics

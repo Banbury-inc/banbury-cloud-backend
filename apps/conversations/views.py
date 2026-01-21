@@ -276,7 +276,8 @@ def update_conversation(request, conversation_id):
     {
         "title": "Conversation title",
         "messages": [...],
-        "metadata": {...} (optional)
+        "metadata": {...} (optional),
+        "token_usage": 1234 (optional) - total tokens used for this conversation
     }
     """
     try:
@@ -286,6 +287,7 @@ def update_conversation(request, conversation_id):
         title = data.get("title")
         messages = data.get("messages", [])
         metadata = data.get("metadata")
+        token_usage = data.get("token_usage", 0)
         
         if not title:
             return JsonResponse({
@@ -300,6 +302,10 @@ def update_conversation(request, conversation_id):
             }, status=400)
         
         result = Conversation.update_conversation(conversation_id, username, title, messages, metadata)
+        
+        # Track token usage if provided
+        if result["success"] and token_usage > 0:
+            Conversation.track_daily_token_usage(username, token_usage)
         
         if result["success"]:
             return JsonResponse(result)

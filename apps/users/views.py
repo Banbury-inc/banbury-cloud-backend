@@ -1358,8 +1358,7 @@ def track_token_usage(request):
 def token_usage_history(request):
     """
     Returns daily token usage for the current month.
-    Since we don't track daily usage historically, this returns estimates
-    by distributing the current month's total across days elapsed.
+    Uses real stored data from the daily_token_usage collection.
     """
     from datetime import datetime, timedelta
     
@@ -1373,20 +1372,16 @@ def token_usage_history(request):
         client = MongoClient(uri)
         db = client["NeuraNet"]
         user_collection = db["users"]
+        daily_usage_collection = db["daily_token_usage"]
 
         # Find user
         user = user_collection.find_one({"username": username})
         if not user:
             return JsonResponse({"error": "User not found"}, status=404)
 
-        # Get current month's token usage
+        # Get current month
         now = datetime.utcnow()
         current_month = now.strftime("%Y-%m")
-        stored_month = user.get("token_usage_month", "")
-        
-        tokens_used = 0
-        if stored_month == current_month:
-            tokens_used = user.get("tokens_used_this_month", 0)
         
         # Calculate days in current month and days elapsed
         if now.month == 12:
@@ -1398,41 +1393,51 @@ def token_usage_history(request):
         days_in_month = (next_month - first_of_month).days
         days_elapsed = (now - first_of_month).days + 1  # +1 to include today
         
-        # Generate daily data
+        # Get real daily usage data from database for current month
+        month_start_str = first_of_month.strftime("%Y-%m-%d")
+        month_end_str = (first_of_month + timedelta(days=days_in_month - 1)).strftime("%Y-%m-%d")
+        
+        # Query for all daily usage records in the current month
+        daily_records = list(daily_usage_collection.find({
+            "username": username,
+            "date": {
+                "$gte": month_start_str,
+                "$lte": month_end_str
+            }
+        }))
+        
+        # Create a map of date -> tokens for quick lookup
+        usage_map = {record["date"]: record.get("tokens", 0) for record in daily_records}
+        
+        # Generate daily data using real stored values
         daily_usage = []
-        if days_elapsed > 0 and tokens_used > 0:
-            # Distribute tokens evenly across days (simple estimate)
-            avg_daily = tokens_used / days_elapsed
+        total_tokens = 0
+        
+        for day in range(days_elapsed):
+            date = first_of_month + timedelta(days=day)
+            date_str = date.strftime("%Y-%m-%d")
             
-            for day in range(days_elapsed):
-                date = first_of_month + timedelta(days=day)
-                # Add some randomness to make it look more realistic
-                # But ensure total matches tokens_used
-                if day == days_elapsed - 1:
-                    # Last day gets the remainder to ensure exact total
-                    day_tokens = tokens_used - sum(d.get('tokens', 0) for d in daily_usage)
-                else:
-                    # Use average with small variation
-                    variation = avg_daily * 0.3 * (hash(f"{username}{day}") % 100 - 50) / 100
-                    day_tokens = max(0, int(avg_daily + variation))
-                
-                daily_usage.append({
-                    "date": date.strftime("%Y-%m-%d"),
-                    "tokens": day_tokens
-                })
-        else:
-            # No usage yet or new month
-            for day in range(min(days_elapsed, days_in_month)):
-                date = first_of_month + timedelta(days=day)
-                daily_usage.append({
-                    "date": date.strftime("%Y-%m-%d"),
-                    "tokens": 0
-                })
+            # Get tokens from stored data, or 0 if no data for this day
+            day_tokens = usage_map.get(date_str, 0)
+            total_tokens += day_tokens
+            
+            daily_usage.append({
+                "date": date_str,
+                "tokens": day_tokens
+            })
+        
+        # Fill in remaining days of month with 0 if needed
+        for day in range(days_elapsed, days_in_month):
+            date = first_of_month + timedelta(days=day)
+            daily_usage.append({
+                "date": date.strftime("%Y-%m-%d"),
+                "tokens": 0
+            })
 
         return JsonResponse({
             "result": "success",
             "daily_usage": daily_usage,
-            "total_tokens": tokens_used,
+            "total_tokens": total_tokens,
             "month": current_month
         })
 
