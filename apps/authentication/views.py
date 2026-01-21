@@ -955,11 +955,36 @@ def google_callback_electron(request):
             })
         else:
             # Return HTML page for browser redirects
-            # For Electron, redirect to banbury:// protocol with the token
-            # This allows the Electron app to receive the token and redirect to workspaces
+            # For Electron, redirect to banbury:// protocol with the token and user info
+            # This allows the Electron app to receive the token and user info and redirect to workspaces
             import urllib.parse
+            import json
             encoded_token = urllib.parse.quote(token, safe='')
-            redirect_url = f"banbury://auth/callback?token={encoded_token}"
+            
+            # Build query parameters with token and user info
+            params = {
+                'token': token,
+                'email': email,
+                'username': user.get("username") or email,
+            }
+            
+            # Add optional user fields if they exist
+            if user.get("first_name"):
+                params['first_name'] = user.get("first_name")
+            if user.get("last_name"):
+                params['last_name'] = user.get("last_name")
+            if user.get("picture"):
+                # For picture, if it's a dict with base64 data, encode it as JSON
+                # Otherwise, if it's a URL string, include it directly
+                picture = user.get("picture")
+                if isinstance(picture, dict):
+                    params['picture'] = json.dumps(picture)
+                elif isinstance(picture, str):
+                    params['picture'] = picture
+            
+            # URL encode all parameters
+            query_string = '&'.join([f"{key}={urllib.parse.quote(str(value), safe='')}" for key, value in params.items()])
+            redirect_url = f"banbury://auth/callback?{query_string}"
             
             # Return HTML page that redirects to banbury:// protocol
             html_content = f"""
