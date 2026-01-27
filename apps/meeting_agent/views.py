@@ -2881,8 +2881,8 @@ def proxy_transcript(request):
                 'error': 'Transcript URL is required'
             }, status=400)
         
-        # Validate that the URL is from Recall.ai
-        if 'recall.ai' not in transcript_url:
+        # Validate that the URL is from Recall.ai (either recall.ai domain or recallai S3 bucket)
+        if 'recall.ai' not in transcript_url and 'recallai' not in transcript_url:
             return JsonResponse({
                 'error': 'Invalid transcript URL'
             }, status=400)
