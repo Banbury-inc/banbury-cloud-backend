@@ -1351,3 +1351,95 @@ def track_token_usage(request):
 
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def token_usage_history(request):
+    """
+    Returns daily token usage for the current month.
+    Uses real stored data from the daily_token_usage collection.
+    """
+    from datetime import datetime, timedelta
+    
+    try:
+        username = request.username_from_token
+        if not username:
+            return JsonResponse({"error": "Unauthorized"}, status=401)
+
+        # DB connection
+        uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+        client = MongoClient(uri)
+        db = client["NeuraNet"]
+        user_collection = db["users"]
+        daily_usage_collection = db["daily_token_usage"]
+
+        # Find user
+        user = user_collection.find_one({"username": username})
+        if not user:
+            return JsonResponse({"error": "User not found"}, status=404)
+
+        # Get current month
+        now = datetime.utcnow()
+        current_month = now.strftime("%Y-%m")
+        
+        # Calculate days in current month and days elapsed
+        if now.month == 12:
+            next_month = datetime(now.year + 1, 1, 1)
+        else:
+            next_month = datetime(now.year, now.month + 1, 1)
+        
+        first_of_month = datetime(now.year, now.month, 1)
+        days_in_month = (next_month - first_of_month).days
+        days_elapsed = (now - first_of_month).days + 1  # +1 to include today
+        
+        # Get real daily usage data from database for current month
+        month_start_str = first_of_month.strftime("%Y-%m-%d")
+        month_end_str = (first_of_month + timedelta(days=days_in_month - 1)).strftime("%Y-%m-%d")
+        
+        # Query for all daily usage records in the current month
+        daily_records = list(daily_usage_collection.find({
+            "username": username,
+            "date": {
+                "$gte": month_start_str,
+                "$lte": month_end_str
+            }
+        }))
+        
+        # Create a map of date -> tokens for quick lookup
+        usage_map = {record["date"]: record.get("tokens", 0) for record in daily_records}
+        
+        # Generate daily data using real stored values
+        daily_usage = []
+        total_tokens = 0
+        
+        for day in range(days_elapsed):
+            date = first_of_month + timedelta(days=day)
+            date_str = date.strftime("%Y-%m-%d")
+            
+            # Get tokens from stored data, or 0 if no data for this day
+            day_tokens = usage_map.get(date_str, 0)
+            total_tokens += day_tokens
+            
+            daily_usage.append({
+                "date": date_str,
+                "tokens": day_tokens
+            })
+        
+        # Fill in remaining days of month with 0 if needed
+        for day in range(days_elapsed, days_in_month):
+            date = first_of_month + timedelta(days=day)
+            daily_usage.append({
+                "date": date.strftime("%Y-%m-%d"),
+                "tokens": 0
+            })
+
+        return JsonResponse({
+            "result": "success",
+            "daily_usage": daily_usage,
+            "total_tokens": total_tokens,
+            "month": current_month
+        })
+
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
