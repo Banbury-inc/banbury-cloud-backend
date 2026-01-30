@@ -1,14 +1,17 @@
 # Use a Debian-based Python image
 FROM python:3.11-slim-bullseye
 
-# Install Redis and build tools
-RUN apt-get update && apt-get install -y \
+# Install Redis, build tools, and LibreOffice for PDF conversion
+RUN apt-get update && apt-get install -y --no-install-recommends \
     redis-server \
     build-essential \
     libssl-dev \
     libffi-dev \
     python3-dev \
     curl \
+    libreoffice-writer \
+    libreoffice-calc \
+    libreoffice-impress \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Set the working directory to /app
