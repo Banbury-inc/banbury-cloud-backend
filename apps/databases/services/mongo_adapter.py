@@ -13,6 +13,15 @@ def _connect(connection: dict[str, Any], database_override: str | None = None):
     database_name = database_override or connection.get("database")
 
     try:
+        if connection.get("uri"):
+            client = MongoClient(
+                connection["uri"],
+                serverSelectionTimeoutMS=5000,
+                connectTimeoutMS=5000,
+                socketTimeoutMS=10000,
+            )
+            return client, None
+
         client = MongoClient(
             host=connection["host"],
             port=connection["port"],

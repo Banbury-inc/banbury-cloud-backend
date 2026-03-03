@@ -17,6 +17,7 @@ def normalize_connection_payload(raw_connection: Any):
         return None, "Missing connection payload"
 
     provider = str(raw_connection.get("provider", "")).strip().lower()
+    uri = str(raw_connection.get("uri", "")).strip()
     host = str(raw_connection.get("host", "")).strip()
     username = str(raw_connection.get("username", "")).strip()
     password = str(raw_connection.get("password", ""))
@@ -25,6 +26,18 @@ def normalize_connection_payload(raw_connection: Any):
 
     if provider not in ALLOWED_PROVIDERS:
         return None, "Unsupported provider"
+
+    if provider == "mongodb" and uri:
+        normalized = {
+            "provider": provider,
+            "uri": uri,
+        }
+        if database_name:
+            if not _is_valid_identifier(database_name):
+                return None, "Invalid database name format"
+            normalized["database"] = database_name
+        return normalized, None
+
     if not host:
         return None, "Host is required"
     if not username:
