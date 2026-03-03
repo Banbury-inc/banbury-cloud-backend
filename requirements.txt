@@ -107,3 +107,4 @@ zep-cloud==3.4.1
 mem0ai==0.1.32
 sendgrid==6.11.0
 sentry-sdk==2.49.0
+sshtunnel==0.4.0

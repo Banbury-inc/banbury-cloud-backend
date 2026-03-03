@@ -2,6 +2,7 @@ import re
 from typing import Any
 
 ALLOWED_PROVIDERS = {"postgres", "mysql", "mongodb"}
+ALLOWED_SSH_AUTH_METHODS = {"password", "publickey"}
 IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9_\-.$]+$")
 MAX_PAGE_SIZE = 200
 
@@ -10,6 +11,16 @@ def _is_valid_identifier(identifier: str) -> bool:
     if not identifier:
         return False
     return bool(IDENTIFIER_RE.fullmatch(identifier))
+
+
+def _normalize_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    if isinstance(value, (int, float)):
+        return value != 0
+    return False
 
 
 def normalize_connection_payload(raw_connection: Any):
@@ -23,6 +34,7 @@ def normalize_connection_payload(raw_connection: Any):
     password = str(raw_connection.get("password", ""))
     database = raw_connection.get("database")
     database_name = str(database).strip() if database is not None else ""
+    raw_ssh = raw_connection.get("ssh")
 
     if provider not in ALLOWED_PROVIDERS:
         return None, "Unsupported provider"
@@ -65,6 +77,57 @@ def normalize_connection_payload(raw_connection: Any):
     }
     if database_name:
         normalized["database"] = database_name
+
+    if raw_ssh is not None:
+        if provider not in {"postgres", "mysql"}:
+            return None, "SSH tunneling is supported only for PostgreSQL and MySQL"
+        if not isinstance(raw_ssh, dict):
+            return None, "Invalid SSH configuration"
+
+        ssh_enabled = _normalize_bool(raw_ssh.get("enabled"))
+        if ssh_enabled:
+            ssh_host = str(raw_ssh.get("host", "")).strip()
+            ssh_username = str(raw_ssh.get("username", "")).strip()
+            ssh_password = str(raw_ssh.get("password", ""))
+            ssh_private_key = str(raw_ssh.get("privateKey", ""))
+            ssh_passphrase = str(raw_ssh.get("passphrase", ""))
+
+            try:
+                ssh_port = int(raw_ssh.get("port", 22))
+            except (TypeError, ValueError):
+                return None, "SSH port must be a number"
+
+            if ssh_port <= 0 or ssh_port > 65535:
+                return None, "SSH port must be between 1 and 65535"
+            if not ssh_host:
+                return None, "SSH host is required"
+            if not ssh_username:
+                return None, "SSH username is required"
+
+            auth_method = str(raw_ssh.get("authMethod", "password")).strip().lower()
+            if auth_method not in ALLOWED_SSH_AUTH_METHODS:
+                return None, "Unsupported SSH authentication method"
+
+            normalized_ssh = {
+                "enabled": True,
+                "host": ssh_host,
+                "port": ssh_port,
+                "username": ssh_username,
+                "authMethod": "publicKey" if auth_method == "publickey" else "password",
+            }
+
+            if auth_method == "publickey":
+                if not ssh_private_key:
+                    return None, "SSH private key is required for public key authentication"
+                normalized_ssh["privateKey"] = ssh_private_key
+                if ssh_passphrase:
+                    normalized_ssh["passphrase"] = ssh_passphrase
+            else:
+                if not ssh_password:
+                    return None, "SSH password is required"
+                normalized_ssh["password"] = ssh_password
+
+            normalized["ssh"] = normalized_ssh
 
     return normalized, None
 

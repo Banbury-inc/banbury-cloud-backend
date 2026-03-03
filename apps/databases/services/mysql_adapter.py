@@ -1,6 +1,7 @@
 from typing import Any
 
 from .serializers import serialize_value
+from .ssh_tunnel import create_ssh_tunnel
 
 SYSTEM_DATABASES = {"information_schema", "mysql", "performance_schema", "sys"}
 MAX_DATABASES = 20
@@ -16,13 +17,23 @@ def _connect(connection: dict[str, Any], database_override: str | None = None):
         import pymysql
         from pymysql.cursors import DictCursor
     except ImportError:
-        return None, "MySQL driver is not installed"
+        return None, None, "MySQL driver is not installed"
 
     target_database = database_override or connection.get("database")
+    tunnel, tunnel_error = create_ssh_tunnel(connection)
+    if tunnel_error:
+        return None, None, tunnel_error
+
+    host = connection["host"]
+    port = connection["port"]
+    if tunnel:
+        host = "127.0.0.1"
+        port = tunnel.local_bind_port
+
     try:
         db_connection = pymysql.connect(
-            host=connection["host"],
-            port=connection["port"],
+            host=host,
+            port=port,
             user=connection["username"],
             password=connection["password"],
             database=target_database,
@@ -31,13 +42,15 @@ def _connect(connection: dict[str, Any], database_override: str | None = None):
             write_timeout=10,
             cursorclass=DictCursor,
         )
-        return db_connection, None
+        return db_connection, tunnel, None
     except Exception:
-        return None, "Unable to connect to MySQL"
+        if tunnel:
+            tunnel.stop()
+        return None, None, "Unable to connect to MySQL"
 
 
 def test_connection(connection: dict[str, Any]):
-    db_connection, error_message = _connect(connection)
+    db_connection, tunnel, error_message = _connect(connection)
     if error_message:
         return {"success": False, "error": error_message}
 
@@ -50,10 +63,12 @@ def test_connection(connection: dict[str, Any]):
         return {"success": False, "error": "MySQL test query failed"}
     finally:
         db_connection.close()
+        if tunnel:
+            tunnel.stop()
 
 
 def get_tree(connection: dict[str, Any]):
-    db_connection, error_message = _connect(connection)
+    db_connection, tunnel, error_message = _connect(connection)
     if error_message:
         return {"success": False, "error": error_message}
 
@@ -70,14 +85,15 @@ def get_tree(connection: dict[str, Any]):
                         databases.append(db_name)
                 databases = databases[:MAX_DATABASES]
     except Exception:
-        db_connection.close()
         return {"success": False, "error": "Failed to list MySQL databases"}
     finally:
         db_connection.close()
+        if tunnel:
+            tunnel.stop()
 
     tree = []
     for database_name in databases:
-        child_connection, child_error = _connect(connection, database_name)
+        child_connection, child_tunnel, child_error = _connect(connection, database_name)
         if child_error:
             continue
 
@@ -118,6 +134,8 @@ def get_tree(connection: dict[str, Any]):
             pass
         finally:
             child_connection.close()
+            if child_tunnel:
+                child_tunnel.stop()
 
         tree.append(database_node)
 
@@ -129,7 +147,7 @@ def get_table_data(connection: dict[str, Any], target: dict[str, Any], page: int
     table_name = target["table"]
     offset = (page - 1) * page_size
 
-    db_connection, error_message = _connect(connection, database_name)
+    db_connection, tunnel, error_message = _connect(connection, database_name)
     if error_message:
         return {"success": False, "error": error_message}
 
@@ -167,3 +185,5 @@ def get_table_data(connection: dict[str, Any], target: dict[str, Any], page: int
         return {"success": False, "error": "Failed to query MySQL table"}
     finally:
         db_connection.close()
+        if tunnel:
+            tunnel.stop()
