@@ -1,0 +1,82 @@
+import json
+from typing import Any
+
+from django.http import JsonResponse
+
+from ..services.database_service import (
+    get_table_data_for_connection,
+    get_tree_for_connection,
+    test_database_connection,
+)
+from ..services.validation import normalize_connection_payload, normalize_page_payload, normalize_target_payload
+
+
+def _parse_request_json(request) -> dict[str, Any]:
+    try:
+        body = request.body.decode("utf-8") if request.body else "{}"
+        payload = json.loads(body or "{}")
+        if isinstance(payload, dict):
+            return payload
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return {}
+    return {}
+
+
+def _ensure_authenticated(request):
+    username = getattr(request, "username_from_token", None)
+    if username:
+        return None
+    return JsonResponse({"success": False, "error": "Unauthorized"}, status=401)
+
+
+def handle_test_connection_request(request):
+    auth_error = _ensure_authenticated(request)
+    if auth_error:
+        return auth_error
+
+    payload = _parse_request_json(request)
+    connection, error_message = normalize_connection_payload(payload.get("connection"))
+    if error_message:
+        return JsonResponse({"success": False, "error": error_message}, status=400)
+
+    result = test_database_connection(connection)
+    status_code = 200 if result.get("success") else 400
+    return JsonResponse(result, status=status_code)
+
+
+def handle_get_tree_request(request):
+    auth_error = _ensure_authenticated(request)
+    if auth_error:
+        return auth_error
+
+    payload = _parse_request_json(request)
+    connection, error_message = normalize_connection_payload(payload.get("connection"))
+    if error_message:
+        return JsonResponse({"success": False, "error": error_message}, status=400)
+
+    result = get_tree_for_connection(connection)
+    status_code = 200 if result.get("success") else 400
+    return JsonResponse(result, status=status_code)
+
+
+def handle_get_table_data_request(request):
+    auth_error = _ensure_authenticated(request)
+    if auth_error:
+        return auth_error
+
+    payload = _parse_request_json(request)
+    connection, connection_error = normalize_connection_payload(payload.get("connection"))
+    if connection_error:
+        return JsonResponse({"success": False, "error": connection_error}, status=400)
+
+    target, target_error = normalize_target_payload(connection["provider"], payload.get("target"))
+    if target_error:
+        return JsonResponse({"success": False, "error": target_error}, status=400)
+
+    page, page_size, page_error = normalize_page_payload(payload.get("page"), payload.get("pageSize"))
+    if page_error:
+        return JsonResponse({"success": False, "error": page_error}, status=400)
+
+    result = get_table_data_for_connection(connection, target, page, page_size)
+    status_code = 200 if result.get("success") else 400
+    return JsonResponse(result, status=status_code)
