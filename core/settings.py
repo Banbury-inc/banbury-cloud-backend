@@ -77,6 +77,7 @@ INSTALLED_APPS = [
     'apps.tasks',
     'apps.analytics',
     'apps.meeting_agent',
+    'apps.flows',
     'rest_framework',
     'corsheaders',
     'rest_framework.authtoken',

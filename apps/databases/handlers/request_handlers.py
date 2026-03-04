@@ -3,6 +3,7 @@ from typing import Any
 
 from django.http import JsonResponse
 
+from ..models import SavedDatabaseConnection
 from ..services.database_service import (
     get_table_data_for_connection,
     get_tree_for_connection,
@@ -80,3 +81,42 @@ def handle_get_table_data_request(request):
     result = get_table_data_for_connection(connection, target, page, page_size)
     status_code = 200 if result.get("success") else 400
     return JsonResponse(result, status=status_code)
+
+
+def handle_save_connection_request(request):
+    auth_error = _ensure_authenticated(request)
+    if auth_error:
+        return auth_error
+
+    username = request.username_from_token
+    payload = _parse_request_json(request)
+    name = payload.get("name")
+    config = payload.get("config")
+
+    if not name or not config:
+        return JsonResponse({"success": False, "error": "name and config are required"}, status=400)
+
+    saved = SavedDatabaseConnection.create(username, name, config)
+    return JsonResponse({"success": True, "connection": saved})
+
+
+def handle_list_connections_request(request):
+    auth_error = _ensure_authenticated(request)
+    if auth_error:
+        return auth_error
+
+    username = request.username_from_token
+    connections = SavedDatabaseConnection.list_for_user(username)
+    return JsonResponse({"success": True, "connections": connections})
+
+
+def handle_delete_connection_request(request, connection_id: str):
+    auth_error = _ensure_authenticated(request)
+    if auth_error:
+        return auth_error
+
+    username = request.username_from_token
+    deleted = SavedDatabaseConnection.delete(connection_id, username)
+    if not deleted:
+        return JsonResponse({"success": False, "error": "Connection not found"}, status=404)
+    return JsonResponse({"success": True})
