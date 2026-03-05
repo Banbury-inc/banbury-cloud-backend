@@ -170,6 +170,63 @@ def normalize_target_payload(provider: str, raw_target: Any):
     return normalized, None
 
 
+ALLOWED_FILTER_OPERATORS = {"=", "!=", ">", "<", ">=", "<=", "contains"}
+MAX_FILTERS = 10
+
+
+def normalize_order_by_payload(raw: Any):
+    if raw is None:
+        return None, None
+
+    if not isinstance(raw, dict):
+        return None, "orderBy must be an object"
+
+    column = str(raw.get("column", "")).strip()
+    direction = str(raw.get("direction", "")).strip().lower()
+
+    if not column:
+        return None, "orderBy.column is required"
+    if not _is_valid_identifier(column):
+        return None, "Invalid orderBy column identifier"
+    if direction not in {"asc", "desc"}:
+        return None, "orderBy.direction must be 'asc' or 'desc'"
+
+    return {"column": column, "direction": direction}, None
+
+
+def normalize_filters_payload(raw: Any):
+    if raw is None:
+        return [], None
+
+    if not isinstance(raw, list):
+        return None, "filters must be an array"
+
+    if len(raw) > MAX_FILTERS:
+        return None, f"Too many filters (max {MAX_FILTERS})"
+
+    normalized = []
+    for i, item in enumerate(raw):
+        if not isinstance(item, dict):
+            return None, f"Filter {i} must be an object"
+
+        column = str(item.get("column", "")).strip()
+        operator = str(item.get("operator", "")).strip()
+        value = item.get("value")
+
+        if not column:
+            return None, f"Filter {i}: column is required"
+        if not _is_valid_identifier(column):
+            return None, f"Filter {i}: invalid column identifier"
+        if operator not in ALLOWED_FILTER_OPERATORS:
+            return None, f"Filter {i}: unsupported operator '{operator}'"
+        if value is None:
+            return None, f"Filter {i}: value is required"
+
+        normalized.append({"column": column, "operator": operator, "value": str(value)})
+
+    return normalized, None
+
+
 def normalize_page_payload(raw_page: Any, raw_page_size: Any):
     page = 1 if raw_page is None else raw_page
     page_size = 50 if raw_page_size is None else raw_page_size

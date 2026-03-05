@@ -9,4 +9,6 @@ urlpatterns = [
     path("connections/<str:connection_id>/", views.delete_connection, name="databases_delete_connection"),
     path("tree/", views.get_tree, name="databases_get_tree"),
     path("table-data/", views.get_table_data, name="databases_get_table_data"),
+    path("update-rows/", views.update_rows, name="databases_update_rows"),
+    path("insert-rows/", views.insert_rows, name="databases_insert_rows"),
 ]

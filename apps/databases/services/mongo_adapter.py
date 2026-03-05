@@ -97,7 +97,40 @@ def get_tree(connection: dict[str, Any]):
         client.close()
 
 
-def get_table_data(connection: dict[str, Any], target: dict[str, Any], page: int, page_size: int):
+def _build_mongo_query(filters: list[dict]) -> dict:
+    if not filters:
+        return {}
+
+    operator_map = {
+        "=": "$eq",
+        "!=": "$ne",
+        ">": "$gt",
+        "<": "$lt",
+        ">=": "$gte",
+        "<=": "$lte",
+    }
+
+    query: dict[str, Any] = {}
+    for f in filters:
+        col = f["column"]
+        op = f["operator"]
+        val = f["value"]
+
+        if op == "contains":
+            condition = {"$regex": val, "$options": "i"}
+        else:
+            mongo_op = operator_map[op]
+            condition = {mongo_op: val}
+
+        if col in query:
+            query[col].update(condition)
+        else:
+            query[col] = condition
+
+    return query
+
+
+def get_table_data(connection: dict[str, Any], target: dict[str, Any], page: int, page_size: int, order_by=None, filters=None):
     database_name = target["database"]
     collection_name = target["collection"]
     offset = (page - 1) * page_size
@@ -107,11 +140,18 @@ def get_table_data(connection: dict[str, Any], target: dict[str, Any], page: int
         return {"success": False, "error": error_message}
 
     try:
+        import pymongo
+
         collection = client[database_name][collection_name]
-        total_count = collection.count_documents({}, maxTimeMS=10000)
-        documents = list(
-            collection.find({}, max_time_ms=10000).skip(offset).limit(page_size)
-        )
+        query = _build_mongo_query(filters or [])
+        total_count = collection.count_documents(query, maxTimeMS=10000)
+
+        cursor = collection.find(query, max_time_ms=10000).skip(offset).limit(page_size)
+        if order_by:
+            direction = pymongo.ASCENDING if order_by["direction"] == "asc" else pymongo.DESCENDING
+            cursor = cursor.sort(order_by["column"], direction)
+
+        documents = list(cursor)
 
         columns = []
         for document in documents:
@@ -130,8 +170,63 @@ def get_table_data(connection: dict[str, Any], target: dict[str, Any], page: int
             "page": page,
             "pageSize": page_size,
             "totalCount": total_count,
+            "primaryKeyColumns": ["_id"],
         }
     except Exception:
         return {"success": False, "error": "Failed to query MongoDB collection"}
+    finally:
+        client.close()
+
+
+def _parse_id(value):
+    from bson import ObjectId
+    if isinstance(value, str):
+        try:
+            return ObjectId(value)
+        except Exception:
+            return value
+    return value
+
+
+def update_rows(connection: dict[str, Any], target: dict[str, Any], updates: list[dict]):
+    database_name = target["database"]
+    collection_name = target["collection"]
+
+    client, error_message = _connect(connection, database_name)
+    if error_message:
+        return {"success": False, "error": error_message}
+
+    try:
+        collection = client[database_name][collection_name]
+        for update in updates:
+            primary_key = update.get("primaryKey", {})
+            changes = update.get("changes", {})
+            if not primary_key or not changes:
+                continue
+            query = {k: (_parse_id(v) if k == "_id" else v) for k, v in primary_key.items()}
+            collection.update_one(query, {"$set": changes})
+        return {"success": True}
+    except Exception:
+        return {"success": False, "error": "Failed to update MongoDB documents"}
+    finally:
+        client.close()
+
+
+def insert_rows(connection: dict[str, Any], target: dict[str, Any], rows: list[dict]):
+    database_name = target["database"]
+    collection_name = target["collection"]
+
+    client, error_message = _connect(connection, database_name)
+    if error_message:
+        return {"success": False, "error": error_message}
+
+    try:
+        collection = client[database_name][collection_name]
+        filtered_rows = [row for row in rows if row]
+        if filtered_rows:
+            collection.insert_many(filtered_rows)
+        return {"success": True}
+    except Exception:
+        return {"success": False, "error": "Failed to insert documents into MongoDB collection"}
     finally:
         client.close()

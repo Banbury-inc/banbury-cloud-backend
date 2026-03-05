@@ -2,22 +2,12 @@ import json
 from datetime import datetime
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
-from rest_framework_simplejwt.authentication import JWTAuthentication
-from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 
 from .models import Flow, flows_collection
 
 
-def _get_username(request) -> str | None:
-    auth = JWTAuthentication()
-    try:
-        validated = auth.authenticate(request)
-        if validated is None:
-            return None
-        user, _ = validated
-        return user.username
-    except (InvalidToken, TokenError):
-        return None
+def _get_username(request):
+    return getattr(request, 'username_from_token', None)
 
 
 @csrf_exempt
