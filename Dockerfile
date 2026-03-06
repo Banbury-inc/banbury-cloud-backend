@@ -42,6 +42,8 @@ redis-server --daemonize yes\n\
 if [ "${ENABLE_DAEMON:-true}" != "false" ]; then\n\
   echo "Starting TaskStudio daemon (interval=${DAEMON_INTERVAL:-30}s, batch=${DAEMON_BATCH:-50})"\n\
   python manage.py process_taskstudio_daemon --interval ${DAEMON_INTERVAL:-30} --batch ${DAEMON_BATCH:-50} &\n\
+  echo "Starting Flow Scheduler daemon (adaptive, batch=20)"\n\
+  python manage.py process_flow_scheduler --adaptive --batch 20 &\n\
 fi\n\
 exec daphne -b 0.0.0.0 -p 8080 core.asgi:application' > /app/startup.sh
 RUN chmod +x /app/startup.sh

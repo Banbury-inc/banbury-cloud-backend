@@ -9,6 +9,8 @@ DAEMON_BATCH=${DAEMON_BATCH:-50}
 DAEMON_MODE=${DAEMON_MODE:-"adaptive"}  # "adaptive", "realtime", or "fixed"
 DAEMON_PID_FILE="taskstudio_daemon.pid"
 DAEMON_LOG_FILE="taskstudio_daemon.log"
+FLOW_DAEMON_PID_FILE="flow_scheduler_daemon.pid"
+FLOW_DAEMON_LOG_FILE="flow_scheduler_daemon.log"
 
 # Parse arguments
 USE_DOCKER=false
@@ -138,6 +140,53 @@ container_exists() {
 container_running() {
     docker container ls --filter "name=$CONTAINER_NAME" --filter "status=running" --format "{{.Names}}" | grep -q "$CONTAINER_NAME"
     return $?
+}
+
+# Function to kill all flow scheduler daemon processes
+kill_all_flow_daemons() {
+    echo "🔍 Checking for existing Flow Scheduler daemon processes..."
+    local pids=()
+    if command -v pgrep &> /dev/null; then
+        local pgrep_pids=$(pgrep -f "process_flow_scheduler" 2>/dev/null | tr '\n' ' ')
+        if [ -n "$pgrep_pids" ]; then
+            pids+=($pgrep_pids)
+        fi
+    fi
+    local ps_pids=$(ps aux | grep -E "process_flow_scheduler" | grep -v grep | awk '{print $2}' | tr '\n' ' ')
+    if [ -n "$ps_pids" ]; then
+        pids+=($ps_pids)
+    fi
+    if [ -f "$FLOW_DAEMON_PID_FILE" ]; then
+        local file_pid=$(cat "$FLOW_DAEMON_PID_FILE" 2>/dev/null)
+        if [ -n "$file_pid" ] && kill -0 "$file_pid" 2>/dev/null; then
+            pids+=($file_pid)
+        fi
+    fi
+    local unique_pids=($(printf "%s\n" "${pids[@]}" | sort -u | grep -v '^$'))
+    if [ ${#unique_pids[@]} -eq 0 ]; then
+        echo "✅ No existing Flow Scheduler daemon processes found"
+        return 0
+    fi
+    echo "🛑 Found ${#unique_pids[@]} Flow Scheduler daemon process(es): ${unique_pids[*]}"
+    local killed_count=0
+    for pid in "${unique_pids[@]}"; do
+        if kill -0 "$pid" 2>/dev/null; then
+            echo "   Killing daemon PID $pid..."
+            if kill -TERM "$pid" 2>/dev/null; then
+                sleep 2
+                if kill -0 "$pid" 2>/dev/null; then
+                    kill -KILL "$pid" 2>/dev/null || true
+                fi
+                killed_count=$((killed_count + 1))
+                echo "   ✓ Daemon PID $pid stopped"
+            else
+                echo "   ⚠️  Failed to kill daemon PID $pid"
+            fi
+        fi
+    done
+    rm -f "$FLOW_DAEMON_PID_FILE" 2>/dev/null || true
+    echo "✅ Killed $killed_count Flow Scheduler daemon process(es)"
+    return 0
 }
 
 # Function to kill all TaskStudio daemon processes
@@ -499,25 +548,29 @@ else
             # Kill process on the app port
             kill_process_on_port $HTTP_PORT
             
-            # Kill all existing TaskStudio daemons
+            # Kill all existing daemons
             kill_all_taskstudio_daemons
+            kill_all_flow_daemons
 
             echo "Starting Daphne server on port $HTTP_PORT"
-            # Run Daphne directly on the HTTP_PORT
-            # Start daemon in background first
             PYTHON_BIN=${PYTHON_BIN:-venv/bin/python}
             if [ ! -x "$PYTHON_BIN" ]; then
                 PYTHON_BIN=$(command -v python3 || command -v python)
             fi
             if [ -z "$PYTHON_BIN" ]; then
-                echo "No python interpreter found (venv/bin/python, python3, or python). Cannot start daemon."
+                echo "No python interpreter found (venv/bin/python, python3, or python). Cannot start daemons."
             else
                 local daemon_cmd=$(get_daemon_command "$PYTHON_BIN")
                 local daemon_desc=$(get_daemon_description)
                 echo "🚀 Starting TaskStudio daemon with $daemon_desc (batch=$DAEMON_BATCH)"
                 nohup $daemon_cmd > "$DAEMON_LOG_FILE" 2>&1 &
                 echo $! > "$DAEMON_PID_FILE"
-                echo "✅ Daemon PID $(cat "$DAEMON_PID_FILE") logging to $DAEMON_LOG_FILE"
+                echo "✅ TaskStudio daemon PID $(cat "$DAEMON_PID_FILE") logging to $DAEMON_LOG_FILE"
+
+                echo "🚀 Starting Flow Scheduler daemon with adaptive polling"
+                nohup $PYTHON_BIN manage.py process_flow_scheduler --adaptive --batch 20 > "$FLOW_DAEMON_LOG_FILE" 2>&1 &
+                echo $! > "$FLOW_DAEMON_PID_FILE"
+                echo "✅ Flow Scheduler daemon PID $(cat "$FLOW_DAEMON_PID_FILE") logging to $FLOW_DAEMON_LOG_FILE"
             fi
 
             daphne -p $HTTP_PORT -b 0.0.0.0 core.asgi:application
@@ -527,6 +580,7 @@ else
         "stop")
             kill_process_on_port $HTTP_PORT
             kill_all_taskstudio_daemons
+            kill_all_flow_daemons
             echo "Server stopped."
             ;;
         "start-daemon")
@@ -572,50 +626,53 @@ else
             # Kill any existing processes on the ports
             kill_process_on_port $HTTP_PORT
             kill_all_taskstudio_daemons
+            kill_all_flow_daemons
             
             local daemon_desc=$(get_daemon_description)
-            echo "Starting Daphne server AND TaskStudio daemon in FOREGROUND"
-            echo "Server on port $HTTP_PORT, Daemon ($daemon_desc, batch=$DAEMON_BATCH)"
-            echo "Press Ctrl+C to stop both services"
+            echo "Starting Daphne server, TaskStudio daemon, AND Flow Scheduler daemon in FOREGROUND"
+            echo "Server on port $HTTP_PORT, TaskStudio ($daemon_desc, batch=$DAEMON_BATCH)"
+            echo "Press Ctrl+C to stop all services"
             echo "=========================================="
             
-            # Start daemon in background first
+            # Start task daemon in background
             local daemon_cmd=$(get_daemon_command "$PYTHON_BIN")
             echo "🔧 Starting TaskStudio daemon with $daemon_desc..."
             $daemon_cmd &
             DAEMON_PID=$!
-            echo "✓ Daemon started with PID $DAEMON_PID"
+            echo "✓ TaskStudio daemon started with PID $DAEMON_PID"
+
+            # Start flow scheduler daemon in background
+            echo "🔧 Starting Flow Scheduler daemon with adaptive polling..."
+            $PYTHON_BIN manage.py process_flow_scheduler --adaptive --batch 20 &
+            FLOW_DAEMON_PID=$!
+            echo "✓ Flow Scheduler daemon started with PID $FLOW_DAEMON_PID"
             
-            # Function to cleanup on exit
             cleanup() {
                 echo ""
                 echo "🛑 Shutting down services..."
                 if kill -0 $DAEMON_PID 2>/dev/null; then
-                    echo "   Stopping daemon (PID $DAEMON_PID)..."
+                    echo "   Stopping TaskStudio daemon (PID $DAEMON_PID)..."
                     kill -TERM $DAEMON_PID 2>/dev/null || true
-                    sleep 2
-                    if kill -0 $DAEMON_PID 2>/dev/null; then
-                        kill -KILL $DAEMON_PID 2>/dev/null || true
-                    fi
                 fi
+                if kill -0 $FLOW_DAEMON_PID 2>/dev/null; then
+                    echo "   Stopping Flow Scheduler daemon (PID $FLOW_DAEMON_PID)..."
+                    kill -TERM $FLOW_DAEMON_PID 2>/dev/null || true
+                fi
+                sleep 2
+                kill -KILL $DAEMON_PID 2>/dev/null || true
+                kill -KILL $FLOW_DAEMON_PID 2>/dev/null || true
                 kill_process_on_port $HTTP_PORT
                 echo "✓ All services stopped"
                 exit 0
             }
             
-            # Set up signal handlers
             trap cleanup INT TERM
-            
-            # Give daemon a moment to start
             sleep 2
             
             echo "🌐 Starting Daphne server on port $HTTP_PORT..."
             echo "----------------------------------------"
             
-            # Start Daphne in foreground (this will block)
             daphne -p $HTTP_PORT -b 0.0.0.0 core.asgi:application
-            
-            # If we get here, Daphne has stopped, so cleanup
             cleanup
             ;;
         "logs"|"stream-logs")
