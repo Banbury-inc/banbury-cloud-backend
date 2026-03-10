@@ -12,7 +12,6 @@ def _parse_private_key(private_key: str, passphrase: str | None):
         paramiko.RSAKey,
         paramiko.ECDSAKey,
         paramiko.Ed25519Key,
-        paramiko.DSSKey,
     )
     for key_factory in key_factories:
         try:
