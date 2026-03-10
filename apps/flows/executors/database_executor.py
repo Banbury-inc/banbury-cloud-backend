@@ -1,22 +1,14 @@
 """
 Database Query executor: runs table data queries via the existing database service.
 """
-from pymongo import MongoClient
-import os
-
-_MONGO_URI = os.getenv(
-    "MONGODB_URI",
-    "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority",
-)
+from apps.databases.models import saved_connections_collection
 
 
 def _get_saved_connection(connection_id: str, username: str):
     """Load a saved database connection config from MongoDB."""
-    client = MongoClient(_MONGO_URI)
-    db = client["NeuraNet"]
-    doc = db["database_connections"].find_one({"id": connection_id, "username": username})
+    doc = saved_connections_collection.find_one({"id": connection_id, "username": username})
     if not doc:
-        doc = db["database_connections"].find_one({"id": connection_id})
+        doc = saved_connections_collection.find_one({"id": connection_id})
     return doc
 
 
