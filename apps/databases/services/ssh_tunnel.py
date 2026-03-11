@@ -54,10 +54,17 @@ def create_ssh_tunnel(connection: dict[str, Any]):
         forwarder_kwargs["ssh_pkey"] = private_key
     else:
         forwarder_kwargs["ssh_password"] = ssh_config["password"]
+        # Prevent agent/local key probing from triggering auth failures
+        # before password auth is attempted on stricter SSH servers.
+        forwarder_kwargs["allow_agent"] = False
+        forwarder_kwargs["host_pkey_directories"] = []
 
     try:
         tunnel = SSHTunnelForwarder(**forwarder_kwargs)
         tunnel.start()
         return tunnel, None
-    except Exception:
-        return None, "Unable to establish SSH tunnel"
+    except Exception as exc:
+        error_message = str(exc).strip()
+        if not error_message:
+            return None, "Unable to establish SSH tunnel"
+        return None, f"Unable to establish SSH tunnel: {error_message}"
