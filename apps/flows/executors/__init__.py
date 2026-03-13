@@ -14,6 +14,7 @@ from . import (
     github_executor,
     x_api_executor,
     drive_executor,
+    python_executor,
 )
 
 
@@ -78,6 +79,9 @@ def execute_node(node: dict, inputs: dict, username: str) -> dict:
 
         if node_type in ('google-drive', 'onedrive'):
             return drive_executor.execute(node_data, inputs, username, node_type)
+
+        if node_type == 'python-code':
+            return python_executor.execute(node_data, inputs, username)
 
         return {'status': 'skipped', 'data': {}, 'note': f'No executor for node type: {node_type}'}
 
