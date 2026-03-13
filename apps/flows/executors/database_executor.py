@@ -39,13 +39,34 @@ def execute(node_data: dict, inputs: dict, username: str) -> dict:
             for f in filters if f.get('field')
         ]
 
-        # Determine target from table name
-        # Table may be "schema.table" for postgres
+        # Determine target from table name.
+        # Table may be "schema.table" for postgres or "database.collection" for MongoDB.
         parts = table.split('.')
         if provider == 'postgres' and len(parts) >= 2:
             target = {'database': connection.get('database', ''), 'schema': parts[0], 'table': parts[1]}
         elif provider == 'mongodb':
-            target = {'database': connection.get('database', ''), 'collection': table}
+            configured_database = (connection.get('database') or '').strip()
+            table_name = table.strip()
+
+            mongo_database = configured_database
+            mongo_collection = table_name
+
+            if '.' in table_name:
+                database_part, collection_part = table_name.split('.', 1)
+                if database_part and collection_part:
+                    mongo_database = database_part
+                    mongo_collection = collection_part
+
+            if not mongo_database:
+                return {
+                    'status': 'failed',
+                    'error': 'MongoDB database is required. Set a default database in the connection or use "database.collection" in the table field.',
+                }
+
+            if not mongo_collection:
+                return {'status': 'failed', 'error': 'MongoDB collection name is required'}
+
+            target = {'database': mongo_database, 'collection': mongo_collection}
         else:
             target = {'database': connection.get('database', ''), 'table': table}
 
