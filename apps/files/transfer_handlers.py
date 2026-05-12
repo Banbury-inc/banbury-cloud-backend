@@ -4,6 +4,7 @@ Transfer handlers for copying files between cloud providers (Google Drive, OneDr
 import io
 import os
 import json
+import urllib.parse
 from datetime import datetime
 import boto3
 from botocore.exceptions import ClientError
@@ -43,6 +44,93 @@ def get_onedrive_credentials(user):
     if not onedrive_creds.get('access_token'):
         return None
     return onedrive_creds
+
+
+def get_dropbox_credentials(user):
+    """Get Dropbox credentials from user document."""
+    dropbox_creds = user.get('dropbox_credentials', {})
+    if not dropbox_creds.get('access_token'):
+        return None
+    return dropbox_creds
+
+
+def refresh_dropbox_token_if_needed(dropbox_credentials, user_doc):
+    """
+    Ensure we have a valid Dropbox access token; refresh using refresh_token when required.
+    Returns (access_token, error_message).
+    """
+    if not dropbox_credentials:
+        return None, "No Dropbox credentials found"
+
+    access_token = dropbox_credentials.get('access_token')
+    refresh_token = dropbox_credentials.get('refresh_token')
+    expires_at = dropbox_credentials.get('expires_at')
+
+    if not access_token:
+        return None, "No access token found"
+
+    needs_refresh = False
+    if expires_at:
+        try:
+            from datetime import timedelta
+            expiry_time = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
+            if datetime.now(expiry_time.tzinfo) >= expiry_time - timedelta(minutes=5):
+                needs_refresh = True
+        except (ValueError, TypeError):
+            pass
+
+    if not needs_refresh:
+        return access_token, None
+
+    if not refresh_token:
+        return None, "Token expired and no refresh token available"
+
+    app_key = os.environ.get('DROPBOX_APP_KEY') or os.environ.get('DROPBOX_CLIENT_ID')
+    app_secret = os.environ.get('DROPBOX_APP_SECRET') or os.environ.get('DROPBOX_CLIENT_SECRET')
+
+    if not app_key or not app_secret:
+        return access_token, None
+
+    try:
+        from datetime import timedelta
+        response = requests.post(
+            'https://api.dropboxapi.com/oauth2/token',
+            data={
+                'client_id': app_key,
+                'client_secret': app_secret,
+                'refresh_token': refresh_token,
+                'grant_type': 'refresh_token'
+            },
+            timeout=30
+        )
+
+        if response.status_code == 200:
+            token_response = response.json()
+            new_access_token = token_response.get('access_token')
+            expires_in = token_response.get('expires_in', 14400)
+            new_expires_at = (datetime.utcnow() + timedelta(seconds=expires_in)).isoformat() + 'Z'
+
+            client = get_mongo_client()
+            db = client["NeuraNet"]
+            user_collection = db["users"]
+
+            user_collection.update_one(
+                {"_id": user_doc.get("_id")},
+                {
+                    "$set": {
+                        "dropbox_credentials.access_token": new_access_token,
+                        "dropbox_credentials.expires_at": new_expires_at
+                    }
+                }
+            )
+
+            return new_access_token, None
+
+        return access_token, None
+
+    except Exception as e:
+        print(f"Error refreshing Dropbox token: {e}")
+        return access_token, None
 
 
 def refresh_onedrive_token_if_needed(onedrive_credentials, user_doc):
@@ -386,6 +474,117 @@ def transfer_onedrive_to_s3(request):
 
 @csrf_exempt
 @require_http_methods(["POST"])
+def transfer_dropbox_to_s3(request):
+    """
+    Copy a file from Dropbox to S3 (Banbury Local storage).
+
+    Expects JSON body:
+    - dropbox_path (str): The Dropbox file path or file ID
+
+    Returns:
+    - { result: "success", local_file_id, local_path, file_name }
+    - Or error response
+    """
+    try:
+        username = request.username_from_token
+        if not username:
+            return JsonResponse({"error": "Authentication required"}, status=401)
+
+        data = json.loads(request.body)
+        dropbox_path = data.get('dropbox_path')
+
+        if not dropbox_path:
+            return JsonResponse({"error": "dropbox_path is required"}, status=400)
+
+        client = get_mongo_client()
+        db = client["NeuraNet"]
+        user_collection = db["users"]
+        file_collection = db["files"]
+
+        user = user_collection.find_one({"username": username})
+        if not user:
+            return JsonResponse({"error": "User not found"}, status=404)
+
+        dropbox_creds = get_dropbox_credentials(user)
+        if not dropbox_creds:
+            return JsonResponse({"error": "Dropbox not connected. Please connect Dropbox first."}, status=400)
+
+        access_token, error = refresh_dropbox_token_if_needed(dropbox_creds, user)
+        if error or not access_token:
+            return JsonResponse({"error": error or "Failed to get Dropbox access token"}, status=400)
+
+        headers = {
+            'Authorization': f'Bearer {access_token}',
+            'Dropbox-API-Arg': json.dumps({'path': dropbox_path})
+        }
+
+        download_resp = requests.post(
+            'https://content.dropboxapi.com/2/files/download',
+            headers=headers,
+            timeout=120
+        )
+
+        if download_resp.status_code != 200:
+            return JsonResponse({"error": f"Failed to download file from Dropbox: HTTP {download_resp.status_code}"}, status=500)
+
+        metadata = json.loads(download_resp.headers.get('Dropbox-API-Result', '{}'))
+        file_name = metadata.get('name', os.path.basename(dropbox_path) or 'unknown')
+        file_content = download_resp.content
+        file_size = len(file_content)
+        content_type = download_resp.headers.get('Content-Type', 'application/octet-stream')
+
+        s3_client = get_s3_client()
+        bucket_name = os.environ.get('AWS_S3_BUCKET_NAME')
+
+        unique_path = f"imports/dropbox/{urllib.parse.quote(dropbox_path, safe='')}/{file_name}"
+        timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+        object_key = f"{username}/{timestamp}_{file_name}"
+
+        s3_client.put_object(
+            Bucket=bucket_name,
+            Key=object_key,
+            Body=file_content,
+            ContentType=content_type
+        )
+
+        s3_url = f"https://{bucket_name}.s3.amazonaws.com/{object_key}"
+        current_time = datetime.now().isoformat()
+
+        file_metadata_doc = {
+            "user_id": user["_id"],
+            "device_id": None,
+            "file_type": os.path.splitext(file_name)[1],
+            "file_name": file_name,
+            "file_path": unique_path,
+            "date_uploaded": current_time,
+            "date_modified": current_time,
+            "file_size": file_size,
+            "file_parent": f"imports/dropbox/{urllib.parse.quote(dropbox_path, safe='')}",
+            "original_device": "dropbox-import",
+            "kind": "file",
+            "s3_url": s3_url,
+            "s3_key": object_key,
+            "source_provider": "dropbox",
+            "source_file_id": dropbox_path
+        }
+
+        result = file_collection.insert_one(file_metadata_doc)
+        local_file_id = str(result.inserted_id)
+
+        return JsonResponse({
+            "result": "success",
+            "local_file_id": local_file_id,
+            "local_path": unique_path,
+            "file_name": file_name
+        })
+
+    except Exception as e:
+        print(f"Error in transfer_dropbox_to_s3: {e}")
+        return JsonResponse({"error": f"Failed to copy file: {str(e)}"}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
 def transfer_s3_to_drive(request):
     """
     Copy a file from S3 (Banbury Local) to Google Drive root.
@@ -583,6 +782,115 @@ def transfer_s3_to_onedrive(request):
         
     except Exception as e:
         print(f"Error in transfer_s3_to_onedrive: {e}")
+        return JsonResponse({"error": f"Failed to copy file: {str(e)}"}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def transfer_s3_to_dropbox(request):
+    """
+    Copy a file from S3 (Banbury Local) to Dropbox root or a Dropbox folder.
+
+    Expects JSON body:
+    - s3_file_id (str): The MongoDB file ID for the S3 file
+    - dropbox_parent_path (str, optional): Destination folder path, defaults to root
+
+    Returns:
+    - { result: "success", dropbox_path, dropbox_file_name }
+    - Or error response
+    """
+    try:
+        username = request.username_from_token
+        if not username:
+            return JsonResponse({"error": "Authentication required"}, status=401)
+
+        data = json.loads(request.body)
+        s3_file_id = data.get('s3_file_id')
+
+        if not s3_file_id:
+            return JsonResponse({"error": "s3_file_id is required"}, status=400)
+
+        client = get_mongo_client()
+        db = client["NeuraNet"]
+        user_collection = db["users"]
+        file_collection = db["files"]
+
+        user = user_collection.find_one({"username": username})
+        if not user:
+            return JsonResponse({"error": "User not found"}, status=404)
+
+        dropbox_creds = get_dropbox_credentials(user)
+        if not dropbox_creds:
+            return JsonResponse({"error": "Dropbox not connected. Please connect Dropbox first."}, status=400)
+
+        access_token, error = refresh_dropbox_token_if_needed(dropbox_creds, user)
+        if error or not access_token:
+            return JsonResponse({"error": error or "Failed to get Dropbox access token"}, status=400)
+
+        from bson.objectid import ObjectId
+        try:
+            file_doc = file_collection.find_one({"_id": ObjectId(s3_file_id), "s3_url": {"$exists": True}})
+        except Exception:
+            return JsonResponse({"error": "Invalid file ID format"}, status=400)
+
+        if not file_doc:
+            return JsonResponse({"error": "File not found"}, status=404)
+
+        if file_doc.get("user_id") != user["_id"]:
+            shared_with = file_doc.get("shared_with", [])
+            shared_with_edit = file_doc.get("shared_with_edit", [])
+            if user["_id"] not in shared_with and user["_id"] not in shared_with_edit:
+                return JsonResponse({"error": "Access denied"}, status=403)
+
+        s3_client = get_s3_client()
+        bucket_name = os.environ.get('AWS_S3_BUCKET_NAME')
+        object_key = file_doc.get('s3_key')
+
+        if not object_key:
+            return JsonResponse({"error": "S3 key not found for file"}, status=404)
+
+        try:
+            s3_obj = s3_client.get_object(Bucket=bucket_name, Key=object_key)
+            file_content = s3_obj['Body'].read()
+        except ClientError as e:
+            return JsonResponse({"error": f"Failed to download from S3: {str(e)}"}, status=500)
+
+        file_name = file_doc.get('file_name', 'unknown')
+        parent_path = data.get('dropbox_parent_path', '')
+        if parent_path == '/':
+            parent_path = ''
+        dropbox_path = f"{parent_path.rstrip('/')}/{file_name}" if parent_path else f"/{file_name}"
+
+        headers = {
+            'Authorization': f'Bearer {access_token}',
+            'Content-Type': 'application/octet-stream',
+            'Dropbox-API-Arg': json.dumps({
+                'path': dropbox_path,
+                'mode': 'add',
+                'autorename': True,
+                'mute': False
+            })
+        }
+
+        upload_resp = requests.post(
+            'https://content.dropboxapi.com/2/files/upload',
+            headers=headers,
+            data=file_content,
+            timeout=120
+        )
+
+        if upload_resp.status_code != 200:
+            return JsonResponse({"error": f"Failed to upload to Dropbox: {upload_resp.text}"}, status=500)
+
+        upload_result = upload_resp.json()
+        return JsonResponse({
+            "result": "success",
+            "dropbox_path": upload_result.get("path_display") or upload_result.get("path_lower"),
+            "dropbox_file_name": upload_result.get("name", file_name)
+        })
+
+    except Exception as e:
+        print(f"Error in transfer_s3_to_dropbox: {e}")
         return JsonResponse({"error": f"Failed to copy file: {str(e)}"}, status=500)
 
 

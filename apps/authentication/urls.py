@@ -4,6 +4,8 @@ from . import slack_views
 from . import github_views
 from . import outlook_views
 from . import onedrive_views
+from . import notion_views
+from . import dropbox_views
 
 urlpatterns = [
     path("login/", views.login, name="login"),
@@ -105,6 +107,19 @@ urlpatterns = [
     path('github/repos/<str:owner>/<str:repo>/contents/', github_views.github_get_file_contents, name='github_get_file_contents'),
     path('github/issues/create/', github_views.github_create_issue, name='github_create_issue'),
     path('github/search/code/', github_views.github_search_code, name='github_search_code'),
+    # Notion OAuth endpoints
+    path('notion/status/', notion_views.notion_connection_status, name='notion_connection_status'),
+    path('notion/initiate_oauth/', notion_views.notion_initiate_oauth, name='notion_initiate_oauth'),
+    path('notion/oauth_callback/', notion_views.notion_oauth_callback, name='notion_oauth_callback'),
+    path('notion/disconnect/', notion_views.notion_disconnect, name='notion_disconnect'),
+    # Notion API proxy endpoints
+    path('notion/search/', notion_views.notion_search, name='notion_search'),
+    path('notion/pages/', notion_views.notion_create_page, name='notion_create_page'),
+    path('notion/pages/<str:page_id>/', notion_views.notion_get_page, name='notion_get_page'),
+    path('notion/pages/<str:page_id>/blocks/', notion_views.notion_get_page_blocks, name='notion_get_page_blocks'),
+    path('notion/data_sources/<str:data_source_id>/query/', notion_views.notion_query_data_source, name='notion_query_data_source'),
+    path('notion/data_sources/<str:data_source_id>/templates/', notion_views.notion_list_templates, name='notion_list_templates'),
+    path('notion/data_sources/<str:data_source_id>/pages_from_template/', notion_views.notion_create_page_from_template, name='notion_create_page_from_template'),
     # Outlook OAuth endpoints
     path('outlook/status/', outlook_views.outlook_connection_status, name='outlook_connection_status'),
     path('outlook/initiate_oauth/', outlook_views.outlook_initiate_oauth, name='outlook_initiate_oauth'),
@@ -152,4 +167,20 @@ urlpatterns = [
     # OneDrive Banbury-managed trash
     path('onedrive/trash/', onedrive_views.onedrive_trash_list, name='onedrive_trash_list'),
     path('onedrive/trash/clear/', onedrive_views.onedrive_trash_clear, name='onedrive_trash_clear'),
+    # Dropbox OAuth endpoints
+    path('dropbox/status/', dropbox_views.dropbox_connection_status, name='dropbox_connection_status'),
+    path('dropbox/initiate_oauth/', dropbox_views.dropbox_initiate_oauth, name='dropbox_initiate_oauth'),
+    path('dropbox/oauth_callback/', dropbox_views.dropbox_oauth_callback, name='dropbox_oauth_callback'),
+    path('dropbox/disconnect/', dropbox_views.dropbox_disconnect, name='dropbox_disconnect'),
+    # Dropbox file proxy endpoints
+    path('dropbox/list_folder/', dropbox_views.dropbox_list_folder, name='dropbox_list_folder'),
+    path('dropbox/search/', dropbox_views.dropbox_search_files, name='dropbox_search_files'),
+    path('dropbox/metadata/', dropbox_views.dropbox_get_metadata, name='dropbox_get_metadata'),
+    path('dropbox/download/', dropbox_views.dropbox_download_file, name='dropbox_download_file'),
+    path('dropbox/upload/', dropbox_views.dropbox_upload_file, name='dropbox_upload_file'),
+    path('dropbox/folders/create/', dropbox_views.dropbox_create_folder, name='dropbox_create_folder'),
+    path('dropbox/delete/', dropbox_views.dropbox_delete_item, name='dropbox_delete_item'),
+    path('dropbox/move/', dropbox_views.dropbox_move_item, name='dropbox_move_item'),
+    path('dropbox/share_link/', dropbox_views.dropbox_create_share_link, name='dropbox_create_share_link'),
+    path('dropbox/trash/', dropbox_views.dropbox_trash_list, name='dropbox_trash_list'),
 ]

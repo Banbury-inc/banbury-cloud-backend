@@ -66,8 +66,10 @@ urlpatterns = [
     # Cloud transfer endpoints (copy between providers)
     path("transfer/drive_to_s3/", transfer_handlers.transfer_drive_to_s3, name="transfer_drive_to_s3"),
     path("transfer/onedrive_to_s3/", transfer_handlers.transfer_onedrive_to_s3, name="transfer_onedrive_to_s3"),
+    path("transfer/dropbox_to_s3/", transfer_handlers.transfer_dropbox_to_s3, name="transfer_dropbox_to_s3"),
     path("transfer/s3_to_drive/", transfer_handlers.transfer_s3_to_drive, name="transfer_s3_to_drive"),
     path("transfer/s3_to_onedrive/", transfer_handlers.transfer_s3_to_onedrive, name="transfer_s3_to_onedrive"),
+    path("transfer/s3_to_dropbox/", transfer_handlers.transfer_s3_to_dropbox, name="transfer_s3_to_dropbox"),
     # Save as PDF endpoint
     path("save_as_pdf/", transfer_handlers.save_as_pdf, name="save_as_pdf"),
 ]

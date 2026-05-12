@@ -7,6 +7,9 @@ Users can connect their GitHub accounts and perform various GitHub operations th
 
 import json
 import os
+import urllib.parse
+import uuid
+
 import requests
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -18,7 +21,13 @@ from rest_framework_simplejwt.tokens import AccessToken
 def get_mongo_client():
     """Get MongoDB client instance."""
     mongo_uri = os.environ.get('MONGO_URI', 'mongodb://localhost:27017/')
-    return MongoClient(mongo_uri)
+    return MongoClient(
+        mongo_uri,
+        serverSelectionTimeoutMS=5000,
+        connectTimeoutMS=5000,
+        socketTimeoutMS=10000,
+        waitQueueTimeoutMS=5000
+    )
 
 
 def get_user_from_token(request):
@@ -124,7 +133,6 @@ def github_initiate_oauth(request):
             return JsonResponse({'error': 'GitHub credentials not configured'}, status=500)
 
         # Generate state parameter to prevent CSRF
-        import uuid
         state = str(uuid.uuid4())
         
         # Store state temporarily in user document
@@ -151,14 +159,13 @@ def github_initiate_oauth(request):
             'notifications',  # Access notifications
         ]
         
-        # Generate authorization URL
-        auth_url = (
-            f"https://github.com/login/oauth/authorize?"
-            f"client_id={github_client_id}"
-            f"&redirect_uri={callback_url}"
-            f"&scope={' '.join(scopes)}"
-            f"&state={state}"
-        )
+        query_params = urllib.parse.urlencode({
+            'client_id': github_client_id,
+            'redirect_uri': callback_url,
+            'scope': ' '.join(scopes),
+            'state': state
+        })
+        auth_url = f"https://github.com/login/oauth/authorize?{query_params}"
         
         return JsonResponse({
             'auth_url': auth_url
