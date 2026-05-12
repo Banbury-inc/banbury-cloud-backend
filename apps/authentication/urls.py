@@ -135,6 +135,15 @@ urlpatterns = [
     path('outlook/messages/<str:message_id>/modify/', outlook_views.outlook_modify_message, name='outlook_modify_message'),
     path('outlook/messages/<str:message_id>/attachments/<str:attachment_id>', outlook_views.outlook_get_attachment, name='outlook_get_attachment'),
     path('outlook/thread/<str:conversation_id>/', outlook_views.outlook_get_thread, name='outlook_get_thread'),
+    # Microsoft Teams API proxy endpoints via existing Outlook/Microsoft Graph auth
+    path('outlook/teams/status/', outlook_views.outlook_teams_status, name='outlook_teams_status'),
+    path('outlook/teams/', outlook_views.outlook_teams_list, name='outlook_teams_list'),
+    path('outlook/teams/chats/', outlook_views.outlook_teams_chats, name='outlook_teams_chats'),
+    path('outlook/teams/<str:team_id>/channels/', outlook_views.outlook_teams_channels, name='outlook_teams_channels'),
+    path('outlook/teams/<str:team_id>/channels/<str:channel_id>/messages/', outlook_views.outlook_teams_channel_messages, name='outlook_teams_channel_messages'),
+    path('outlook/teams/<str:team_id>/channels/<str:channel_id>/messages/<str:message_id>/', outlook_views.outlook_teams_channel_message_detail, name='outlook_teams_channel_message_detail'),
+    path('outlook/teams/<str:team_id>/channels/<str:channel_id>/messages/<str:message_id>/replies/', outlook_views.outlook_teams_channel_message_replies, name='outlook_teams_channel_message_replies'),
+    path('outlook/teams/<str:team_id>/members/', outlook_views.outlook_teams_members, name='outlook_teams_members'),
     # Outlook Calendar API proxy endpoints
     path('outlook/calendar/status/', outlook_views.outlook_calendar_status, name='outlook_calendar_status'),
     path('outlook/calendars/', outlook_views.outlook_list_calendars, name='outlook_list_calendars'),

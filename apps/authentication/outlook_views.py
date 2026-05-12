@@ -13,6 +13,35 @@ from pymongo import MongoClient
 from rest_framework_simplejwt.tokens import AccessToken
 import requests
 
+OUTLOOK_GRAPH_SCOPES = [
+    'openid',
+    'profile',
+    'email',
+    'offline_access',
+    'Mail.Read',
+    'Mail.ReadWrite',
+    'Mail.Send',
+    'User.Read',
+    'Calendars.ReadWrite',
+    'Team.ReadBasic.All',
+    'Channel.ReadBasic.All',
+    'ChannelMessage.Read.All',
+    'ChannelMessage.Send',
+    'Chat.Read',
+    'ChatMessage.Send',
+    'User.ReadBasic.All'
+]
+
+TEAMS_SCOPE_NAMES = [
+    'Team.ReadBasic.All',
+    'Channel.ReadBasic.All',
+    'ChannelMessage.Read.All',
+    'ChannelMessage.Send',
+    'Chat.Read',
+    'ChatMessage.Send',
+    'User.ReadBasic.All'
+]
+
 
 # MongoDB connection
 def get_mongo_client():
@@ -107,7 +136,7 @@ def _refresh_outlook_access_token_if_needed(outlook_credentials, user_doc):
             'client_secret': ms_client_secret,
             'refresh_token': refresh_token,
             'grant_type': 'refresh_token',
-            'scope': outlook_credentials.get('scope', 'Mail.Read Mail.ReadWrite Mail.Send User.Read Calendars.ReadWrite offline_access')
+            'scope': outlook_credentials.get('scope', ' '.join(OUTLOOK_GRAPH_SCOPES))
         }
         
         response = requests.post(token_url, data=token_data, timeout=30)
@@ -314,26 +343,13 @@ def outlook_initiate_oauth(request):
             }
         )
         
-        # Required Microsoft OAuth scopes for mail and calendar
-        scopes = [
-            'openid',
-            'profile',
-            'email',
-            'offline_access',
-            'Mail.Read',
-            'Mail.ReadWrite',
-            'Mail.Send',
-            'User.Read',
-            'Calendars.ReadWrite'
-        ]
-        
         # Generate authorization URL (using common tenant for multi-tenant)
         auth_url = (
             f"https://login.microsoftonline.com/common/oauth2/v2.0/authorize?"
             f"client_id={ms_client_id}"
             f"&response_type=code"
             f"&redirect_uri={urllib.parse.quote(callback_url, safe='')}"
-            f"&scope={urllib.parse.quote(' '.join(scopes), safe='')}"
+            f"&scope={urllib.parse.quote(' '.join(OUTLOOK_GRAPH_SCOPES), safe='')}"
             f"&state={state}"
             f"&response_mode=query"
         )
@@ -977,6 +993,384 @@ def outlook_get_thread(request, conversation_id):
         'result': 'success',
         'id': conversation_id,
         'messages': messages
+    })
+
+
+# ============================================================================
+# MICROSOFT TEAMS API PROXY ENDPOINTS
+# ============================================================================
+
+def _quote_graph_path_segment(value):
+    """URL-encode Microsoft Graph path IDs without treating slashes as safe."""
+    return urllib.parse.quote(str(value), safe='')
+
+
+def _get_outlook_access_token_for_graph(request):
+    """Authenticate the request and return a refreshed Microsoft Graph access token."""
+    user, error_response = get_user_from_token(request)
+    if error_response:
+        return None, error_response
+
+    outlook_creds = get_outlook_credentials(user)
+    if not outlook_creds:
+        return None, JsonResponse({'error': 'Microsoft account not connected'}, status=400)
+
+    access_token, error = _refresh_outlook_access_token_if_needed(outlook_creds, user)
+    if error or not access_token:
+        return None, JsonResponse({'error': error or 'Failed to get access token'}, status=400)
+
+    return access_token, None
+
+
+def _get_next_page_token(graph_data):
+    """Extract a compact pagination token from Microsoft Graph nextLink."""
+    next_link = graph_data.get('@odata.nextLink')
+    if not next_link:
+        return None
+
+    parsed = urllib.parse.urlparse(next_link)
+    query = urllib.parse.parse_qs(parsed.query)
+    for key in ('$skiptoken', '$skip'):
+        value = query.get(key)
+        if value:
+            return value[0]
+    return None
+
+
+def _normalize_teams_team(team):
+    return {
+        'id': team.get('id'),
+        'displayName': team.get('displayName'),
+        'description': team.get('description'),
+        'webUrl': team.get('webUrl')
+    }
+
+
+def _normalize_teams_channel(channel):
+    return {
+        'id': channel.get('id'),
+        'displayName': channel.get('displayName'),
+        'description': channel.get('description'),
+        'membershipType': channel.get('membershipType'),
+        'email': channel.get('email'),
+        'webUrl': channel.get('webUrl')
+    }
+
+
+def _normalize_teams_message(message):
+    body = message.get('body') or {}
+    from_user = (message.get('from') or {}).get('user') or {}
+    return {
+        'id': message.get('id'),
+        'replyToId': message.get('replyToId'),
+        'etag': message.get('etag'),
+        'messageType': message.get('messageType'),
+        'createdDateTime': message.get('createdDateTime'),
+        'lastModifiedDateTime': message.get('lastModifiedDateTime'),
+        'deletedDateTime': message.get('deletedDateTime'),
+        'subject': message.get('subject'),
+        'summary': message.get('summary'),
+        'importance': message.get('importance'),
+        'locale': message.get('locale'),
+        'webUrl': message.get('webUrl'),
+        'body': {
+            'contentType': body.get('contentType'),
+            'content': body.get('content')
+        },
+        'from': {
+            'id': from_user.get('id'),
+            'displayName': from_user.get('displayName'),
+            'userIdentityType': from_user.get('userIdentityType')
+        },
+        'attachments': message.get('attachments', []),
+        'mentions': message.get('mentions', [])
+    }
+
+
+def _normalize_teams_member(member):
+    return {
+        'id': member.get('id'),
+        'userId': member.get('userId'),
+        'displayName': member.get('displayName'),
+        'email': member.get('email'),
+        'roles': member.get('roles', [])
+    }
+
+
+def _normalize_teams_chat(chat):
+    return {
+        'id': chat.get('id'),
+        'topic': chat.get('topic'),
+        'chatType': chat.get('chatType'),
+        'createdDateTime': chat.get('createdDateTime'),
+        'lastUpdatedDateTime': chat.get('lastUpdatedDateTime'),
+        'webUrl': chat.get('webUrl')
+    }
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def outlook_teams_status(request):
+    """Get Microsoft Teams scope status from the existing Outlook Graph connection."""
+    access_token, error_response = _get_outlook_access_token_for_graph(request)
+    if error_response:
+        return error_response
+
+    user, user_error_response = get_user_from_token(request)
+    if user_error_response:
+        return user_error_response
+
+    outlook_creds = get_outlook_credentials(user)
+    stored_scope = outlook_creds.get('scope', '') if outlook_creds else ''
+    has_teams_scope = all(scope in stored_scope for scope in TEAMS_SCOPE_NAMES)
+
+    data, error = make_graph_api_request("https://graph.microsoft.com/v1.0/me", access_token)
+    if error or not data:
+        return JsonResponse({
+            'connected': False,
+            'hasTeamsScope': False,
+            'needsReconnect': False
+        })
+
+    return JsonResponse({
+        'connected': True,
+        'hasTeamsScope': has_teams_scope,
+        'needsReconnect': not has_teams_scope,
+        'accountEmail': data.get('mail') or data.get('userPrincipalName'),
+        'accountName': data.get('displayName')
+    })
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def outlook_teams_list(request):
+    """List Microsoft Teams joined by the connected user."""
+    access_token, error_response = _get_outlook_access_token_for_graph(request)
+    if error_response:
+        return error_response
+
+    max_results = request.GET.get('maxResults', '50')
+    page_token = request.GET.get('pageToken')
+    params = {
+        '$top': max_results,
+        '$select': 'id,displayName,description,webUrl'
+    }
+    if page_token:
+        params['$skiptoken'] = page_token
+
+    data, error = make_graph_api_request("https://graph.microsoft.com/v1.0/me/joinedTeams", access_token, params=params)
+    if error:
+        return JsonResponse({'error': error}, status=500)
+
+    return JsonResponse({
+        'teams': [_normalize_teams_team(team) for team in data.get('value', [])],
+        'nextPageToken': _get_next_page_token(data)
+    })
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def outlook_teams_channels(request, team_id):
+    """List channels for a Microsoft Team."""
+    access_token, error_response = _get_outlook_access_token_for_graph(request)
+    if error_response:
+        return error_response
+
+    max_results = request.GET.get('maxResults', '50')
+    page_token = request.GET.get('pageToken')
+    params = {
+        '$top': max_results,
+        '$select': 'id,displayName,description,membershipType,email,webUrl'
+    }
+    if page_token:
+        params['$skiptoken'] = page_token
+
+    encoded_team_id = _quote_graph_path_segment(team_id)
+    url = f"https://graph.microsoft.com/v1.0/teams/{encoded_team_id}/channels"
+    data, error = make_graph_api_request(url, access_token, params=params)
+    if error:
+        return JsonResponse({'error': error}, status=500)
+
+    return JsonResponse({
+        'channels': [_normalize_teams_channel(channel) for channel in data.get('value', [])],
+        'nextPageToken': _get_next_page_token(data)
+    })
+
+
+@csrf_exempt
+@require_http_methods(["GET", "POST"])
+def outlook_teams_channel_messages(request, team_id, channel_id):
+    """List or send messages in a Microsoft Teams channel."""
+    access_token, error_response = _get_outlook_access_token_for_graph(request)
+    if error_response:
+        return error_response
+
+    encoded_team_id = _quote_graph_path_segment(team_id)
+    encoded_channel_id = _quote_graph_path_segment(channel_id)
+    url = f"https://graph.microsoft.com/v1.0/teams/{encoded_team_id}/channels/{encoded_channel_id}/messages"
+
+    if request.method == "GET":
+        max_results = request.GET.get('maxResults', '20')
+        page_token = request.GET.get('pageToken')
+        params = {'$top': max_results}
+        if page_token:
+            params['$skiptoken'] = page_token
+
+        data, error = make_graph_api_request(url, access_token, params=params)
+        if error:
+            return JsonResponse({'error': error}, status=500)
+
+        return JsonResponse({
+            'messages': [_normalize_teams_message(message) for message in data.get('value', [])],
+            'nextPageToken': _get_next_page_token(data)
+        })
+
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    content = payload.get('content')
+    if not content:
+        return JsonResponse({'error': 'content is required'}, status=400)
+
+    content_type = payload.get('contentType', 'text')
+    message_payload = {
+        'body': {
+            'contentType': content_type,
+            'content': content
+        }
+    }
+
+    data, error = make_graph_api_request(url, access_token, method='POST', data=message_payload)
+    if error:
+        return JsonResponse({'error': error}, status=500)
+
+    return JsonResponse({'message': _normalize_teams_message(data)})
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def outlook_teams_channel_message_detail(request, team_id, channel_id, message_id):
+    """Get details for a single Microsoft Teams channel message."""
+    access_token, error_response = _get_outlook_access_token_for_graph(request)
+    if error_response:
+        return error_response
+
+    encoded_team_id = _quote_graph_path_segment(team_id)
+    encoded_channel_id = _quote_graph_path_segment(channel_id)
+    encoded_message_id = _quote_graph_path_segment(message_id)
+    url = f"https://graph.microsoft.com/v1.0/teams/{encoded_team_id}/channels/{encoded_channel_id}/messages/{encoded_message_id}"
+    data, error = make_graph_api_request(url, access_token)
+    if error:
+        return JsonResponse({'error': error}, status=500)
+
+    return JsonResponse({'message': _normalize_teams_message(data)})
+
+
+@csrf_exempt
+@require_http_methods(["GET", "POST"])
+def outlook_teams_channel_message_replies(request, team_id, channel_id, message_id):
+    """List or send replies to a Microsoft Teams channel message."""
+    access_token, error_response = _get_outlook_access_token_for_graph(request)
+    if error_response:
+        return error_response
+
+    encoded_team_id = _quote_graph_path_segment(team_id)
+    encoded_channel_id = _quote_graph_path_segment(channel_id)
+    encoded_message_id = _quote_graph_path_segment(message_id)
+    url = f"https://graph.microsoft.com/v1.0/teams/{encoded_team_id}/channels/{encoded_channel_id}/messages/{encoded_message_id}/replies"
+
+    if request.method == "GET":
+        max_results = request.GET.get('maxResults', '20')
+        page_token = request.GET.get('pageToken')
+        params = {'$top': max_results}
+        if page_token:
+            params['$skiptoken'] = page_token
+
+        data, error = make_graph_api_request(url, access_token, params=params)
+        if error:
+            return JsonResponse({'error': error}, status=500)
+
+        return JsonResponse({
+            'replies': [_normalize_teams_message(message) for message in data.get('value', [])],
+            'nextPageToken': _get_next_page_token(data)
+        })
+
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    content = payload.get('content')
+    if not content:
+        return JsonResponse({'error': 'content is required'}, status=400)
+
+    content_type = payload.get('contentType', 'text')
+    reply_payload = {
+        'body': {
+            'contentType': content_type,
+            'content': content
+        }
+    }
+
+    data, error = make_graph_api_request(url, access_token, method='POST', data=reply_payload)
+    if error:
+        return JsonResponse({'error': error}, status=500)
+
+    return JsonResponse({'reply': _normalize_teams_message(data)})
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def outlook_teams_members(request, team_id):
+    """List members of a Microsoft Team."""
+    access_token, error_response = _get_outlook_access_token_for_graph(request)
+    if error_response:
+        return error_response
+
+    max_results = request.GET.get('maxResults', '50')
+    page_token = request.GET.get('pageToken')
+    params = {'$top': max_results}
+    if page_token:
+        params['$skiptoken'] = page_token
+
+    encoded_team_id = _quote_graph_path_segment(team_id)
+    url = f"https://graph.microsoft.com/v1.0/teams/{encoded_team_id}/members"
+    data, error = make_graph_api_request(url, access_token, params=params)
+    if error:
+        return JsonResponse({'error': error}, status=500)
+
+    return JsonResponse({
+        'members': [_normalize_teams_member(member) for member in data.get('value', [])],
+        'nextPageToken': _get_next_page_token(data)
+    })
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def outlook_teams_chats(request):
+    """List Microsoft Teams chats available through delegated Graph access."""
+    access_token, error_response = _get_outlook_access_token_for_graph(request)
+    if error_response:
+        return error_response
+
+    max_results = request.GET.get('maxResults', '50')
+    page_token = request.GET.get('pageToken')
+    params = {
+        '$top': max_results,
+        '$select': 'id,topic,chatType,createdDateTime,lastUpdatedDateTime,webUrl'
+    }
+    if page_token:
+        params['$skiptoken'] = page_token
+
+    data, error = make_graph_api_request("https://graph.microsoft.com/v1.0/me/chats", access_token, params=params)
+    if error:
+        return JsonResponse({'error': error}, status=500)
+
+    return JsonResponse({
+        'chats': [_normalize_teams_chat(chat) for chat in data.get('value', [])],
+        'nextPageToken': _get_next_page_token(data)
     })
 
 

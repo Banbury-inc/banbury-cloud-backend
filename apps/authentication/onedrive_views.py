@@ -712,8 +712,9 @@ def onedrive_update_file(request, item_id):
     if error or not access_token:
         return JsonResponse({'error': error or 'Failed to get access token'}, status=400)
     
-    # Get file content from request body
-    content = request.body
+    # Accept both the raw-content contract and the older multipart wrapper shape.
+    uploaded_file = request.FILES.get('file')
+    content = uploaded_file.read() if uploaded_file else request.body
     
     if len(content) > 4 * 1024 * 1024:  # 4MB limit for simple upload
         return JsonResponse({
