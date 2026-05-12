@@ -17,6 +17,7 @@ meeting_platforms_collection = db["meeting_platforms"]
 meeting_sessions_collection = db["meeting_sessions"]
 meeting_configs_collection = db["meeting_agent_configs"]
 meeting_status_collection = db["meeting_agent_status"]
+users_collection = db["users"]
 
 
 class MeetingPlatform:
@@ -109,6 +110,8 @@ class MeetingSession:
             session_data.setdefault("participants", [])
             session_data.setdefault("transcription_segments", [])
             session_data.setdefault("metadata", {})
+            session_data.setdefault("shared_with", [])
+            session_data.setdefault("shared_with_edit", [])
             session_data.setdefault("s3_upload", {
                 "video_uploaded": False,
                 "transcript_uploaded": False,
@@ -255,6 +258,115 @@ class MeetingSession:
                 "success": result.deleted_count > 0,
                 "message": "Session deleted successfully" if result.deleted_count > 0 else "Session not found"
             }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e)
+            }
+
+    @staticmethod
+    def rename_session(session_id, user_id, title):
+        """Rename a session owned by the user"""
+        try:
+            normalized_title = title.strip()
+            if not normalized_title:
+                return {
+                    "success": False,
+                    "error": "Meeting title is required"
+                }
+
+            result = meeting_sessions_collection.update_one(
+                {
+                    "session_id": session_id,
+                    "user_id": user_id
+                },
+                {
+                    "$set": {
+                        "title": normalized_title,
+                        "updated_at": datetime.utcnow()
+                    }
+                }
+            )
+
+            if result.matched_count == 0:
+                return {
+                    "success": False,
+                    "error": "Session not found"
+                }
+
+            return {
+                "success": True,
+                "message": "Meeting renamed successfully"
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e)
+            }
+
+    @staticmethod
+    def share_session(session_id, user_id, recipients, access="edit"):
+        """Share a session owned by the user with recipient users"""
+        try:
+            session = meeting_sessions_collection.find_one({
+                "session_id": session_id,
+                "user_id": user_id
+            })
+
+            if not session:
+                return {
+                    "success": False,
+                    "error": "Session not found"
+                }
+
+            recipient_ids = []
+            not_found_users = []
+
+            for recipient in recipients:
+                recipient_username = recipient.get("username")
+                if not recipient_username:
+                    continue
+
+                recipient_user = users_collection.find_one({"username": recipient_username})
+                if recipient_user:
+                    recipient_ids.append(recipient_user["_id"])
+                else:
+                    not_found_users.append(recipient_username)
+
+            if not recipient_ids:
+                return {
+                    "success": False,
+                    "error": "No valid recipients found",
+                    "not_found_users": not_found_users
+                }
+
+            add_to_set = {
+                "shared_with": {"$each": recipient_ids}
+            }
+
+            if access == "edit":
+                add_to_set["shared_with_edit"] = {"$each": recipient_ids}
+
+            meeting_sessions_collection.update_one(
+                {"session_id": session_id},
+                {
+                    "$addToSet": add_to_set,
+                    "$set": {
+                        "updated_at": datetime.utcnow()
+                    }
+                }
+            )
+
+            response = {
+                "success": True,
+                "message": f"Meeting shared with {len(recipient_ids)} user(s)",
+                "shared_with_count": len(recipient_ids)
+            }
+
+            if not_found_users:
+                response["not_found_users"] = not_found_users
+
+            return response
         except Exception as e:
             return {
                 "success": False,

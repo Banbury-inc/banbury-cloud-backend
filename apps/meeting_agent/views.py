@@ -1348,6 +1348,98 @@ def delete_meeting_session(request, session_id):
 
 
 @csrf_exempt
+@require_http_methods(["POST"])
+def rename_meeting_session(request, session_id):
+    """Rename a meeting session owned by the authenticated user"""
+    try:
+        username = getattr(request, 'username_from_token', None)
+        if not username:
+            return JsonResponse({
+                'success': False,
+                'message': 'Authentication required'
+            }, status=401)
+
+        data = json.loads(request.body)
+        title = data.get('title', '')
+
+        result = MeetingSession.rename_session(session_id, username, title)
+        if not result["success"]:
+            return JsonResponse({
+                'success': False,
+                'message': result.get("error", "Failed to rename meeting")
+            }, status=400 if result.get("error") == "Meeting title is required" else 404)
+
+        return JsonResponse({
+            'success': True,
+            'message': result["message"]
+        })
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'message': 'Invalid request body'
+        }, status=400)
+    except Exception as e:
+        logger.error(f"Failed to rename session: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'message': f'Failed to rename session: {str(e)}'
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def share_meeting_session(request, session_id):
+    """Share a meeting session owned by the authenticated user"""
+    try:
+        username = getattr(request, 'username_from_token', None)
+        if not username:
+            return JsonResponse({
+                'result': 'error',
+                'error': 'Authentication required'
+            }, status=401)
+
+        data = json.loads(request.body)
+        recipients = data.get('recipients', [])
+        access = data.get('access', 'edit')
+
+        if not recipients or not isinstance(recipients, list):
+            return JsonResponse({
+                'result': 'error',
+                'error': 'Missing or invalid recipients list'
+            }, status=400)
+
+        result = MeetingSession.share_session(session_id, username, recipients, access)
+        if not result["success"]:
+            return JsonResponse({
+                'result': 'error',
+                'error': result.get("error", "Failed to share meeting"),
+                'not_found_users': result.get("not_found_users", [])
+            }, status=400 if result.get("error") == "No valid recipients found" else 404)
+
+        response = {
+            'result': 'success',
+            'message': result["message"],
+            'shared_with_count': result.get("shared_with_count", 0)
+        }
+
+        if result.get("not_found_users"):
+            response['not_found_users'] = result["not_found_users"]
+
+        return JsonResponse(response)
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'result': 'error',
+            'error': 'Invalid request body'
+        }, status=400)
+    except Exception as e:
+        logger.error(f"Failed to share session: {str(e)}")
+        return JsonResponse({
+            'result': 'error',
+            'error': f'Failed to share session: {str(e)}'
+        }, status=500)
+
+
+@csrf_exempt
 @require_http_methods(["GET", "PUT"])
 def agent_config(request):
     """Get or update meeting agent configuration"""

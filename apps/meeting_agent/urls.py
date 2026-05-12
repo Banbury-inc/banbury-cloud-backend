@@ -17,6 +17,8 @@ urlpatterns = [
     path('sessions/<str:session_id>/recording/download/', views.download_recording, name='download_recording'),
     path('sessions/<str:session_id>/leave/', views.leave_meeting, name='leave_meeting'),
     path('sessions/<str:session_id>/delete/', views.delete_meeting_session, name='delete_meeting_session'),
+    path('sessions/<str:session_id>/rename/', views.rename_meeting_session, name='rename_meeting_session'),
+    path('sessions/<str:session_id>/share/', views.share_meeting_session, name='share_meeting_session'),
     path('sessions/<str:session_id>/', views.get_meeting_session, name='get_meeting_session'),
     
     # Alternative shorter paths for easier frontend access
