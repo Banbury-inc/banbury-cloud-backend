@@ -19,6 +19,7 @@ urlpatterns = [
     path('databases/', include('apps.databases.urls')),
     path('meeting-agent/', include('apps.meeting_agent.urls')),
     path('flows/', include('apps.flows.urls')),
+    path('skills/', include('apps.skills.urls')),
     path('ws/', include(websocket_urlpatterns)),
     path('health/', HealthCheckView.as_view(), name='health_check'),
 ]
