@@ -15,7 +15,8 @@ def get_settings(request):
     try:
         username = request.username_from_token
         response = db_get_settings(username)
-        return JsonResponse(response)
+        json_data = json.loads(dumps(response))
+        return JsonResponse(json_data, safe=True)
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
 
@@ -27,14 +28,29 @@ def update_settings(request):
     """Updates settings for a given username."""
     try:
         data = json.loads(request.body)
-        sync_entire_device_checked = data.get("sync_entire_device_checked")
-        predicted_upload_speed_weighting = data.get("predicted_upload_speed_weighting")
-        predicted_download_speed_weighting = data.get("predicted_download_speed_weighting")
-        predicted_cpu_usage_weighting = data.get("predicted_cpu_usage_weighting")
-        predicted_ram_usage_weighting = data.get("predicted_ram_usage_weighting")
-        predicted_gpu_usage_weighting = data.get("predicted_gpu_usage_weighting")
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+    allowed_settings = [
+        "sync_entire_device_checked",
+        "predicted_upload_speed_weighting",
+        "predicted_download_speed_weighting",
+        "predicted_cpu_usage_weighting",
+        "predicted_ram_usage_weighting",
+        "predicted_gpu_usage_weighting",
+        "marketing_emails_enabled",
+    ]
+    settings_data = {
+        setting: data[setting]
+        for setting in allowed_settings
+        if setting in data
+    }
+
+    if not settings_data:
+        return JsonResponse({"error": "No settings provided."}, status=400)
+
+    if "marketing_emails_enabled" in settings_data and not isinstance(settings_data["marketing_emails_enabled"], bool):
+        return JsonResponse({"error": "marketing_emails_enabled must be a boolean."}, status=400)
 
     uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
@@ -53,15 +69,6 @@ def update_settings(request):
     existing_settings = settings_collection.find_one({
         "user_id": user_id
     })
-
-    settings_data = {
-        "sync_entire_device_checked": sync_entire_device_checked,
-        "predicted_upload_speed_weighting": predicted_upload_speed_weighting,
-        "predicted_download_speed_weighting": predicted_download_speed_weighting,
-        "predicted_cpu_usage_weighting": predicted_cpu_usage_weighting,
-        "predicted_ram_usage_weighting": predicted_ram_usage_weighting,
-        "predicted_gpu_usage_weighting": predicted_gpu_usage_weighting,
-    }
 
     try:
         if existing_settings:
@@ -82,7 +89,7 @@ def update_settings(request):
         return JsonResponse({
             "result": "success",
             "message": message,
-            "username": request.username.from_token,
+            "username": request.username_from_token,
         })
 
     except Exception as e:

@@ -19,6 +19,10 @@ from rest_framework_simplejwt.tokens import AccessToken
 
 NOTION_API_BASE_URL = "https://api.notion.com/v1"
 NOTION_API_VERSION = os.environ.get("NOTION_API_VERSION", "2022-06-28")
+NOTION_MEETING_SUMMARY_DATABASE_ID = os.environ.get(
+    "NOTION_MEETING_SUMMARY_DATABASE_ID",
+    "35f1d300a72480908ab7de360cf72bc4",
+)
 
 
 def get_mongo_client():
@@ -138,6 +142,48 @@ def get_bounded_int(value, default, maximum):
         return min(int(value), maximum)
     except (TypeError, ValueError):
         return default
+
+
+def get_required_string(body, field_name):
+    """Read a required string field from a parsed JSON body."""
+    value = body.get(field_name)
+    if not isinstance(value, str) or not value.strip():
+        return None
+    return value.strip()
+
+
+def build_summary_database_properties(name, summary, sentiment, timestamp):
+    """Build Notion database properties for the meeting summary row."""
+    return {
+        "Name": {
+            "title": [
+                {
+                    "text": {
+                        "content": name,
+                    },
+                }
+            ],
+        },
+        "Summary": {
+            "rich_text": [
+                {
+                    "text": {
+                        "content": summary,
+                    },
+                }
+            ],
+        },
+        "Sentiment": {
+            "select": {
+                "name": sentiment,
+            },
+        },
+        "Timestamp": {
+            "date": {
+                "start": timestamp,
+            },
+        },
+    }
 
 
 @csrf_exempt
@@ -491,6 +537,58 @@ def notion_create_page(request):
         notion_creds["access_token"],
         method="POST",
         data=body,
+    )
+    if error:
+        return JsonResponse({"error": error}, status=status_code)
+
+    return JsonResponse(data, status=201)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def notion_append_summary(request):
+    """Append a meeting summary entry to the configured Notion database."""
+    _, notion_creds, error_response = get_authenticated_notion_credentials(request)
+    if error_response:
+        return error_response
+
+    body = parse_json_body(request)
+    if body is None:
+        return JsonResponse({"error": "Invalid JSON body"}, status=400)
+
+    name = get_required_string(body, "Name")
+    summary = get_required_string(body, "Summary")
+    sentiment = get_required_string(body, "Sentiment")
+    timestamp = get_required_string(body, "Timestamp")
+    missing_fields = [
+        field_name for field_name, field_value in {
+            "Name": name,
+            "Summary": summary,
+            "Sentiment": sentiment,
+            "Timestamp": timestamp,
+        }.items()
+        if field_value is None
+    ]
+    if missing_fields:
+        return JsonResponse({
+            "error": "Missing required fields",
+            "fields": missing_fields,
+        }, status=400)
+
+    notion_body = {
+        "parent": {"database_id": NOTION_MEETING_SUMMARY_DATABASE_ID},
+        "properties": build_summary_database_properties(
+            name,
+            summary,
+            sentiment,
+            timestamp,
+        ),
+    }
+    data, error, status_code = make_notion_api_request(
+        "/pages",
+        notion_creds["access_token"],
+        method="POST",
+        data=notion_body,
     )
     if error:
         return JsonResponse({"error": error}, status=status_code)
