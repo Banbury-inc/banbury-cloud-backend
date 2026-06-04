@@ -78,6 +78,7 @@ INSTALLED_APPS = [
     'apps.analytics',
     'apps.meeting_agent',
     'apps.flows',
+    'apps.maps',
     'apps.skills',
     'rest_framework',
     'corsheaders',
