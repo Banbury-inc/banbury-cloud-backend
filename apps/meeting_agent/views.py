@@ -136,8 +136,38 @@ def get_meeting_sessions(request):
             recall_bot = None
             participants_from_bot = []
             recall_bot_id = session.get('recall_bot_id')
+            cached_recall_bot = session.get('recall_bot') or {}
+            cached_video_url = cached_recall_bot.get('video_url') or session.get('recording_url')
+            cached_audio_url = cached_recall_bot.get('audio_url') or session.get('audio_url')
+            cached_transcript_url = cached_recall_bot.get('transcript_url') or session.get('transcription_url')
+            raw_metadata = session.get('metadata', {})
+            is_terminal_session = session.get('status') in ['completed', 'ended', 'failed']
+            has_cached_recall_urls = bool(cached_video_url or cached_audio_url or cached_transcript_url)
             
-            if recall_bot_id:
+            if recall_bot_id and is_terminal_session and has_cached_recall_urls:
+                recall_bot = {
+                    'id': recall_bot_id,
+                    'status': 'done' if session.get('status') in ['completed', 'ended'] else session.get('status'),
+                    'meetingUrl': session.get('meeting_url'),
+                    'recordingStatus': 'completed' if cached_video_url else 'processing',
+                    'transcriptionStatus': 'completed' if cached_transcript_url else 'not_started',
+                    'createdAt': session.get('agent_join_time') or session.get('start_time'),
+                    'joinedAt': session.get('agent_join_time'),
+                    'leftAt': session.get('end_time'),
+                    'metadata': {
+                        'bot_name': raw_metadata.get('bot_name'),
+                        'recording_mode': raw_metadata.get('recording_mode', raw_metadata.get('recordingMode', 'speaker_view')),
+                        'transcription_options': {
+                            'provider': 'recall',
+                            'language': 'en'
+                        }
+                    },
+                    'videoUrl': cached_video_url,
+                    'audioUrl': cached_audio_url,
+                    'transcriptUrl': cached_transcript_url,
+                    'chatMessagesUrl': cached_recall_bot.get('chat_messages_url')
+                }
+            elif recall_bot_id:
                 recall_bot_result = get_recall_bot_sync(recall_bot_id)
                 if recall_bot_result['success']:
                     bot_data = recall_bot_result['bot_data']
@@ -253,7 +283,6 @@ def get_meeting_sessions(request):
                     if not participants_from_bot and transcript_url:
                         logger.info(f"Recall bot {recall_bot_id} attempting to fetch transcript from URL for participants")
                         try:
-                            import requests
                             response = requests.get(transcript_url, timeout=10)
                             if response.status_code == 200:
                                 transcript_data = response.json()
@@ -309,38 +338,26 @@ def get_meeting_sessions(request):
                         'transcriptUrl': transcript_url,
                         'chatMessagesUrl': bot_data.get('chat_messages_url')
                     }
+                    
+                    if is_terminal_session and (video_url or audio_url or transcript_url) and not has_cached_recall_urls:
+                        MeetingSession.update_session(session['session_id'], {
+                            'recall_bot': {
+                                'video_url': video_url,
+                                'audio_url': audio_url,
+                                'transcript_url': transcript_url,
+                                'chat_messages_url': bot_data.get('chat_messages_url')
+                            },
+                            'recording_url': video_url,
+                            'audio_url': audio_url,
+                            'transcription_url': transcript_url
+                        })
 
             # Use participants from bot data if available, otherwise use session participants
             session_participants = participants_from_bot if participants_from_bot else session.get('participants', [])
             
-            # TEMPORARY: Add mock participants for testing if no participants found
-            if not session_participants and recall_bot:
-                logger.info(f"Session {session['session_id']} adding mock participants for testing")
-                session_participants = [
-                    {
-                        'id': 'mock_1',
-                        'name': 'Meeting Host',
-                        'email': 'host@example.com',
-                        'role': 'host',
-                        'joinTime': session.get('start_time', 0),
-                        'leaveTime': session.get('end_time'),
-                        'duration': session.get('duration', 0)
-                    },
-                    {
-                        'id': 'mock_2', 
-                        'name': 'Participant 1',
-                        'email': 'participant1@example.com',
-                        'role': 'participant',
-                        'joinTime': session.get('start_time', 0),
-                        'leaveTime': session.get('end_time'),
-                        'duration': session.get('duration', 0)
-                    }
-                ]
-            
             logger.info(f"Session {session['session_id']} participants: {len(session_participants)} from bot, {len(session.get('participants', []))} from session")
             
             # Convert metadata keys to camelCase for frontend
-            raw_metadata = session.get('metadata', {})
             frontend_metadata = {
                 'transcriptionEnabled': raw_metadata.get('transcription_enabled', raw_metadata.get('transcriptionEnabled', True)),
                 'windowId': raw_metadata.get('window_id', raw_metadata.get('windowId', '')),
