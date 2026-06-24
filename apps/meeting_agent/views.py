@@ -23,6 +23,111 @@ import requests
 logger = logging.getLogger(__name__)
 
 
+def _get_participant_identifier(participant):
+    return (
+        participant.get('id') or
+        participant.get('participant_id') or
+        participant.get('speakerId') or
+        participant.get('speaker_id') or
+        participant.get('user_id') or
+        participant.get('name') or
+        participant.get('speakerName') or
+        participant.get('speaker_name')
+    )
+
+
+def _add_unique_participant(participants, participant):
+    participant_id = str(_get_participant_identifier(participant) or '').strip()
+    participant_name = str(
+        participant.get('name') or
+        participant.get('speakerName') or
+        participant.get('speaker_name') or
+        'Unknown Speaker'
+    ).strip()
+    unique_key = participant_id or participant_name
+
+    if not unique_key:
+        return
+
+    if any(existing.get('_unique_key') == unique_key for existing in participants):
+        return
+
+    participants.append({
+        '_unique_key': unique_key,
+        'id': participant_id or unique_key,
+        'name': participant_name,
+        'email': participant.get('email', ''),
+        'role': 'host' if participant.get('is_host') else participant.get('role', 'participant'),
+        'joinTime': participant.get('joinTime') or participant.get('join_time') or participant.get('start_time') or 0,
+        'leaveTime': participant.get('leaveTime') or participant.get('leave_time') or participant.get('end_time'),
+        'duration': participant.get('duration')
+    })
+
+
+def _strip_participant_keys(participants):
+    return [
+        {key: value for key, value in participant.items() if key != '_unique_key'}
+        for participant in participants
+    ]
+
+
+def _extract_participants_from_transcript_utterances(utterances):
+    participants = []
+
+    if not isinstance(utterances, list):
+        return participants
+
+    for utterance in utterances:
+        participant = utterance.get('participant') if isinstance(utterance, dict) else None
+        if isinstance(participant, dict):
+            _add_unique_participant(participants, participant)
+
+    return _strip_participant_keys(participants)
+
+
+def _extract_participants_from_segments(segments):
+    participants = []
+
+    if not isinstance(segments, list):
+        return participants
+
+    for segment in segments:
+        if not isinstance(segment, dict):
+            continue
+
+        participant = {
+            'id': segment.get('speakerId') or segment.get('speaker_id') or segment.get('participant_id'),
+            'name': segment.get('speakerName') or segment.get('speaker_name') or segment.get('name'),
+            'start_time': segment.get('startTime') or segment.get('start_time')
+        }
+        _add_unique_participant(participants, participant)
+
+    return _strip_participant_keys(participants)
+
+
+def _get_session_participants(session, fallback_participants=None):
+    session_participants = session.get('participants') or []
+    if session_participants:
+        return session_participants
+
+    if fallback_participants:
+        return fallback_participants
+
+    live_participants = _extract_participants_from_segments(session.get('live_transcript_segments'))
+    if live_participants:
+        return live_participants
+
+    stored_participants = _extract_participants_from_segments(session.get('transcription_segments'))
+    if stored_participants:
+        return stored_participants
+
+    transcript_participants = _extract_participants_from_transcript_utterances(session.get('recall_transcript_data'))
+    if transcript_participants:
+        return transcript_participants
+
+    return []
+
+
 @require_http_methods(["GET"])
 def get_platforms(request):
     """Get all supported meeting platforms"""
@@ -352,8 +457,8 @@ def get_meeting_sessions(request):
                             'transcription_url': transcript_url
                         })
 
-            # Use participants from bot data if available, otherwise use session participants
-            session_participants = participants_from_bot if participants_from_bot else session.get('participants', [])
+            # Use participants from bot data if available, otherwise derive them from stored desktop transcript data.
+            session_participants = _get_session_participants(session, participants_from_bot)
             
             logger.info(f"Session {session['session_id']} participants: {len(session_participants)} from bot, {len(session.get('participants', []))} from session")
             
@@ -527,7 +632,7 @@ def get_meeting_session(request, session_id):
             'transcriptionUrl': session.get('transcription_url', ''),
             'transcriptionText': session.get('transcription_text', ''),
             'metadata': frontend_metadata,
-            'participants': session.get('participants', []),
+            'participants': _get_session_participants(session),
             'summary': session.get('summary'),
             'createdAt': session.get('created_at'),
             'updatedAt': session.get('updated_at'),
@@ -966,6 +1071,11 @@ def get_transcription(request, session_id):
                     
                     # Sort segments by start time
                     segments.sort(key=lambda x: x['startTime'])
+
+                    if participants_from_transcript and not session.get('participants'):
+                        MeetingSession.update_session(session_id, {
+                            'participants': _extract_participants_from_transcript_utterances(transcript_json)
+                        })
                     
                     # Return parsed segments and raw transcript with video URL and recording data
                     return JsonResponse({
@@ -1071,6 +1181,11 @@ def get_transcription(request, session_id):
                                         
                                         # Sort segments by start time
                                         segments.sort(key=lambda x: x['startTime'])
+
+                                        if participants_from_transcript and not session.get('participants'):
+                                            MeetingSession.update_session(session_id, {
+                                                'participants': _extract_participants_from_transcript_utterances(transcript_json)
+                                            })
                                         
                                         # Return parsed segments and raw transcript with video URL and recording data
                                         return JsonResponse({
