@@ -2,7 +2,7 @@
 Services for meeting agent functionality using MongoDB (following existing patterns)
 """
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from datetime import datetime
 from .models import MeetingSession
 from .recall_service import create_recall_bot_sync, get_recall_bot_sync, stop_recall_bot_sync
@@ -352,6 +352,12 @@ class TranscriptionService:
                     logger.warning(f"S3 upload failed for session {session_id}: {s3_result.get('error', 'Unknown error')}")
             except Exception as e:
                 logger.error(f"Error triggering S3 upload for session {session_id}: {str(e)}")
+
+            maybe_generate_summary_for_session(session_id, {
+                **MeetingSession.get_session(session_id).get('session', {}),
+                'transcription_text': full_text,
+                'status': 'completed'
+            })
             
             logger.info(f"Whisper transcription completed for session: {session_id}")
             logger.info(f"Processed {len(processed_segments)} segments")
@@ -413,6 +419,12 @@ class TranscriptionService:
                 logger.warning(f"S3 upload failed for session {session_id}: {s3_result.get('error', 'Unknown error')}")
         except Exception as e:
             logger.error(f"Error triggering S3 upload for session {session_id}: {str(e)}")
+
+        maybe_generate_summary_for_session(session_id, {
+            **MeetingSession.get_session(session_id).get('session', {}),
+            'transcription_text': full_text,
+            'status': 'completed'
+        })
         
         logger.info(f"Simulated transcription completed for session: {session_id}")
     
@@ -456,7 +468,7 @@ class SummaryService:
         # Set OpenAI API key from environment variable
         openai.api_key = os.environ.get('OPENAI_API_KEY')
         if not openai.api_key:
-            logger.warning("OPENAI_API_KEY not set. Summary generation will use fallback simulation.")
+            logger.warning("OPENAI_API_KEY not set. Automatic summary generation will be skipped.")
         
         self.client = openai
     
@@ -472,31 +484,43 @@ class SummaryService:
             
             # Check if OpenAI API key is available
             if not self.client.api_key:
-                logger.warning(f"OpenAI API key not available, using simulation for session {session_id}")
-                summary_data = self._generate_fallback_summary(transcription_text)
+                logger.warning(f"OpenAI API key not available, skipping summary generation for session {session_id}")
+                return {
+                    'success': False,
+                    'skipped': True,
+                    'message': 'OpenAI API key not configured'
+                }
             else:
                 # Use GPT-4 for real summary generation
                 summary_data = self._generate_gpt4_summary(transcription_text, session.get('metadata', {}))
             
             # Generate action items if enabled
-            if session.get('metadata', {}).get('action_items_enabled', False):
+            if _metadata_flag_enabled(session.get('metadata', {}), 'action_items_enabled', 'actionItemsEnabled', default=False):
                 if self.client.api_key:
                     summary_data['action_items'] = self._extract_action_items_gpt4(transcription_text)
                 else:
-                    summary_data['action_items'] = self._extract_action_items_fallback()
+                    summary_data['action_items'] = []
             else:
                 summary_data['action_items'] = []
+
+            summary_data = _normalize_summary_data(summary_data)
             
             # Save summary to session
-            MeetingSession.set_summary(session_id, summary_data)
+            result = MeetingSession.set_summary(session_id, summary_data)
+            if not result.get('success'):
+                raise RuntimeError(result.get('error') or result.get('message') or 'Failed to save summary')
             
             logger.info(f"Summary generated for session: {session_id}")
+            return {
+                'success': True,
+                'summary': summary_data
+            }
             
         except Exception as e:
             logger.error(f"Summary generation failed for session {session.get('session_id')}: {str(e)}")
             raise
     
-    def _generate_gpt4_summary(self, transcription: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
+    def _generate_gpt4_summary(self, transcription: str, _metadata: Dict[str, Any]) -> Dict[str, Any]:
         """Generate AI summary using GPT-4"""
         try:
             logger.info("Generating summary with GPT-4")
@@ -543,12 +567,12 @@ class SummaryService:
                 logger.info("Successfully generated GPT-4 summary")
                 return summary_data
             except json.JSONDecodeError:
-                logger.warning("GPT-4 response was not valid JSON, using fallback")
-                return self._generate_fallback_summary(transcription)
+                logger.warning("GPT-4 response was not valid JSON")
+                raise ValueError("Summary model response was not valid JSON")
                 
         except Exception as e:
             logger.error(f"GPT-4 summary generation failed: {str(e)}")
-            return self._generate_fallback_summary(transcription)
+            raise
     
     def _extract_action_items_gpt4(self, transcription: str) -> list:
         """Extract action items using GPT-4"""
@@ -600,56 +624,242 @@ class SummaryService:
                     logger.info(f"Successfully extracted {len(action_items)} action items with GPT-4")
                     return action_items
                 else:
-                    logger.warning("GPT-4 action items response was not a list, using fallback")
-                    return self._extract_action_items_fallback()
+                    logger.warning("GPT-4 action items response was not a list")
+                    return []
             except json.JSONDecodeError:
-                logger.warning("GPT-4 action items response was not valid JSON, using fallback")
-                return self._extract_action_items_fallback()
+                logger.warning("GPT-4 action items response was not valid JSON")
+                return []
                 
         except Exception as e:
             logger.error(f"GPT-4 action item extraction failed: {str(e)}")
-            return self._extract_action_items_fallback()
+            return []
     
-    def _generate_fallback_summary(self, transcription: str) -> Dict[str, Any]:
-        """Generate fallback summary when GPT-4 is not available"""
-        return {
-            'summary': """
-            This was a weekly team standup meeting where team members discussed their progress 
-            and upcoming work. The main focus was on the user authentication feature completion 
-            and planning for the next sprint.
-            """.strip(),
-            'key_points': [
-                'User authentication feature has been completed',
-                'Team is preparing for next sprint planning',
-                'Good progress on overall project timeline'
-            ],
-            'decisions': [
-                'Proceed with user authentication feature deployment',
-                'Schedule next sprint planning for Friday'
-            ],
-            'next_steps': [
-                'Deploy authentication feature to staging',
-                'Prepare sprint planning agenda',
-                'Review and prioritize backlog items'
-            ]
+def _metadata_flag_enabled(
+    metadata: Dict[str, Any],
+    snake_case_key: str,
+    camel_case_key: str,
+    default: bool = True
+) -> bool:
+    """Read metadata flags that may be stored as snake_case or camelCase."""
+    if not isinstance(metadata, dict):
+        return default
+
+    if snake_case_key in metadata:
+        return bool(metadata.get(snake_case_key))
+
+    if camel_case_key in metadata:
+        return bool(metadata.get(camel_case_key))
+
+    return default
+
+
+def _has_summary(session: Dict[str, Any]) -> bool:
+    summary = session.get('summary')
+    if not summary:
+        return False
+
+    if isinstance(summary, dict):
+        summary_text = summary.get('summary')
+        return bool(str(summary_text or '').strip() or summary.get('summary_id') or summary.get('id'))
+
+    return bool(str(summary).strip())
+
+
+def _segment_speaker_name(segment: Dict[str, Any]) -> str:
+    return str(
+        segment.get('speakerName') or
+        segment.get('speaker_name') or
+        segment.get('speaker') or
+        'Unknown Speaker'
+    )
+
+
+def _transcript_text_from_segments(segments: Any) -> str:
+    if not isinstance(segments, list):
+        return ''
+
+    lines = []
+    for segment in segments:
+        if not isinstance(segment, dict):
+            continue
+
+        text = str(segment.get('text') or '').strip()
+        if not text:
+            continue
+
+        lines.append(f"{_segment_speaker_name(segment)}: {text}")
+
+    return '\n'.join(lines).strip()
+
+
+def _recall_utterance_speaker_name(utterance: Dict[str, Any]) -> str:
+    participant = utterance.get('participant') or {}
+    return str(
+        utterance.get('speaker_name') or
+        utterance.get('speaker') or
+        participant.get('name') or
+        'Unknown Speaker'
+    )
+
+
+def _recall_words_text(words: Any) -> str:
+    if not isinstance(words, list):
+        return ''
+
+    return ' '.join(
+        str(word.get('text') or '').strip()
+        for word in words
+        if isinstance(word, dict) and str(word.get('text') or '').strip()
+    ).strip()
+
+
+def _recall_utterance_line(utterance: Dict[str, Any]) -> str:
+    if utterance.get('text'):
+        return f"{_recall_utterance_speaker_name(utterance)}: {str(utterance.get('text')).strip()}"
+
+    text = _recall_words_text(utterance.get('words'))
+    if not text:
+        return ''
+
+    return f"{_recall_utterance_speaker_name(utterance)}: {text}"
+
+
+def _transcript_text_from_recall_payload(transcript_payload: Any) -> str:
+    if isinstance(transcript_payload, str):
+        return transcript_payload.strip()
+
+    if isinstance(transcript_payload, dict):
+        if transcript_payload.get('text'):
+            return str(transcript_payload.get('text')).strip()
+
+        utterances = transcript_payload.get('utterances')
+        if isinstance(utterances, list):
+            return _transcript_text_from_recall_payload(utterances)
+
+    if not isinstance(transcript_payload, list):
+        return ''
+
+    lines = []
+    for utterance in transcript_payload:
+        if not isinstance(utterance, dict):
+            continue
+
+        line = _recall_utterance_line(utterance)
+        if line:
+            lines.append(line)
+
+    return '\n'.join(lines).strip()
+
+
+def _fetch_transcript_text(transcript_url: Optional[str]) -> str:
+    if not transcript_url:
+        return ''
+
+    try:
+        import requests
+
+        response = requests.get(transcript_url, timeout=10)
+        response.raise_for_status()
+
+        content_type = response.headers.get('content-type', '')
+        if 'application/json' in content_type:
+            return _transcript_text_from_recall_payload(response.json())
+
+        try:
+            return _transcript_text_from_recall_payload(response.json())
+        except ValueError:
+            return response.text.strip()
+    except Exception as e:
+        logger.warning(f"Failed to fetch transcript text for summary generation: {str(e)}")
+        return ''
+
+
+def _get_transcript_text(session: Dict[str, Any]) -> str:
+    transcription_text = str(session.get('transcription_text') or '').strip()
+    if transcription_text:
+        return transcription_text
+
+    segments_text = _transcript_text_from_segments(session.get('transcription_segments'))
+    if segments_text:
+        return segments_text
+
+    live_segments_text = _transcript_text_from_segments(session.get('live_transcript_segments'))
+    if live_segments_text:
+        return live_segments_text
+
+    transcript_url = (
+        session.get('transcription_url') or
+        session.get('recall_transcript_url') or
+        session.get('recall_bot', {}).get('transcript_url')
+    )
+
+    return _fetch_transcript_text(transcript_url)
+
+
+def _normalize_summary_data(summary_data: Dict[str, Any]) -> Dict[str, Any]:
+    key_points = summary_data.get('key_points') or summary_data.get('keyPoints') or []
+    next_steps = summary_data.get('next_steps') or summary_data.get('nextSteps') or []
+    action_items = summary_data.get('action_items') or summary_data.get('actionItems') or []
+
+    return {
+        **summary_data,
+        'summary': summary_data.get('summary', ''),
+        'key_points': key_points,
+        'keyPoints': key_points,
+        'decisions': summary_data.get('decisions') or [],
+        'next_steps': next_steps,
+        'nextSteps': next_steps,
+        'action_items': action_items,
+        'actionItems': action_items
+    }
+
+
+def maybe_generate_summary_for_session(
+    session_id: str,
+    session: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    """Generate and save a meeting summary when transcript text is ready."""
+    try:
+        result = MeetingSession.get_session(session_id)
+        if not result.get('success'):
+            logger.warning(f"Skipping summary generation for missing session {session_id}: {result.get('error')}")
+            return {'success': False, 'skipped': True, 'message': result.get('error')}
+
+        current_session = {
+            **(session or {}),
+            **result.get('session', {})
         }
-    
-    def _extract_action_items_fallback(self) -> list:
-        """Extract fallback action items when GPT-4 is not available"""
-        return [
-            {
-                'description': 'Deploy user authentication feature to staging environment',
-                'assignee': 'Jane Smith',
-                'priority': 'high',
-                'status': 'pending'
-            },
-            {
-                'description': 'Prepare sprint planning agenda for Friday meeting',
-                'assignee': 'John Doe',
-                'priority': 'medium',
-                'status': 'pending'
-            }
-        ]
+
+        if session and session.get('transcription_text') and not current_session.get('transcription_text'):
+            current_session['transcription_text'] = session['transcription_text']
+
+        if _has_summary(current_session):
+            logger.info(f"Skipping summary generation for session {session_id}: summary already exists")
+            return {'success': True, 'skipped': True, 'message': 'Summary already exists'}
+
+        metadata = current_session.get('metadata', {})
+        if not _metadata_flag_enabled(metadata, 'summary_enabled', 'summaryEnabled', default=True):
+            logger.info(f"Skipping summary generation for session {session_id}: summaries disabled")
+            return {'success': True, 'skipped': True, 'message': 'Summaries disabled'}
+
+        transcription_text = _get_transcript_text(current_session)
+        if not transcription_text:
+            logger.info(f"Skipping summary generation for session {session_id}: transcript text is not ready")
+            return {'success': True, 'skipped': True, 'message': 'Transcript text not ready'}
+
+        summary_session = {
+            **current_session,
+            'session_id': session_id,
+            'transcription_text': transcription_text
+        }
+
+        if not current_session.get('transcription_text'):
+            MeetingSession.update_session(session_id, {'transcription_text': transcription_text})
+
+        return SummaryService().generate_summary(summary_session)
+    except Exception as e:
+        logger.exception(f"Automatic summary generation failed for session {session_id}: {str(e)}")
+        return {'success': False, 'error': str(e)}
 
 
 class PlatformService:

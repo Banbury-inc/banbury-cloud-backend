@@ -13,7 +13,7 @@ from .models import (
     get_user_id_from_django_user, get_username_from_django_user,
     initialize_meeting_platforms, get_duration_minutes
 )
-from .services import MeetingAgentService, TranscriptionService, SummaryService
+from .services import MeetingAgentService, TranscriptionService, maybe_generate_summary_for_session
 from .recall_service import create_recall_bot_sync, get_recall_bot_sync, stop_recall_bot_sync, create_async_transcript_sync, get_transcript_sync, list_recordings_sync
 from .s3_upload_service import trigger_s3_upload_for_completed_meeting, MeetingS3UploadService
 from .desktop_recording_service import create_bot_for_meeting_sync, get_bot_sync, stop_bot_sync, handle_bot_webhook_sync
@@ -1097,6 +1097,13 @@ def get_transcription(request, session_id):
                         MeetingSession.update_session(session_id, {
                             'participants': _extract_participants_from_transcript_utterances(transcript_json)
                         })
+
+                    maybe_generate_summary_for_session(session_id, {
+                        **session,
+                        'transcription_text': full_text,
+                        'transcription_url': recall_transcript_url,
+                        'status': 'completed'
+                    })
                     
                     # Return parsed segments and raw transcript with video URL and recording data
                     return JsonResponse({
@@ -1207,6 +1214,13 @@ def get_transcription(request, session_id):
                                             MeetingSession.update_session(session_id, {
                                                 'participants': _extract_participants_from_transcript_utterances(transcript_json)
                                             })
+
+                                        maybe_generate_summary_for_session(session_id, {
+                                            **session,
+                                            'transcription_text': full_text,
+                                            'transcription_url': transcript_download_url,
+                                            'status': 'completed'
+                                        })
                                         
                                         # Return parsed segments and raw transcript with video URL and recording data
                                         return JsonResponse({
@@ -1292,6 +1306,14 @@ def get_transcription(request, session_id):
         
         is_complete = session.get('status') == 'completed'
         processing_status = session.get('status', '')
+
+        if is_complete and full_text:
+            maybe_generate_summary_for_session(session_id, {
+                **session,
+                'transcription_text': full_text,
+                'transcription_url': recall_transcript_url,
+                'status': 'completed'
+            })
         
         return JsonResponse({
             'segments': segments,
@@ -2044,6 +2066,12 @@ def recall_webhook(request):
                                 
                                 MeetingSession.update_session(session_id, update_data)
                                 logger.info(f"Updated session {session_id} with recording URLs")
+
+                                if transcript_url:
+                                    maybe_generate_summary_for_session(session_id, {
+                                        **matching_session,
+                                        **update_data
+                                    })
                                 
                                 # Only trigger S3 upload if we have at least one URL
                                 if video_url or transcript_url or audio_url:
@@ -2124,6 +2152,12 @@ def recall_webhook(request):
                                             logger.warning(f"S3 upload failed for session {session_id} via transcript.done webhook: {s3_result.get('error', 'Unknown error')}")
                                     except Exception as e:
                                         logger.error(f"Error triggering S3 upload for session {session_id} via transcript.done webhook: {str(e)}")
+
+                                    maybe_generate_summary_for_session(session_id, {
+                                        **session,
+                                        **update_data,
+                                        'status': 'completed'
+                                    })
                                     break
                     except Exception as e:
                         logger.error(f"Error processing transcript.done webhook: {str(e)}")
@@ -2936,6 +2970,11 @@ def desktop_recording_webhook(request):
                             
                             MeetingSession.update_session(session_id, update_data)
                             logger.info(f"Updated session {session_id} with recording data from SDK upload: recording_url={bool(video_url)}, transcription_url={bool(transcript_url)}, transcript_id={transcript_id}")
+                            if transcript_url:
+                                maybe_generate_summary_for_session(session_id, {
+                                    **session,
+                                    **update_data
+                                })
                         else:
                             logger.warning(f"No session found for sdk_upload_id: {sdk_upload_id}")
             
