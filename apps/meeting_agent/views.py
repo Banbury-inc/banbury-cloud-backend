@@ -372,13 +372,15 @@ def get_meeting_sessions(request):
                 if camel_key not in frontend_metadata:
                     frontend_metadata[camel_key] = value
             
+            session_start_time = session.get('start_time') or session.get('created_at')
+
             session_data.append({
                 'id': session['session_id'],
                 'title': session.get('title', ''),
                 'platform': platform_data,
                 'meetingUrl': session.get('meeting_url', ''),
                 'status': session.get('status', ''),
-                'startTime': session.get('start_time'),
+                'startTime': session_start_time,
                 'endTime': session.get('end_time'),
                 'duration': session.get('duration'),
                 'agentJoinTime': session.get('agent_join_time'),
@@ -509,13 +511,15 @@ def get_meeting_session(request, session_id):
             if camel_key not in frontend_metadata:
                 frontend_metadata[camel_key] = value
         
+        session_start_time = session.get('start_time') or session.get('created_at')
+
         session_data = {
             'id': session['session_id'],
             'title': session.get('title', ''),
             'platform': platform_data,
             'meetingUrl': session.get('meeting_url', ''),
             'status': session.get('status', ''),
-            'startTime': session.get('start_time'),
+            'startTime': session_start_time,
             'endTime': session.get('end_time'),
             'duration': session.get('duration'),
             'agentJoinTime': session.get('agent_join_time'),
@@ -2529,12 +2533,14 @@ def create_desktop_sdk_upload_token(request):
         
         # Create a meeting session for tracking
         from .models import MeetingSession
+        started_at = datetime.utcnow()
         session_data = {
             'user_id': username,
             'username': username,
             'platform': platform,
             'meeting_url': f'desktop://{window_id}',  # Use a pseudo-URL for desktop recordings
             'status': 'active',
+            'start_time': started_at,
             'recording_type': 'desktop_sdk',
             'sdk_upload_id': sdk_upload_id,  # Store SDK upload ID for webhook linking
             'metadata': {
@@ -2543,7 +2549,7 @@ def create_desktop_sdk_upload_token(request):
                 'transcription_enabled': transcription_enabled,
                 'upload_token_prefix': upload_token[:10] + '...',  # Store partial token for reference
                 'sdk_upload_id': sdk_upload_id,
-                'created_at': datetime.utcnow().isoformat()
+                'created_at': started_at.isoformat()
             }
         }
         
@@ -2601,6 +2607,7 @@ def create_desktop_upload_token(request):
             }, status=400)
         
         # Build metadata for the bot
+        started_at = datetime.utcnow()
         metadata = {
             'user_id': username,
             'username': username,
@@ -2610,7 +2617,7 @@ def create_desktop_upload_token(request):
             'transcription_enabled': body.get('transcription_enabled', True),
             'recording_mode': body.get('recording_mode', 'speaker_view'),
             'profile_picture_url': body.get('profile_picture_url', ''),
-            'created_at': datetime.utcnow().isoformat()
+            'created_at': started_at.isoformat()
         }
         
         # Add any additional metadata from request
@@ -2634,6 +2641,7 @@ def create_desktop_upload_token(request):
                 'meeting_url': meeting_url,
                 'bot_id': bot_id,
                 'status': 'joining',
+                'start_time': started_at,
                 'recording_type': 'bot',
                 'metadata': metadata
             }
