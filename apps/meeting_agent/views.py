@@ -128,6 +128,48 @@ def _get_session_participants(session, fallback_participants=None):
     return []
 
 
+def _get_platform_display_name(platform_id):
+    platform_names = {
+        'zoom': 'Zoom',
+        'teams': 'Microsoft Teams',
+        'meet': 'Google Meet',
+        'webex': 'Webex',
+        'slack': 'Slack Huddle',
+        'discord': 'Discord',
+        'desktop': 'Desktop Recording',
+        'unknown': 'Unknown Platform'
+    }
+
+    normalized_platform_id = str(platform_id or 'desktop').lower()
+    return platform_names.get(normalized_platform_id, str(platform_id).title())
+
+
+def _get_session_platform_data(session):
+    platform_id = session.get('platform_id') or session.get('platform')
+    platform_result = MeetingPlatform.get_by_id(platform_id or '')
+
+    if platform_result["success"]:
+        platform = platform_result["platform"]
+        return {
+            'id': platform['platform_id'],
+            'name': platform['name'],
+            'icon': platform['icon'],
+            'supported': platform['supported'],
+            'authRequired': platform['auth_required']
+        }
+
+    if platform_id:
+        return {
+            'id': platform_id,
+            'name': _get_platform_display_name(platform_id),
+            'icon': '',
+            'supported': True,
+            'authRequired': False
+        }
+
+    return None
+
+
 @require_http_methods(["GET"])
 def get_platforms(request):
     """Get all supported meeting platforms"""
@@ -224,18 +266,7 @@ def get_meeting_sessions(request):
         # Transform sessions for frontend
         session_data = []
         for session in result["sessions"]:
-            # Get platform data
-            platform_result = MeetingPlatform.get_by_id(session.get('platform_id', ''))
-            platform_data = None
-            if platform_result["success"]:
-                platform = platform_result["platform"]
-                platform_data = {
-                    'id': platform['platform_id'],
-                    'name': platform['name'],
-                    'icon': platform['icon'],
-                    'supported': platform['supported'],
-                    'authRequired': platform['auth_required']
-                }
+            platform_data = _get_session_platform_data(session)
             
             # Get Recall bot data if available
             recall_bot = None
@@ -533,17 +564,7 @@ def get_meeting_session(request, session_id):
         logger.info(f"Session: {session}")
         
         # Transform session for frontend
-        platform_result = MeetingPlatform.get_by_id(session.get('platform_id', ''))
-        platform_data = None
-        if platform_result["success"]:
-            platform = platform_result["platform"]
-            platform_data = {
-                'id': platform['platform_id'],
-                'name': platform['name'],
-                'icon': platform['icon'],
-                'supported': platform['supported'],
-                'authRequired': platform['auth_required']
-            }
+        platform_data = _get_session_platform_data(session)
         
         # Get Recall bot data if available
         recall_bot = None
