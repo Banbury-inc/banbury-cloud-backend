@@ -38,6 +38,8 @@ class AuthenticationTokenMiddleware:
             '/authentication/outlook/oauth_callback/',
             # OneDrive OAuth callback must be public
             '/authentication/onedrive/oauth_callback/',
+            # ECS/ALB health checks must be able to reach the health endpoint.
+            '/health/',
             # favicon should not require auth
             '/favicon.ico',
             # Recall AI webhooks (called by external service, no auth)
