@@ -38,10 +38,10 @@ RUN chmod +x /app/healthcheck.sh
 RUN echo '#!/bin/bash\n\
 set -e\n\
 redis-server --daemonize yes\n\
-# Optionally start the TaskStudio daemon inside the same container (default: enabled)\n\
-if [ "${ENABLE_DAEMON:-true}" != "false" ]; then\n\
-  echo "Starting TaskStudio daemon (interval=${DAEMON_INTERVAL:-30}s, batch=${DAEMON_BATCH:-50})"\n\
-  python manage.py process_taskstudio_daemon --interval ${DAEMON_INTERVAL:-30} --batch ${DAEMON_BATCH:-50} &\n\
+# Optionally start schedulers inside the web container. Keep this disabled for ECS web services.\n\
+if [ "${ENABLE_DAEMON:-false}" = "true" ]; then\n\
+  echo "Starting TaskStudio daemon (adaptive, batch=${DAEMON_BATCH:-50})"\n\
+  python manage.py process_taskstudio_daemon --adaptive --batch ${DAEMON_BATCH:-50} &\n\
   echo "Starting Flow Scheduler daemon (adaptive, batch=20)"\n\
   python manage.py process_flow_scheduler --adaptive --batch 20 &\n\
 fi\n\
