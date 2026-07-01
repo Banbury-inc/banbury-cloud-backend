@@ -549,6 +549,22 @@ def list_all_users(request):
             last_workspace_visit_map = {}
             system_total_workspace_visits = 0
 
+        # Build a map of marketing email opt-out per user_id from settings collection
+        settings_collection = db["settings"]
+        try:
+            settings_cursor = settings_collection.find(
+                {},
+                {"user_id": 1, "marketing_emails_enabled": 1}
+            )
+            marketing_opt_out_map = {}
+            for item in settings_cursor:
+                key = str(item.get("user_id"))
+                marketing_enabled = item.get("marketing_emails_enabled", True)
+                marketing_opt_out_map[key] = marketing_enabled is False
+        except Exception as e:
+            print(f"Error getting marketing email settings: {e}")
+            marketing_opt_out_map = {}
+
         # Get all users with basic information including Google credentials, AI usage, and subscription
         users = user_collection.find(
             {},
@@ -619,7 +635,8 @@ def list_all_users(request):
                 "hasGmailScope": has_gmail_scope,
                 "hasDriveScope": has_drive_scope,
                 "hasCalendarScope": has_calendar_scope,
-                "hasContactsScope": has_contacts_scope
+                "hasContactsScope": has_contacts_scope,
+                "marketingEmailsOptOut": marketing_opt_out_map.get(user_id_str, False)
             })
         
         return JsonResponse({
@@ -630,6 +647,128 @@ def list_all_users(request):
             "system_total_ai_messages": system_total_ai_messages,
             "system_total_dashboard_visits": system_total_dashboard_visits,
             "system_total_workspace_visits": system_total_workspace_visits
+        })
+
+    except Exception as e:
+        return JsonResponse({'message': f'Error: {str(e)}'}, status=500)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def send_marketing_email(request):
+    """Sends a branded marketing email to the selected users (admin only)."""
+    try:
+        # Check if user is authenticated and is admin
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or ' ' not in auth_header:
+            return JsonResponse({'message': 'Authentication required'}, status=401)
+
+        auth_type, token = auth_header.split(' ', 1)
+        if auth_type.lower() != 'bearer':
+            return JsonResponse({'message': 'Invalid authentication type'}, status=401)
+
+        # Validate token and get username
+        try:
+            from rest_framework_simplejwt.tokens import AccessToken
+            validated = AccessToken(token)
+            username = validated.payload.get('username')
+
+            if not username:
+                return JsonResponse({'message': 'Invalid token'}, status=401)
+
+        except Exception as e:
+            return JsonResponse({'message': str(e)}, status=401)
+
+        # Check if user is admin (mmills or mmills6060@gmail.com)
+        if username not in ['mmills', 'mmills6060@gmail.com']:
+            return JsonResponse({'message': 'Admin access required'}, status=403)
+
+        # Parse and validate request body
+        try:
+            data = json.loads(request.body)
+        except json.JSONDecodeError:
+            return JsonResponse({'message': 'Invalid JSON body'}, status=400)
+
+        subject = (data.get('subject') or '').strip()
+        body = (data.get('body') or '').strip()
+        user_ids = data.get('user_ids')
+
+        if not subject:
+            return JsonResponse({'message': 'subject is required'}, status=400)
+        if not body:
+            return JsonResponse({'message': 'body is required'}, status=400)
+        if not isinstance(user_ids, list) or not user_ids:
+            return JsonResponse({'message': 'user_ids must be a non-empty list'}, status=400)
+
+        from apps.authentication.marketing_email_service import marketing_email_service
+        if not marketing_email_service.is_configured:
+            return JsonResponse({'message': 'Marketing email service is not configured'}, status=503)
+
+        from bson.objectid import ObjectId
+
+        # Connect to MongoDB
+        uri = "mongodb+srv://mmills6060:Dirtballer6060@banbury.fx0xcqk.mongodb.net/?retryWrites=true&w=majority"
+        client = MongoClient(uri)
+        db = client["NeuraNet"]
+        user_collection = db["users"]
+        settings_collection = db["settings"]
+
+        object_ids = []
+        invalid_ids = []
+        for user_id in user_ids:
+            try:
+                object_ids.append(ObjectId(str(user_id)))
+            except Exception:
+                invalid_ids.append(str(user_id))
+
+        users_by_id = {
+            str(user["_id"]): user
+            for user in user_collection.find(
+                {"_id": {"$in": object_ids}},
+                {"_id": 1, "email": 1}
+            )
+        }
+
+        # Server-side opt-out enforcement: skip users with marketing_emails_enabled === false
+        opted_out_ids = set()
+        settings_cursor = settings_collection.find(
+            {"marketing_emails_enabled": False},
+            {"user_id": 1}
+        )
+        for item in settings_cursor:
+            opted_out_ids.add(str(item.get("user_id")))
+
+        recipients = []
+        skipped_opted_out = []
+        missing_email = []
+        not_found = list(invalid_ids)
+
+        for user_id in user_ids:
+            user_id_str = str(user_id)
+            if user_id_str in invalid_ids:
+                continue
+            user = users_by_id.get(user_id_str)
+            if not user:
+                not_found.append(user_id_str)
+                continue
+            if user_id_str in opted_out_ids:
+                skipped_opted_out.append(user_id_str)
+                continue
+            email = (user.get("email") or "").strip()
+            if not email:
+                missing_email.append(user_id_str)
+                continue
+            recipients.append({"user_id": user_id_str, "email": email})
+
+        send_result = marketing_email_service.send_bulk(recipients, subject, body)
+
+        return JsonResponse({
+            "result": "success",
+            "sent": len(send_result["sent"]),
+            "sent_user_ids": send_result["sent"],
+            "skipped_opted_out": skipped_opted_out,
+            "missing_email": missing_email,
+            "not_found": not_found,
+            "failed": send_result["failed"],
         })
 
     except Exception as e:

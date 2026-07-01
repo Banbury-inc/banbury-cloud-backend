@@ -15,6 +15,7 @@ urlpatterns = [
     path("track_dashboard_visit/", views.track_dashboard_visit, name="track_dashboard_visit"),
     path("track_workspace_visit/", views.track_workspace_visit, name="track_workspace_visit"),
     path("list_all_users/", views.list_all_users, name="list_all_users"),
+    path("send_marketing_email/", views.send_marketing_email, name="send_marketing_email"),
     path("send_friend_request/", views.send_friend_request, name="send_friend_request"),
     path("remove_friend/", views.remove_friend, name="remove_friend"),
     path("get_friends/", views.get_friends, name="get_friends"),
