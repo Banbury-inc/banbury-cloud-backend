@@ -6,6 +6,7 @@ import os
 import html
 import logging
 import smtplib
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -19,6 +20,7 @@ SMTP_PORT = 587
 LOGO_CID = "banbury-logo"
 LOGO_PATH = os.path.join(os.path.dirname(__file__), "assets", "banbury_logo.png")
 UNSUBSCRIBE_URL = "https://www.banbury.io/workspaces?openSettings=true&settingsTab=notifications"
+MAX_SMTP_WORKERS = 4
 COMPANY_ADDRESS = "New York, New York"
 
 
@@ -164,28 +166,8 @@ class MarketingEmailService:
 
         return message
 
-    def send_bulk(self, recipients: list, subject: str, body: str) -> dict:
-        """
-        Send an individual marketing email to each recipient over a single SMTP connection.
-
-        Args:
-            recipients: list of dicts with "user_id" and "email" keys
-            subject: email subject line
-            body: plain-text message body (newlines become paragraphs)
-
-        Returns:
-            dict with "sent" (list of user_ids) and "failed" (list of {user_id, error}) keys
-        """
-        if not self.is_configured:
-            return {
-                "sent": [],
-                "failed": [
-                    {"user_id": r["user_id"], "error": "Email service not configured"}
-                    for r in recipients
-                ],
-            }
-
-        logo_bytes = self._load_logo_bytes()
+    def _send_batch(self, recipients: list, subject: str, body: str, logo_bytes: Optional[bytes]) -> dict:
+        """Send emails to a batch of recipients over a single SMTP connection."""
         sent = []
         failed = []
 
@@ -204,10 +186,51 @@ class MarketingEmailService:
                         failed.append({"user_id": recipient["user_id"], "error": str(e)})
         except (smtplib.SMTPException, OSError) as e:
             logger.error("SMTP connection error while sending marketing emails: %s", e)
-            already_processed = {r for r in sent} | {f["user_id"] for f in failed}
+            already_processed = set(sent) | {f["user_id"] for f in failed}
             for recipient in recipients:
                 if recipient["user_id"] not in already_processed:
                     failed.append({"user_id": recipient["user_id"], "error": f"SMTP connection error: {e}"})
+
+        return {"sent": sent, "failed": failed}
+
+    def send_bulk(self, recipients: list, subject: str, body: str) -> dict:
+        """
+        Send an individual marketing email to each recipient, parallelized across
+        a few SMTP connections to keep large batches fast.
+
+        Args:
+            recipients: list of dicts with "user_id" and "email" keys
+            subject: email subject line
+            body: plain-text message body (newlines become paragraphs)
+
+        Returns:
+            dict with "sent" (list of user_ids) and "failed" (list of {user_id, error}) keys
+        """
+        if not recipients:
+            return {"sent": [], "failed": []}
+
+        if not self.is_configured:
+            return {
+                "sent": [],
+                "failed": [
+                    {"user_id": r["user_id"], "error": "Email service not configured"}
+                    for r in recipients
+                ],
+            }
+
+        logo_bytes = self._load_logo_bytes()
+
+        worker_count = min(MAX_SMTP_WORKERS, len(recipients))
+        batches = [recipients[i::worker_count] for i in range(worker_count)]
+
+        sent = []
+        failed = []
+        with ThreadPoolExecutor(max_workers=worker_count) as pool:
+            futures = [pool.submit(self._send_batch, batch, subject, body, logo_bytes) for batch in batches]
+            for future in futures:
+                result = future.result()
+                sent.extend(result["sent"])
+                failed.extend(result["failed"])
 
         return {"sent": sent, "failed": failed}
 
