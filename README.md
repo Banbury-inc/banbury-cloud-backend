@@ -4,7 +4,7 @@
 gcloud auth login
 
 gcloud auth configure-docker
-
+a
 deploy to cloud run
 
 do i need to update dockerfile before I do a git commit?
