@@ -6,6 +6,7 @@ import os
 import html
 import logging
 import smtplib
+from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.image import MIMEImage
@@ -17,6 +18,8 @@ SMTP_HOST = "smtp.gmail.com"
 SMTP_PORT = 587
 LOGO_CID = "banbury-logo"
 LOGO_PATH = os.path.join(os.path.dirname(__file__), "assets", "banbury_logo.png")
+UNSUBSCRIBE_URL = "https://www.banbury.io/workspaces?openSettings=true&settingsTab=notifications"
+COMPANY_ADDRESS = "New York, New York"
 
 
 class MarketingEmailService:
@@ -60,6 +63,16 @@ class MarketingEmailService:
             else '<span style="font-size: 24px; font-weight: 700; color: #111111;">Banbury</span>'
         )
 
+        footer_logo_html = (
+            f'<img src="cid:{LOGO_CID}" alt="Banbury" width="40" height="40" '
+            'style="display: block; border: 0; opacity: 0.55;" />'
+            if include_logo
+            else '<span style="font-size: 16px; font-weight: 700; color: #8a8f98;">Banbury</span>'
+        )
+
+        footer_link_style = "color: #8a8f98; text-decoration: underline;"
+        current_year = datetime.now().year
+
         return f"""\
 <!DOCTYPE html>
 <html lang="en">
@@ -92,12 +105,21 @@ class MarketingEmailService:
             </td>
           </tr>
           <tr>
-            <td style="padding: 24px 8px 0 8px;" align="center">
-              <p style="margin: 0 0 6px 0; font-size: 12px; line-height: 1.5; color: #8a8f98;">
-                You're receiving this email because you have a Banbury account.
+            <td style="padding: 32px 8px 0 8px;" align="left">
+              {footer_logo_html}
+              <p style="margin: 20px 0 0 0; font-size: 14px; line-height: 1.6; color: #8a8f98;">
+                <a href="https://www.banbury.io" style="{footer_link_style}">Home</a>
+                &nbsp;&middot;&nbsp;
+                <a href="https://banbury.io/docs" style="{footer_link_style}">Docs</a>
+                &nbsp;&middot;&nbsp;
+                <a href="https://www.banbury.io/workspaces" style="{footer_link_style}">Open Web App</a>
               </p>
-              <p style="margin: 0; font-size: 12px; line-height: 1.5; color: #8a8f98;">
-                To stop receiving marketing emails, update your preferences in Settings &rarr; Notifications.
+              <p style="margin: 18px 0 0 0; font-size: 14px; line-height: 1.6; color: #8a8f98;">
+                &copy; {current_year} Banbury<br />
+                {COMPANY_ADDRESS}
+              </p>
+              <p style="margin: 18px 0 0 0; font-size: 14px; line-height: 1.6; color: #8a8f98;">
+                <a href="{UNSUBSCRIBE_URL}" style="{footer_link_style}">Unsubscribe</a>
               </p>
             </td>
           </tr>
@@ -128,7 +150,8 @@ class MarketingEmailService:
             f"{body}\n\n"
             "---\n"
             "You're receiving this email because you have a Banbury account.\n"
-            "To stop receiving marketing emails, update your preferences in Settings -> Notifications."
+            f"Banbury, {COMPANY_ADDRESS}\n"
+            f"Unsubscribe: {UNSUBSCRIBE_URL}"
         )
         alternative.attach(MIMEText(plain_text, "plain", "utf-8"))
         alternative.attach(MIMEText(self._build_html(subject, body, include_logo=logo_bytes is not None), "html", "utf-8"))
